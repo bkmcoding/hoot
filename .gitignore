@@ -1,0 +1,9 @@
+# Backend (.NET / C#)
+**/bin/
+**/obj/
+*.user
+*.suo
+appsettings.Development.json
+
+# Frontend
+node_modules/
