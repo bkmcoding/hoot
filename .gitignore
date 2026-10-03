@@ -7,3 +7,12 @@ appsettings.Development.json
 
 # Frontend
 node_modules/
+
+# Docs
+docs/hoot_breakdown.aux
+docs/hoot_breakdown.log
+docs/hoot_breakdown.out
+docs/hoot_breakdown.nav
+docs/hoot_breakdown.snm
+docs/hoot_breakdown.toc
+docs/hoot_breakdown.synctex.gz
