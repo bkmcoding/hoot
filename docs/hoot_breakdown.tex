@@ -1,0 +1,135 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{beaver}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+
+\title[Hoot: Project Breakdown]{Hoot: Project Breakdown}
+\subtitle{Predictive Household Inventory Tracker}
+\author{Michael Hannan}
+\date{Week 4 --- September 17, 2026}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Project Recap}
+  \begin{itemize}
+    \item Households run on a small set of recurring consumables: milk, dish soap, toothpaste, paper towels.
+    \item Manual shopping lists only work if someone remembers to update them before an item runs out.
+    \item \textbf{Hoot's idea:} log purchases as they happen, learn each item's restock interval automatically, and surface a prediction --- no list maintenance required.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Application Features --- Core User Flows}
+  \begin{itemize}
+    \item \textbf{Register an item} --- name, category, unit, expected restock
+    \item \textbf{Log a purchase} against an existing item --- quantity, price, date
+    \item \textbf{Dashboard} --- tracked items ranked by how soon they're expected to run out
+    \item \textbf{Add a one-time item} (e.g.\ a birthday candle) --- shown as a plain checklist, excluded from prediction
+    \item \emph{(Optional)} Scan a barcode to auto-fill an item's name, category, and nutrition data
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Application Features --- Behind the Scenes}
+  \begin{itemize}
+    \item \textbf{Interval regression:} on every new purchase, recompute the day-gaps between that item's past purchases and fit a linear regression to project the next purchase date
+    \item \textbf{Initial fallback:} a brand-new item uses its manual \texttt{reorder\_threshold} until at least 3 \texttt{purchase\_log} entries exist
+    \item \textbf{Prediction logging:} every regression run writes a row to \texttt{predictions} (\texttt{model\_version}, \texttt{computed\_at}) so accuracy can be measured later
+    \item \textbf{Product Information:} barcode $\to$ check \texttt{product\_lookups} cache $\to$ Open Food Facts / UPCitemdb $\to$ curated into \texttt{products} / \texttt{product\_nutrition}
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task Breakdown}
+  \small
+  \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.1cm} X}
+    \toprule
+    \textbf{Category} & \textbf{Key Tasks} \\
+    \midrule
+    Database Design &
+      Finalize ER diagram; implement core tables (\texttt{users}, \texttt{items}, \texttt{purchase\_log}) in PostgreSQL via Entity Framework Core migrations; add extension tables (\texttt{products}, \texttt{product\_nutrition}, \texttt{product\_lookups}, \texttt{predictions}) \\[4pt]
+    Backend / API &
+      ASP.NET Core Web API controllers for item and purchase CRUD; DTOs for request/response shapes; Swagger/OpenAPI docs \\[4pt]
+    Prediction Engine &
+      Interval-extraction query; ordinary-least-squares regression; write results to \texttt{predictions} \\[4pt]
+    Barcode Integration &
+      \texttt{product\_lookups} cache check; Open Food Facts client; UPCitemdb fallback client \\[4pt]
+    Frontend &
+      Static HTML/CSS pages + vanilla JavaScript (\texttt{app.js}) calling the Web API via \texttt{fetch}; dashboard, forms, restock progress bars \\[4pt]
+    Testing \& Deployment &
+      Seed data and manual test pass on CRUD + prediction accuracy; optional Docker / Nginx deployment \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Timeline for Tasks}
+  \scriptsize
+  \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.4cm} X}
+    \toprule
+    \textbf{Week / Date} & \textbf{Focus} \\
+    \midrule
+    Week 4 --- Sep 17 & Project breakdown (this deck); finalize schema design \\
+    Weeks 5--6 --- Sep 18--Oct 1 & Implement core 3-table PostgreSQL schema + EF Core models; basic ASP.NET Web API CRUD endpoints for items \& purchases \\
+    Weeks 7--8 --- Oct 2--21 & Build dashboard frontend; implement interval-regression prediction pipeline + \texttt{predictions} logging \\
+    Week 9 --- Oct 22 & \textbf{Progress Report 1} --- Done: schema, CRUD, basic dashboard. TODO: prediction refinement, barcode integration \\
+    Weeks 10--11 --- Oct 23--Nov 9 & Product catalog \& barcode enrichment (\texttt{products}, \texttt{product\_nutrition}, \texttt{product\_lookups}); Open Food Facts / UPCitemdb clients \\
+    Week 12 --- Nov 10 & \textbf{Progress Report 2} --- Done: prediction pipeline, barcode integration. TODO: polish, one-time items, testing \\
+    Weeks 13--15 --- Nov 11--Dec 7 & One-time item checklist flow; testing \& bug fixes; optional Docker deploy; UI polish \\
+    Week 16 --- Dec 8 & Demo slides + demo video submitted \\
+    Week 16 --- Dec 10 & Final report + project code submitted \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Application Views --- Expected Screens}
+  \begin{itemize}
+    \item \textbf{Login / Register} --- create an account, sign in
+    \item \textbf{Dashboard} --- ranked list of tracked items with restock progress bars (main screen)
+    \item \textbf{Item Detail} --- one item's info plus its full purchase history; edit or delete
+    \item \textbf{Add Item} --- form to register a new tracked item (name, category, unit, threshold)
+    \item \textbf{Log Purchase} --- quick form to record a purchase against an existing item
+    \item \textbf{One-Time Items} --- checklist view for irregular, non-predicted items
+    \item \emph{(Stretch)} \textbf{Barcode Scan} --- scan input that auto-fills item name/category/nutrition
+  \end{itemize}
+  \vspace{4pt}
+  \small All views are static HTML/CSS pages driven by \texttt{app.js}, which talks to the ASP.NET Web API over \texttt{fetch}.
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Queries --- What We Want to See From the Data}
+  \begin{itemize}
+    \item \textbf{Dashboard list:} all items for a user joined to their latest prediction, ordered by \texttt{predicted\_date} ascending \hfill \emph{(list of records)}
+    \item \textbf{Item detail:} one item's info plus its full \texttt{purchase\_log} history, ordered by \texttt{purchase\_date} \hfill \emph{(single record)}
+    \item \textbf{Regression input:} \texttt{purchase\_log} rows for one \texttt{item\_id}, ordered by \texttt{purchase\_date}
+    \item \textbf{One-time checklist:} items where \texttt{is\_one\_time = TRUE}
+    \item \textbf{Prediction accuracy:} \texttt{predicted\_date} vs.\ actual next purchase date, across \texttt{model\_version}
+    \item \textbf{Barcode lookup:} \texttt{products} joined to \texttt{product\_nutrition} by \texttt{product\_id}
+    \item \textbf{Cache check:} \texttt{product\_lookups} row for a barcode, before calling an external API
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Actions --- Manipulating the Data}
+  \begin{itemize}
+    \item \textbf{INSERT} --- new item; new \texttt{purchase\_log} row on every purchase; new \texttt{predictions} row on every regression run; new \texttt{products} / \texttt{product\_nutrition} / \texttt{product\_lookups} rows on a barcode cache miss
+    \item \textbf{UPDATE} --- edit an item's fields (name, category, unit, \texttt{reorder\_threshold}); correct a \texttt{purchase\_log} entry (quantity, price, date)
+    \item \textbf{DELETE} --- remove a tracked item; remove a mistaken \texttt{purchase\_log} entry
+    \item Together with the queries above, this covers list retrieval and single-record retrieval
+  \end{itemize}
+\end{frame}
+
+\end{document}
