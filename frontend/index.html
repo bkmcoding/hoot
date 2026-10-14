@@ -1,13 +1,309 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hoot</title>
-    <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-    <h1>Hello World</h1>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Hoot is a predictive household inventory tracker that learns your restock rhythm." />
+    <title>Hoot — Predictive Household Inventory Tracker</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+
+  <body class="hoot-shell">
+    <div class="app-frame">
+      <header class="app-header">
+        <a class="brand" href="#view-dashboard" data-view="dashboard" aria-label="Hoot home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img" aria-hidden="true">
+              <path class="owl-body" d="M24 7c-9.4 0-17 6.7-17 15 0 8.3 7.6 15 17 15s17-6.7 17-15c0-8.3-7.6-15-17-15Z" />
+              <path class="owl-wing" d="M12 25c2.6-2.2 5.5-3.4 8.5-3.4v12.8c-3.5-.4-6.5-3.6-8.5-9.4Z" />
+              <path class="owl-wing" d="M36 25c-2.6-2.2-5.5-3.4-8.5-3.4v12.8c3.5-.4 6.5-3.6 8.5-9.4Z" />
+              <circle class="owl-eye" cx="17.5" cy="21" r="6" />
+              <circle class="owl-eye" cx="30.5" cy="21" r="6" />
+              <circle class="owl-pupil" cx="17.5" cy="21" r="2.1" />
+              <circle class="owl-pupil" cx="30.5" cy="21" r="2.1" />
+              <path class="owl-beak" d="m24 24.5 4 4.4-4 4.4-4-4.4 4-4.4Z" />
+            </svg>
+          </span>
+          <span class="brand-text">
+            <strong>Hoot</strong>
+            <small>Predictive household inventory</small>
+          </span>
+        </a>
+
+        <nav class="app-nav" aria-label="Primary">
+          <button class="nav-button is-active" type="button" data-view="dashboard">Dashboard</button>
+          <button class="nav-button" type="button" data-view="one-time">One-time</button>
+          <button class="nav-button" type="button" data-view="ideas">Feature ideas</button>
+        </nav>
+
+        <div class="header-actions">
+          <button class="btn btn-primary" type="button" data-dialog="add-item">Add item</button>
+          <button class="btn btn-secondary" type="button" data-dialog="log-purchase">Log purchase</button>
+          <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
+        </div>
+      </header>
+
+      <main class="app-main">
+        <section class="app-view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
+          <div class="section-heading">
+            <div>
+              <h1 id="dashboard-title">Upcoming restocks</h1>
+              <p class="section-copy">Hoot ranks your tracked staples by how soon they are likely to run out.</p>
+            </div>
+          </div>
+
+          <div class="stats-grid" aria-label="Inventory summary">
+            <article class="stat-card">
+              <span>Tracked items</span>
+              <strong id="stat-tracked">0</strong>
+              <p>Learning your restock rhythm</p>
+            </article>
+            <article class="stat-card">
+              <span>Needs attention</span>
+              <strong id="stat-attention">0</strong>
+              <p>Due within three days</p>
+            </article>
+            <article class="stat-card">
+              <span>Established</span>
+              <strong id="stat-established">0</strong>
+              <p>Using learned intervals</p>
+            </article>
+            <article class="stat-card">
+              <span>One-time</span>
+              <strong id="stat-one-time">0</strong>
+              <p>Excluded from prediction</p>
+            </article>
+          </div>
+
+          <section class="calendar-panel" aria-labelledby="calendar-title">
+            <div class="section-heading">
+              <div>
+                <h2 id="calendar-title">Restock calendar</h2>
+                <p class="section-copy">A wider look at the dates Hoot is watching. Select an item to inspect its rhythm.</p>
+              </div>
+            </div>
+            <div class="calendar-viewport">
+              <div id="restock-calendar" class="calendar-strip" role="list" aria-label="Predicted restocks for the next fourteen days"></div>
+            </div>
+          </section>
+
+          <div id="dashboard-list" class="item-list" aria-live="polite"></div>
+        </section>
+
+        <section class="app-view" id="view-item" aria-labelledby="item-analysis-title">
+          <div id="item-analysis-content"></div>
+        </section>
+
+        <section class="app-view" id="view-one-time" aria-labelledby="one-time-title">
+          <div class="section-heading">
+            <div>
+              <h1 id="one-time-title">One-time items</h1>
+              <p class="section-copy">Check off things you only need once in a while. Hoot will not try to predict them.</p>
+            </div>
+          </div>
+          <div id="one-time-list" class="one-time-list" aria-live="polite"></div>
+        </section>
+
+        <section class="app-view" id="view-ideas" aria-labelledby="ideas-title">
+          <div class="section-heading">
+            <div>
+              <h1 id="ideas-title">Where Hoot can grow</h1>
+              <p class="section-copy">The core tracker is deliberately simple. These are the natural next features.</p>
+            </div>
+          </div>
+
+          <div class="ideas-grid">
+            <article class="idea-card">
+              <h2>Barcode enrichment</h2>
+              <p>Scan a product to auto-fill its name, category, and nutrition details.</p>
+            </article>
+            <article class="idea-card">
+              <h2>Prediction accuracy</h2>
+              <p>Compare predicted dates with actual purchases and show how reliable each estimate is.</p>
+            </article>
+            <article class="idea-card">
+              <h2>Household sharing</h2>
+              <p>Let everyone in a home log purchases and see the same live inventory picture.</p>
+            </article>
+            <article class="idea-card">
+              <h2>Shopping mode</h2>
+              <p>Turn today’s urgent restocks into a compact, checkable store list.</p>
+            </article>
+            <article class="idea-card">
+              <h2>Price trends</h2>
+              <p>Track how each item’s price changes over time and flag unusually good or bad weeks.</p>
+            </article>
+            <article class="idea-card">
+              <h2>Smart reminders</h2>
+              <p>Nudge you only when something is genuinely close to running out.</p>
+            </article>
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <p>Hoot demo data is synthetic. Predictions update locally and reset with the demo.</p>
+      </footer>
+    </div>
+
+    <dialog class="hoot-dialog" id="add-item-dialog" aria-labelledby="add-item-title">
+      <form id="add-item-form" novalidate>
+        <header class="dialog-header">
+          <div>
+            <h2 id="add-item-title">Add an item</h2>
+          </div>
+          <button class="icon-button" type="button" data-close aria-label="Close add item">✕</button>
+        </header>
+
+        <div class="field-row">
+          <label class="field" for="add-name">
+            <span>Name</span>
+            <input id="add-name" name="name" type="text" autocomplete="off" required />
+            <small class="field-error" data-error-for="name"></small>
+          </label>
+
+          <label class="field" for="add-category">
+            <span>Category</span>
+            <select id="add-category" name="category">
+              <option>Pantry</option>
+              <option>Cleaning</option>
+              <option>Personal care</option>
+              <option>Household</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field" for="add-unit">
+            <span>Unit</span>
+            <input id="add-unit" name="unit" type="text" placeholder="half-gallon, roll, tube…" autocomplete="off" />
+          </label>
+
+          <label class="field" for="add-threshold">
+            <span>Expected restock</span>
+            <input id="add-threshold" name="reorderThresholdDays" type="number" min="1" max="365" step="1" value="14" />
+            <small class="field-error" data-error-for="reorderThresholdDays"></small>
+          </label>
+        </div>
+
+        <label class="check-row">
+          <input id="add-one-time" name="isOneTime" type="checkbox" />
+          <span>Add as a one-time item</span>
+          <small>Excluded from prediction</small>
+        </label>
+
+        <footer class="dialog-actions">
+          <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+          <button class="btn btn-primary" type="submit">Add item</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="hoot-dialog" id="log-purchase-dialog" aria-labelledby="log-purchase-title">
+      <form id="log-purchase-form" novalidate>
+        <header class="dialog-header">
+          <div>
+            <h2 id="log-purchase-title">Log a purchase</h2>
+          </div>
+          <button class="icon-button" type="button" data-close aria-label="Close log purchase">✕</button>
+        </header>
+
+        <label class="field" for="purchase-item">
+          <span>Item</span>
+          <select id="purchase-item" name="itemId" required></select>
+        </label>
+
+        <div class="field-row">
+          <label class="field" for="purchase-date">
+            <span>Date</span>
+            <input id="purchase-date" name="date" type="date" required />
+            <small class="field-error" data-error-for="date"></small>
+          </label>
+
+          <label class="field" for="purchase-quantity">
+            <span>Quantity</span>
+            <input id="purchase-quantity" name="quantity" type="number" min="0.01" step="0.01" value="1" required />
+            <small class="field-error" data-error-for="quantity"></small>
+          </label>
+
+          <label class="field" for="purchase-price">
+            <span>Price</span>
+            <input id="purchase-price" name="price" type="number" min="0" step="0.01" value="0" required />
+            <small class="field-error" data-error-for="price"></small>
+          </label>
+        </div>
+
+        <footer class="dialog-actions">
+          <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+          <button class="btn btn-primary" type="submit">Log purchase</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="hoot-dialog" id="edit-item-dialog" aria-labelledby="edit-item-title">
+      <form id="edit-item-form" novalidate>
+        <header class="dialog-header">
+          <div>
+            <h2 id="edit-item-title">Edit item</h2>
+          </div>
+          <button class="icon-button" type="button" data-close aria-label="Close edit item">✕</button>
+        </header>
+
+        <div class="field-row">
+          <label class="field" for="edit-name">
+            <span>Name</span>
+            <input id="edit-name" name="name" type="text" required />
+            <small class="field-error" data-error-for="name"></small>
+          </label>
+
+          <label class="field" for="edit-category">
+            <span>Category</span>
+            <select id="edit-category" name="category">
+              <option>Pantry</option>
+              <option>Cleaning</option>
+              <option>Personal care</option>
+              <option>Household</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field-row">
+          <label class="field" for="edit-unit">
+            <span>Unit</span>
+            <input id="edit-unit" name="unit" type="text" />
+          </label>
+
+          <label class="field" for="edit-threshold">
+            <span>Expected restock</span>
+            <input id="edit-threshold" name="reorderThresholdDays" type="number" min="1" max="365" step="1" />
+            <small class="field-error" data-error-for="reorderThresholdDays"></small>
+          </label>
+        </div>
+
+        <footer class="dialog-actions">
+          <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+          <button class="btn btn-primary" type="submit">Save changes</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="hoot-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
+      <header class="dialog-header">
+        <div>
+          <h2 id="confirm-title">Are you sure?</h2>
+        </div>
+        <button class="icon-button" type="button" data-close aria-label="Close confirmation">✕</button>
+      </header>
+      <p id="confirm-message">This action cannot be undone.</p>
+      <footer class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+        <button class="btn btn-danger" id="confirm-action" type="button">Confirm</button>
+      </footer>
+    </dialog>
+
+    <div class="toast-region" id="toast-region" role="status" aria-live="polite"></div>
+
     <script src="app.js"></script>
-</body>
+  </body>
 </html>
