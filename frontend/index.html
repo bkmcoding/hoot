@@ -10,19 +10,25 @@
   </head>
 
   <body class="hoot-shell">
-    <div class="app-frame">
-      <header class="app-header">
+    <header class="app-header">
+      <div class="header-frame">
         <a class="brand" href="#view-dashboard" data-view="dashboard" aria-label="Hoot home">
           <span class="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 48 48" role="img" aria-hidden="true">
-              <path class="owl-body" d="M24 7c-9.4 0-17 6.7-17 15 0 8.3 7.6 15 17 15s17-6.7 17-15c0-8.3-7.6-15-17-15Z" />
-              <path class="owl-wing" d="M12 25c2.6-2.2 5.5-3.4 8.5-3.4v12.8c-3.5-.4-6.5-3.6-8.5-9.4Z" />
-              <path class="owl-wing" d="M36 25c-2.6-2.2-5.5-3.4-8.5-3.4v12.8c3.5-.4 6.5-3.6 8.5-9.4Z" />
-              <circle class="owl-eye" cx="17.5" cy="21" r="6" />
-              <circle class="owl-eye" cx="30.5" cy="21" r="6" />
-              <circle class="owl-pupil" cx="17.5" cy="21" r="2.1" />
-              <circle class="owl-pupil" cx="30.5" cy="21" r="2.1" />
-              <path class="owl-beak" d="m24 24.5 4 4.4-4 4.4-4-4.4 4-4.4Z" />
+            <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+              <defs>
+                <mask id="brand-crescent">
+                  <rect width="48" height="48" fill="#fff" />
+                  <circle cx="35.5" cy="12.5" r="8.5" fill="#000" />
+                </mask>
+              </defs>
+              <rect class="brand-tile" width="48" height="48" rx="14" />
+              <g class="moon-body">
+                <circle class="moon-disc" cx="24" cy="25" r="15" mask="url(#brand-crescent)" />
+                <ellipse class="owl-eye" cx="18.6" cy="27" rx="3.6" ry="2.7" />
+                <ellipse class="owl-eye" cx="28.4" cy="27" rx="3.6" ry="2.7" />
+                <circle class="owl-iris" cx="19.4" cy="26.6" r="1.25" />
+                <circle class="owl-iris" cx="29.2" cy="26.6" r="1.25" />
+              </g>
             </svg>
           </span>
           <span class="brand-text">
@@ -34,15 +40,21 @@
         <nav class="app-nav" aria-label="Primary">
           <button class="nav-button is-active" type="button" data-view="dashboard">Dashboard</button>
           <button class="nav-button" type="button" data-view="one-time">One-time</button>
-          <button class="nav-button" type="button" data-view="ideas">Feature ideas</button>
+          <!-- <button class="nav-button" type="button" data-view="ideas">Feature ideas</button> -->
         </nav>
 
         <div class="header-actions">
           <button class="btn btn-primary" type="button" data-dialog="add-item">Add item</button>
           <button class="btn btn-secondary" type="button" data-dialog="log-purchase">Log purchase</button>
-          <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
         </div>
+
+        <div class="header-utility">
+          <!-- <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button> -->
+        </div>
+      </div>
       </header>
+
+      <div class="app-frame">
 
       <main class="app-main">
         <section class="app-view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
@@ -76,6 +88,8 @@
             </article>
           </div>
 
+          <div id="dashboard-list" class="item-list" aria-live="polite"></div>
+
           <section class="calendar-panel" aria-labelledby="calendar-title">
             <div class="section-heading">
               <div>
@@ -87,8 +101,6 @@
               <div id="restock-calendar" class="calendar-strip" role="list" aria-label="Predicted restocks for the next fourteen days"></div>
             </div>
           </section>
-
-          <div id="dashboard-list" class="item-list" aria-live="polite"></div>
         </section>
 
         <section class="app-view" id="view-item" aria-labelledby="item-analysis-title">
@@ -152,17 +164,22 @@
         <header class="dialog-header">
           <div>
             <h2 id="add-item-title">Add an item</h2>
+            <p>Start tracking a staple or save a one-time need.</p>
           </div>
-          <button class="icon-button" type="button" data-close aria-label="Close add item">✕</button>
+          <button class="icon-button" type="button" data-close aria-label="Close add item">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+            </svg>
+          </button>
         </header>
 
-        <div class="field-row">
-          <label class="field" for="add-name">
-            <span>Name</span>
-            <input id="add-name" name="name" type="text" autocomplete="off" required />
-            <small class="field-error" data-error-for="name"></small>
-          </label>
+        <label class="field" for="add-name">
+          <span>Name</span>
+          <input id="add-name" name="name" type="text" autocomplete="off" required aria-describedby="add-name-error" />
+          <small id="add-name-error" class="field-error" data-error-for="name"></small>
+        </label>
 
+        <div class="field-row field-row--2">
           <label class="field" for="add-category">
             <span>Category</span>
             <select id="add-category" name="category">
@@ -171,31 +188,51 @@
               <option>Personal care</option>
               <option>Household</option>
             </select>
+            <small id="add-category-hint" class="field-hint">Choose the closest household area.</small>
           </label>
-        </div>
 
-        <div class="field-row">
           <label class="field" for="add-unit">
             <span>Unit</span>
-            <input id="add-unit" name="unit" type="text" placeholder="half-gallon, roll, tube…" autocomplete="off" />
-          </label>
-
-          <label class="field" for="add-threshold">
-            <span>Expected restock</span>
-            <input id="add-threshold" name="reorderThresholdDays" type="number" min="1" max="365" step="1" value="14" />
-            <small class="field-error" data-error-for="reorderThresholdDays"></small>
+            <input
+              id="add-unit"
+              name="unit"
+              type="text"
+              placeholder="half-gallon, roll, tube…"
+              autocomplete="off"
+              aria-describedby="add-unit-hint"
+            />
+            <small id="add-unit-hint" class="field-hint">Optional. Example: “half-gallon”.</small>
           </label>
         </div>
 
-        <label class="check-row">
-          <input id="add-one-time" name="isOneTime" type="checkbox" />
-          <span>Add as a one-time item</span>
-          <small>Excluded from prediction</small>
+        <label class="field" for="add-threshold">
+          <span>Restock estimate</span>
+          <input
+            id="add-threshold"
+            name="reorderThresholdDays"
+            type="number"
+            min="1"
+            max="365"
+            step="1"
+            value="14"
+            inputmode="numeric"
+            autocomplete="off"
+            aria-describedby="add-threshold-hint add-threshold-error"
+          />
+          <small id="add-threshold-hint" class="field-hint">Days between typical purchases.</small>
+          <small id="add-threshold-error" class="field-error" data-error-for="reorderThresholdDays"></small>
         </label>
 
+        <label class="check-row">
+          <input id="add-one-time" name="isOneTime" type="checkbox" aria-describedby="add-one-time-hint" />
+          <span>Add as a one-time item</span>
+          <small id="add-one-time-hint">One-time items are excluded from prediction.</small>
+        </label>
+
+        <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
         <footer class="dialog-actions">
           <button class="btn btn-secondary" type="button" data-close>Cancel</button>
-          <button class="btn btn-primary" type="submit">Add item</button>
+          <button class="btn btn-primary" type="submit" data-loading-label="Adding…">Add item</button>
         </footer>
       </form>
     </dialog>
@@ -205,38 +242,84 @@
         <header class="dialog-header">
           <div>
             <h2 id="log-purchase-title">Log a purchase</h2>
+            <p>Record what you bought so Hoot can keep learning.</p>
           </div>
-          <button class="icon-button" type="button" data-close aria-label="Close log purchase">✕</button>
+          <button class="icon-button" type="button" data-close aria-label="Close log purchase">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+            </svg>
+          </button>
         </header>
 
-        <label class="field" for="purchase-item">
-          <span>Item</span>
-          <select id="purchase-item" name="itemId" required></select>
-        </label>
-
-        <div class="field-row">
-          <label class="field" for="purchase-date">
-            <span>Date</span>
-            <input id="purchase-date" name="date" type="date" required />
-            <small class="field-error" data-error-for="date"></small>
+        <div id="purchase-fields">
+          <label class="field" for="purchase-item">
+            <span>Item</span>
+            <select id="purchase-item" name="itemId" required aria-describedby="purchase-item-hint"></select>
+            <small id="purchase-item-hint" class="field-hint">Choose the tracked item you bought.</small>
           </label>
 
-          <label class="field" for="purchase-quantity">
-            <span>Quantity</span>
-            <input id="purchase-quantity" name="quantity" type="number" min="0.01" step="0.01" value="1" required />
-            <small class="field-error" data-error-for="quantity"></small>
-          </label>
+          <div class="field-row field-row--3">
+            <label class="field" for="purchase-date">
+              <span>Date</span>
+              <input
+                id="purchase-date"
+                name="date"
+                type="date"
+                required
+                autocomplete="off"
+                aria-describedby="purchase-date-hint purchase-date-error"
+              />
+              <small id="purchase-date-hint" class="field-hint">Today or earlier.</small>
+              <small id="purchase-date-error" class="field-error" data-error-for="date"></small>
+            </label>
 
-          <label class="field" for="purchase-price">
-            <span>Price</span>
-            <input id="purchase-price" name="price" type="number" min="0" step="0.01" value="0" required />
-            <small class="field-error" data-error-for="price"></small>
-          </label>
+            <label class="field" for="purchase-quantity">
+              <span>Quantity</span>
+              <input
+                id="purchase-quantity"
+                name="quantity"
+                type="number"
+                min="0.01"
+                step="0.01"
+                value="1"
+                inputmode="decimal"
+                autocomplete="off"
+                required
+                aria-describedby="purchase-quantity-hint purchase-quantity-error"
+              />
+              <small id="purchase-quantity-hint" class="field-hint">How many you bought.</small>
+              <small id="purchase-quantity-error" class="field-error" data-error-for="quantity"></small>
+            </label>
+
+            <label class="field" for="purchase-price">
+              <span>Total price</span>
+              <input
+                id="purchase-price"
+                name="price"
+                type="number"
+                min="0"
+                step="0.01"
+                value="0"
+                inputmode="decimal"
+                autocomplete="off"
+                required
+                aria-describedby="purchase-price-hint purchase-price-error"
+              />
+              <small id="purchase-price-hint" class="field-hint">The amount paid, not per unit.</small>
+              <small id="purchase-price-error" class="field-error" data-error-for="price"></small>
+            </label>
+          </div>
         </div>
 
+        <div class="dialog-empty-state" id="purchase-empty-state" hidden>
+          <strong>No tracked items yet</strong>
+          <p>Add a tracked item first. One-time items are not eligible for purchase history.</p>
+        </div>
+
+        <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
         <footer class="dialog-actions">
           <button class="btn btn-secondary" type="button" data-close>Cancel</button>
-          <button class="btn btn-primary" type="submit">Log purchase</button>
+          <button class="btn btn-primary" type="submit" data-loading-label="Logging…">Log purchase</button>
         </footer>
       </form>
     </dialog>
@@ -247,7 +330,11 @@
           <div>
             <h2 id="edit-item-title">Edit item</h2>
           </div>
-          <button class="icon-button" type="button" data-close aria-label="Close edit item">✕</button>
+          <button class="icon-button" type="button" data-close aria-label="Close edit item">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+            </svg>
+          </button>
         </header>
 
         <div class="field-row">
@@ -293,7 +380,11 @@
         <div>
           <h2 id="confirm-title">Are you sure?</h2>
         </div>
-        <button class="icon-button" type="button" data-close aria-label="Close confirmation">✕</button>
+        <button class="icon-button" type="button" data-close aria-label="Close confirmation">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+          </svg>
+        </button>
       </header>
       <p id="confirm-message">This action cannot be undone.</p>
       <footer class="dialog-actions">

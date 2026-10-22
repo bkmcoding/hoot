@@ -1,9 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-  <rect width="48" height="48" rx="12" fill="#17171a"/>
-  <path d="M24 7C14.6 7 7 13.7 7 22s7.6 15 17 15 17-6.7 17-15S33.4 7 24 7Z" fill="#25252a" stroke="#689d99" stroke-width="2"/>
-  <circle cx="17.5" cy="21" r="6" fill="#101014" stroke="#a4a7cf" stroke-width="1.5"/>
-  <circle cx="30.5" cy="21" r="6" fill="#101014" stroke="#a4a7cf" stroke-width="1.5"/>
-  <circle cx="17.5" cy="21" r="2.1" fill="#a4a7cf"/>
-  <circle cx="30.5" cy="21" r="2.1" fill="#a4a7cf"/>
-  <path d="m24 24.5 4 4.4-4 4.4-4-4.4 4-4.4Z" fill="#c697b8"/>
+  <defs>
+    <mask id="crescent">
+      <rect width="48" height="48" fill="#fff"/>
+      <circle cx="35.5" cy="12.5" r="8.5" fill="#000"/>
+    </mask>
+  </defs>
+  <rect width="48" height="48" rx="14" fill="#1a2b33"/>
+  <circle cx="24" cy="25" r="15" fill="#f5efe3" mask="url(#crescent)"/>
+  <ellipse cx="18.6" cy="27" rx="3.6" ry="2.7" fill="#1a2b33"/>
+  <ellipse cx="28.4" cy="27" rx="3.6" ry="2.7" fill="#1a2b33"/>
+  <circle cx="19.4" cy="26.6" r="1.25" fill="#d49b4c"/>
+  <circle cx="29.2" cy="26.6" r="1.25" fill="#d49b4c"/>
 </svg>
