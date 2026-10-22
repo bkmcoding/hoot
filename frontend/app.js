@@ -606,7 +606,12 @@
   }
 
   function renderOneTime() {
-    const oneTimeItems = state.items.filter((item) => item.isOneTime);
+    const oneTimeItems = state.items
+      .filter((item) => item.isOneTime)
+      .sort((left, right) => {
+        const complete = Number(left.completed) - Number(right.completed);
+        return complete || left.name.localeCompare(right.name);
+      });
     const container = $("#one-time-list");
 
     if (!oneTimeItems.length) {
@@ -785,19 +790,35 @@
     const purchases = [...item.purchases].sort(
       (left, right) => parseDate(left.date) - parseDate(right.date),
     );
-    const history = purchases.length
-      ? purchases
-          .map(
-            (purchase) => `
-              <li>
-                <span>${formatFullDate(parseDate(purchase.date))}</span>
-                <strong>${purchase.quantity} ${escapeHtml(item.unit || "unit")}</strong>
-                <span>${formatMoney(purchase.price)}</span>
-              </li>
-            `,
-          )
-          .join("")
-      : `<li><span>No purchase history yet.</span></li>`;
+    const historyRows = purchases
+      .map(
+        (purchase) => `
+          <tr>
+            <td data-label="Date">${formatFullDate(parseDate(purchase.date))}</td>
+            <td data-label="Quantity">${purchase.quantity} ${escapeHtml(item.unit || "unit")}</td>
+            <td data-label="Total price">${formatMoney(purchase.price)}</td>
+          </tr>
+        `,
+      )
+      .join("");
+    const history = `
+      <table class="history-table">
+        <caption> Purchase history for ${escapeHtml(item.name)}</caption>
+        <thead>
+          <tr>
+            <th scope="col">Date</th>
+            <th scope="col">Quantity</th>
+            <th scope="col">Total price</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${
+            historyRows ||
+            `<tr><td colspan="3" class="history-empty">No purchase history yet.</td></tr>`
+          }
+        </tbody>
+      </table>
+    `;
     const averageInterval = prediction?.averageInterval;
     const maturityLabel = prediction
       ? prediction.maturity === "learned"
@@ -874,7 +895,7 @@
 
         <section>
           <h3>Purchase history</h3>
-          <ul class="history-list">${history}</ul>
+          ${history}
         </section>
 
         <footer class="detail-actions">
@@ -889,6 +910,13 @@
   function updatePurchaseSelect(selectedId = null) {
     const select = $("#purchase-item");
     const tracked = state.items.filter((item) => !item.isOneTime);
+    if (!tracked.length) {
+      select.innerHTML = `<option value="">No tracked items yet</option>`;
+      select.disabled = true;
+      return;
+    }
+
+    select.disabled = false;
     select.innerHTML = tracked
       .map(
         (item) =>
@@ -939,7 +967,52 @@
     input.setAttribute("aria-invalid", "true");
     const field = input.closest(".field");
     const error = field?.querySelector(".field-error");
-    if (error) error.textContent = message;
+    if (error) {
+      error.textContent = message;
+      const describedBy = input.getAttribute("aria-describedby");
+      if (error.id && !describedBy?.includes(error.id)) {
+        input.setAttribute("aria-describedby", [describedBy, error.id].filter(Boolean).join(" "));
+      }
+    }
+  }
+
+  function setFormStatus(form, message, tone = "neutral") {
+    const status = $("[data-form-status]", form);
+    if (!status) return;
+    status.textContent = message;
+    if (tone === "error") status.dataset.tone = "error";
+    else delete status.dataset.tone;
+  }
+
+  function setFormBusy(form, isBusy) {
+    const submitButton = form.querySelector('[type="submit"]');
+    if (!submitButton) return;
+
+    if (!submitButton.dataset.label) submitButton.dataset.label = submitButton.textContent;
+    submitButton.textContent = isBusy
+      ? submitButton.dataset.loadingLabel || "Saving…"
+      : submitButton.dataset.label;
+
+    if (isBusy) submitButton.setAttribute("aria-disabled", "true");
+    else submitButton.removeAttribute("aria-disabled");
+
+    form.setAttribute("aria-busy", String(isBusy));
+  }
+
+  function resetDialogFormState(form) {
+    clearFieldErrors(form);
+    setFormBusy(form, false);
+    setFormStatus(form, "");
+  }
+
+  function updateAddThresholdState(isOneTime) {
+    const thresholdInput = $("#add-threshold");
+    const hint = $("#add-threshold-hint");
+    thresholdInput.disabled = isOneTime;
+    thresholdInput.value = isOneTime ? "" : "14";
+    hint.textContent = isOneTime
+      ? "Not used for one-time items."
+      : "Days between typical purchases.";
   }
 
   function readAddItemForm() {
@@ -973,88 +1046,128 @@
   function prepareAddItemDialog(isOneTime = false) {
     const form = $("#add-item-form");
     form.reset();
-    clearFieldErrors(form);
+    resetDialogFormState(form);
     $("#add-one-time").checked = isOneTime;
-    $("#add-threshold").disabled = isOneTime;
-    $("#add-threshold").value = isOneTime ? "" : "14";
-    $("#add-name").focus();
+    updateAddThresholdState(isOneTime);
   }
 
   async function submitAddItem(event) {
     event.preventDefault();
+    const form = $("#add-item-form");
+    if (form.getAttribute("aria-busy") === "true") return;
+
+    setFormStatus(form, "");
     const input = readAddItemForm();
-    if (!input) return;
-    const item = await hootApi.addItem(input);
-    render();
-    closeDialog($("#add-item-dialog"));
-    toast(input.isOneTime ? "One-time item added." : `${item.name} is now tracked.`);
-    if (input.isOneTime) setView("one-time");
+    if (!input) {
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+
+    setFormBusy(form, true);
+    try {
+      const item = await hootApi.addItem(input);
+      render();
+      setFormStatus(form, "Saved.");
+      window.setTimeout(() => closeDialog($("#add-item-dialog")), 240);
+      toast(input.isOneTime ? "One-time item added." : `${item.name} is now tracked.`);
+      if (input.isOneTime) setView("one-time");
+    } catch {
+      setFormBusy(form, false);
+      setFormStatus(form, "Could not add the item. Try again.", "error");
+    }
   }
 
   function prepareLogPurchaseDialog(itemId = null) {
     const tracked = state.items.filter((item) => !item.isOneTime);
+    const form = $("#log-purchase-form");
+    const fields = $("#purchase-fields");
+    const emptyState = $("#purchase-empty-state");
+    const submitButton = form.querySelector('[type="submit"]');
+
+    form.reset();
+    resetDialogFormState(form);
+    updatePurchaseSelect(tracked.length ? itemId || tracked[0].id : null);
+
     if (!tracked.length) {
-      toast("Add a tracked item before logging a purchase.", "error");
-      return false;
+      fields.hidden = true;
+      emptyState.hidden = false;
+      submitButton.disabled = true;
+      setFormStatus(form, "Add a tracked item to enable purchase logging.");
+      return true;
     }
 
-    const form = $("#log-purchase-form");
-    form.reset();
-    clearFieldErrors(form);
-    updatePurchaseSelect(itemId || tracked[0].id);
-    $("#purchase-date").value = toISODate(today);
+    fields.hidden = false;
+    emptyState.hidden = true;
+    submitButton.disabled = false;
+    $("#purchase-date").max = toISODate(startOfDay());
+    $("#purchase-date").value = toISODate(startOfDay());
     $("#purchase-quantity").value = "1";
     $("#purchase-price").value = "0";
-    $("#purchase-item").focus();
     return true;
   }
 
   async function submitLogPurchase(event) {
     event.preventDefault();
     const form = $("#log-purchase-form");
+    if (form.getAttribute("aria-busy") === "true") return;
+
     const itemSelect = $("#purchase-item");
     const dateInput = $("#purchase-date");
     const quantityInput = $("#purchase-quantity");
     const priceInput = $("#purchase-price");
 
     clearFieldErrors(form);
+    setFormStatus(form, "");
     const quantity = Number(quantityInput.value);
     const price = Number(priceInput.value);
     const purchaseDate = dateInput.value ? parseDate(dateInput.value) : null;
 
     if (!itemSelect.value) {
-      toast("Select a tracked item.", "error");
+      setFieldError(itemSelect, "Select a tracked item.");
+      itemSelect.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
       return;
     }
     if (!purchaseDate) {
       setFieldError(dateInput, "Choose the purchase date.");
       dateInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
       return;
     }
-    if (purchaseDate > today) {
+    if (purchaseDate > startOfDay()) {
       setFieldError(dateInput, "Purchase date cannot be in the future.");
       dateInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
       return;
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
       setFieldError(quantityInput, "Enter a quantity greater than zero.");
       quantityInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
       return;
     }
     if (!Number.isFinite(price) || price < 0) {
       setFieldError(priceInput, "Enter a price of zero or more.");
       priceInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
       return;
     }
 
-    await hootApi.logPurchase(itemSelect.value, {
-      date: toISODate(purchaseDate),
-      quantity,
-      price,
-    });
-    render();
-    closeDialog($("#log-purchase-dialog"));
-    toast("Purchase logged. Prediction updated.");
+    setFormBusy(form, true);
+    try {
+      await hootApi.logPurchase(itemSelect.value, {
+        date: toISODate(purchaseDate),
+        quantity,
+        price,
+      });
+      render();
+      setFormStatus(form, "Saved.");
+      window.setTimeout(() => closeDialog($("#log-purchase-dialog")), 240);
+      toast("Purchase logged. Prediction updated.");
+    } catch {
+      setFormBusy(form, false);
+      setFormStatus(form, "Could not log the purchase. Try again.", "error");
+    }
   }
 
   function prepareEditItemDialog(itemId) {
@@ -1126,6 +1239,16 @@
   function showDialog(dialog, trigger = null) {
     lastDialogTrigger = trigger instanceof HTMLElement ? trigger : document.activeElement;
     if (!dialog.open) dialog.showModal();
+
+    const firstControl = Array.from(
+      dialog.querySelectorAll(
+        "input:not([type='hidden']):not(:disabled), select:not(:disabled), textarea:not(:disabled)",
+      ),
+    ).find((control) => control.getClientRects().length > 0);
+    const primaryAction = dialog.querySelector("button:not([data-close]):not(:disabled)");
+    const fallbackAction = dialog.querySelector(".btn-secondary:not(:disabled)");
+    const focusTarget = firstControl || primaryAction || fallbackAction;
+    if (focusTarget) focusTarget.focus();
   }
 
   function closeDialog(dialog) {
@@ -1206,7 +1329,9 @@
 
       const closeButton = target.closest("[data-close]");
       if (closeButton) {
-        closeDialog(closeButton.closest("dialog"));
+        const dialog = closeButton.closest("dialog");
+        const form = dialog?.querySelector("form");
+        if (form?.getAttribute("aria-busy") !== "true") closeDialog(dialog);
         return;
       }
 
@@ -1244,8 +1369,14 @@
     });
 
     $("#add-one-time").addEventListener("change", (event) => {
-      $("#add-threshold").disabled = event.target.checked;
-      $("#add-threshold").value = event.target.checked ? "" : "14";
+      const isOneTime = event.target.checked;
+      updateAddThresholdState(isOneTime);
+      setFormStatus($("#add-item-form"), "");
+      if (isOneTime) {
+        const thresholdInput = $("#add-threshold");
+        thresholdInput.removeAttribute("aria-invalid");
+        $("#add-threshold-error").textContent = "";
+      }
     });
 
     $("#add-item-form").addEventListener("submit", submitAddItem);
@@ -1262,7 +1393,18 @@
     });
 
     $$("dialog").forEach((dialog) => {
+      dialog.addEventListener("cancel", (event) => {
+        const form = dialog.querySelector("form");
+        if (form?.getAttribute("aria-busy") === "true") event.preventDefault();
+      });
+
       dialog.addEventListener("close", () => {
+        const form = dialog.querySelector("form");
+        if (form) {
+          setFormBusy(form, false);
+          setFormStatus(form, "");
+        }
+
         if (lastDialogTrigger instanceof HTMLElement) {
           lastDialogTrigger.focus({ preventScroll: true });
         }
