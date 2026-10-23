@@ -43,8 +43,8 @@
         </nav>
 
         <div class="header-actions">
-          <button class="btn btn-primary" type="button" data-dialog="add-item">Add item</button>
           <button class="btn btn-secondary" type="button" data-dialog="log-purchase">Log purchase</button>
+          <button class="btn btn-secondary" type="button" data-dialog="add-item">Add item</button>
         </div>
 
         <div class="header-utility">
@@ -60,11 +60,20 @@
           <div class="section-heading">
             <div>
               <h1 id="dashboard-title">Upcoming restocks</h1>
-              <p class="section-copy">Hoot ranks your tracked staples by how soon they are likely to run out.</p>
+              <p class="section-copy">Hoot leads with the next item to decide, then ranks the rest of your staples.</p>
+            </div>
+            <div class="queue-search" id="queue-search-field">
+              <input
+                id="queue-search"
+                type="search"
+                placeholder="Search name, category, or unit"
+                autocomplete="off"
+                aria-label="Search tracked staples by name, category, or unit"
+              />
             </div>
           </div>
 
-          <div id="dashboard-list" class="item-list"></div>
+          <div id="dashboard-list" class="dashboard-stack"></div>
 
           <div class="stats-grid" role="group" aria-label="Inventory summary">
             <article class="stat-card">
@@ -127,7 +136,7 @@
         <header class="dialog-header">
           <div>
             <h2 id="add-item-title">Add an item</h2>
-            <p>Start tracking a staple or save a one-time need.</p>
+            <p>Pick a path, then add only what it needs.</p>
           </div>
           <button class="icon-button" type="button" data-close aria-label="Close add item">
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -135,6 +144,22 @@
             </svg>
           </button>
         </header>
+
+        <fieldset class="item-type-choice">
+          <legend>Item type</legend>
+          <div class="segmented-choice">
+            <label class="choice-option">
+              <input type="radio" name="itemType" value="tracked" checked />
+              <span>Tracked staple</span>
+              <small>Hoot learns rhythm</small>
+            </label>
+            <label class="choice-option">
+              <input type="radio" name="itemType" value="one-time" />
+              <span>One-time need</span>
+              <small>Checklist only</small>
+            </label>
+          </div>
+        </fieldset>
 
         <label class="field" for="add-name">
           <span>Name</span>
@@ -168,7 +193,7 @@
           </label>
         </div>
 
-        <label class="field" for="add-threshold">
+        <label class="field" for="add-threshold" id="add-threshold-field">
           <span>Typical restock interval</span>
           <input
             id="add-threshold"
@@ -184,12 +209,6 @@
           />
           <small id="add-threshold-hint" class="field-hint">Days between typical purchases.</small>
           <small id="add-threshold-error" class="field-error" data-error-for="reorderThresholdDays"></small>
-        </label>
-
-        <label class="check-row">
-          <input id="add-one-time" name="isOneTime" type="checkbox" aria-describedby="add-one-time-hint" />
-          <span>Add as a one-time item</span>
-          <small id="add-one-time-hint">One-time items are excluded from prediction.</small>
         </label>
 
         <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>

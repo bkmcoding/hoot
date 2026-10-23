@@ -205,23 +205,10 @@
   let editingItemId = null;
   let lastDialogTrigger = null;
   let pendingConfirm = null;
+  let queueSearch = "";
 
   function makeId(prefix) {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
-  }
-
-  function productInfoFor(item) {
-    return (
-      item.productInfo ?? {
-        barcode: null,
-        source: null,
-        status: "not-connected",
-        brand: null,
-        size: null,
-        imageUrl: null,
-        nutrition: null,
-      }
-    );
   }
 
   const hootApi = {
@@ -234,11 +221,6 @@
       if (!item) throw new Error("Item not found");
       return clone(item);
     },
-    async getProductInfo(id) {
-      const item = state.items.find((entry) => entry.id === id);
-      if (!item) throw new Error("Item not found");
-      return clone(productInfoFor(item));
-    },
     async addItem(input) {
       const item = {
         id: makeId("item"),
@@ -250,7 +232,6 @@
         completed: false,
         createdAt: toISODate(today),
         purchases: [],
-        productInfo: productInfoFor({}),
       };
       state.items.push(item);
       saveState();
@@ -453,6 +434,21 @@
     return `In ${daysUntil} days`;
   }
 
+  function latestPurchaseFor(item) {
+    return (
+      [...item.purchases].sort(
+        (left, right) => parseDate(right.date) - parseDate(left.date),
+      )[0] ?? null
+    );
+  }
+
+  function matchesQueueSearch(item, searchTerm) {
+    if (!searchTerm) return true;
+    return [item.name, item.category, item.unit].some((value) =>
+      String(value ?? "").toLowerCase().includes(searchTerm),
+    );
+  }
+
   function renderStats() {
     const tracked = state.items.filter((item) => !item.isOneTime);
     const oneTime = state.items.filter((item) => item.isOneTime);
@@ -466,25 +462,30 @@
     $("#stat-one-time").textContent = String(oneTime.length);
   }
 
-  function dashboardCard(item, prediction) {
+  function nextUpCard(item, prediction) {
     const todayPosition = clamp((7 + prediction.daysUntil) / 21, 0, 1) * 100;
     const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
+    const logLastButton = item.purchases.length
+      ? `<button class="btn btn-secondary" type="button" data-action="log-last" data-id="${escapeHtml(item.id)}">Log last</button>`
+      : "";
+
     return `
       <article class="item-card horizon-${escapeHtml(prediction.zone)}" data-item-id="${escapeHtml(item.id)}">
         <div class="item-card-header">
+          <div class="next-up-meta">
+            <span class="next-up-label">Next up</span>
+            <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+          </div>
           <div>
-            <h3>
+            <h2>
               <button
                 class="item-title-button"
                 type="button"
                 data-action="detail"
                 data-id="${escapeHtml(item.id)}"
               >${escapeHtml(item.name)}</button>
-            </h3>
+            </h2>
             <p>${escapeHtml(item.category)}${unitText}</p>
-          </div>
-          <div class="status-stack">
-            <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
           </div>
         </div>
         <div
@@ -517,35 +518,76 @@
         </div>
         <div class="item-card-footer">
           <div class="item-actions">
-            <button class="btn btn-secondary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
-            <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
+            <button class="btn btn-primary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
+            ${logLastButton}
+            <button class="btn btn-secondary" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
           </div>
         </div>
       </article>
     `;
   }
 
+  function itemRow(item, prediction) {
+    const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
+    return `
+      <article class="item-row horizon-${escapeHtml(prediction.zone)}" data-item-id="${escapeHtml(item.id)}">
+        <div class="item-row-main">
+          <h3>
+            <button
+              class="item-title-button"
+              type="button"
+              data-action="detail"
+              data-id="${escapeHtml(item.id)}"
+            >${escapeHtml(item.name)}</button>
+          </h3>
+          <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+        </div>
+        <strong class="item-row-due">${formatFullDate(prediction.date)}</strong>
+        <div class="item-row-actions">
+          <button class="btn btn-secondary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
+          <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
+        </div>
+      </article>
+    `;
+  }
+
   function renderDashboard() {
+    const searchTerm = queueSearch.trim().toLowerCase();
     const tracked = state.items
       .filter((item) => !item.isOneTime)
       .map((item) => ({ item, prediction: predictionFor(item) }))
+      .filter(({ item }) => matchesQueueSearch(item, searchTerm))
       .sort((left, right) => left.prediction.date - right.prediction.date);
 
     const container = $("#dashboard-list");
+    const searchField = $("#queue-search-field");
+    const hasTrackedItems = state.items.some((item) => !item.isOneTime);
+    searchField.hidden = !hasTrackedItems;
+
     if (!tracked.length) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <h3>No tracked items yet</h3>
-          <p>Add a household staple and Hoot will start learning its restock rhythm.</p>
-          <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
-        </div>
-      `;
+      container.innerHTML = hasTrackedItems
+        ? `
+          <div class="empty-state">
+            <h3>No matches</h3>
+            <p>Try another name, category, or unit.</p>
+            <button class="btn btn-secondary" type="button" data-action="clear-search">Clear search</button>
+          </div>
+        `
+        : `
+          <div class="empty-state">
+            <h3>No tracked items yet</h3>
+            <p>Add a household staple and Hoot will start learning its restock rhythm.</p>
+            <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
+          </div>
+        `;
       return;
     }
 
-    container.innerHTML = tracked
-      .map(({ item, prediction }) => dashboardCard(item, prediction))
-      .join("");
+    const [nextUp, ...remainingItems] = tracked;
+    container.innerHTML = `
+      ${nextUpCard(nextUp.item, nextUp.prediction)}
+      ${remainingItems.length ? `<div class="item-list">${remainingItems.map(({ item, prediction }) => itemRow(item, prediction)).join("")}</div>` : ""}
+    `;
   }
 
   function calendarItemButton(item, prediction) {
@@ -805,7 +847,6 @@
   function renderItemPage(item) {
     const content = $("#item-analysis-content");
     const prediction = predictionFor(item);
-    const productInfo = productInfoFor(item);
     const purchases = [...item.purchases].sort(
       (left, right) => parseDate(left.date) - parseDate(right.date),
     );
@@ -853,8 +894,6 @@
       itemReturnView === "one-time"
         ? "Back to one-time items"
         : "Back to dashboard";
-    const productStatusLabel =
-      productInfo.status === "not-connected" ? "Not connected" : productInfo.status;
 
     content.innerHTML = `
       <div class="item-page">
@@ -896,18 +935,7 @@
           <dl class="analysis-facts">
             <div><dt>Interval range</dt><dd>${intervalRange}</dd></div>
             <div><dt>Learning progress</dt><dd>${learningProgress}</dd></div>
-            <div><dt>Estimate source</dt><dd>${escapeHtml(prediction.method)}</dd></div>
-          </dl>
-        </article>
-
-        <article class="analysis-card product-card">
-          <span>Product intelligence</span>
-          <strong>Barcode lookup not connected</strong>
-          <p>Future barcode enrichment can attach brand, size, image, and nutrition details to this item.</p>
-          <dl class="analysis-facts">
-            <div><dt>Barcode</dt><dd>${productInfo.barcode ? escapeHtml(productInfo.barcode) : "Awaiting scan"}</dd></div>
-            <div><dt>Source</dt><dd>${productInfo.source ? escapeHtml(productInfo.source) : "Future API"}</dd></div>
-            <div><dt>Status</dt><dd>${escapeHtml(productStatusLabel)}</dd></div>
+            <div><dt>Estimate source</dt><dd>${prediction ? escapeHtml(prediction.method) : "Checklist"}</dd></div>
           </dl>
         </article>
         </div>
@@ -1033,21 +1061,20 @@
     setFormStatus(form, "");
   }
 
-  function updateAddThresholdState(isOneTime) {
+  function updateAddItemTypeState(isOneTime) {
+    const thresholdField = $("#add-threshold-field");
     const thresholdInput = $("#add-threshold");
-    const hint = $("#add-threshold-hint");
+    thresholdField.hidden = isOneTime;
     thresholdInput.disabled = isOneTime;
     thresholdInput.value = isOneTime ? "" : "14";
-    hint.textContent = isOneTime
-      ? "Not used for one-time items."
-      : "Days between typical purchases.";
   }
 
   function readAddItemForm() {
     const form = $("#add-item-form");
     const nameInput = $("#add-name");
     const thresholdInput = $("#add-threshold");
-    const isOneTime = $("#add-one-time").checked;
+    const itemType = form.elements.itemType.value;
+    const isOneTime = itemType === "one-time";
     const threshold = Number(thresholdInput.value);
 
     clearFieldErrors(form);
@@ -1075,8 +1102,8 @@
     const form = $("#add-item-form");
     form.reset();
     resetDialogFormState(form);
-    $("#add-one-time").checked = isOneTime;
-    updateAddThresholdState(isOneTime);
+    form.elements.itemType.value = isOneTime ? "one-time" : "tracked";
+    updateAddItemTypeState(isOneTime);
   }
 
   async function submitAddItem(event) {
@@ -1105,7 +1132,7 @@
     }
   }
 
-  function prepareLogPurchaseDialog(itemId = null) {
+  function prepareLogPurchaseDialog(itemId = null, { repeatLast = false } = {}) {
     const tracked = state.items.filter((item) => !item.isOneTime);
     const form = $("#log-purchase-form");
     const fields = $("#purchase-fields");
@@ -1114,7 +1141,8 @@
 
     form.reset();
     resetDialogFormState(form);
-    updatePurchaseSelect(tracked.length ? itemId || tracked[0].id : null);
+    const selectedItemId = tracked.length ? itemId || tracked[0].id : null;
+    updatePurchaseSelect(selectedItemId);
 
     if (!tracked.length) {
       fields.hidden = true;
@@ -1127,10 +1155,12 @@
     fields.hidden = false;
     emptyState.hidden = true;
     submitButton.disabled = false;
+    const selectedItem = state.items.find((item) => item.id === selectedItemId);
+    const latestPurchase = repeatLast ? latestPurchaseFor(selectedItem) : null;
     $("#purchase-date").max = toISODate(startOfDay());
     $("#purchase-date").value = toISODate(startOfDay());
-    $("#purchase-quantity").value = "1";
-    $("#purchase-price").value = "0";
+    $("#purchase-quantity").value = String(latestPurchase?.quantity ?? 1);
+    $("#purchase-price").value = String(latestPurchase?.price ?? 0);
     return true;
   }
 
@@ -1348,6 +1378,8 @@
         await hootApi.resetDemo();
         currentItemId = null;
         itemReturnView = "dashboard";
+        queueSearch = "";
+        $("#queue-search").value = "";
         render();
         setView("dashboard");
         toast("Demo data restored.");
@@ -1394,7 +1426,13 @@
       const action = actionButton.dataset.action;
       const itemId = actionButton.dataset.id;
 
-      if (action === "add-item") {
+      if (action === "clear-search") {
+        queueSearch = "";
+        const searchInput = $("#queue-search");
+        searchInput.value = "";
+        renderDashboard();
+        searchInput.focus();
+      } else if (action === "add-item") {
         prepareAddItemDialog(false);
         showDialog($("#add-item-dialog"), actionButton);
       } else if (action === "add-one-time") {
@@ -1404,6 +1442,10 @@
         openDetail(itemId, actionButton);
       } else if (action === "log") {
         if (prepareLogPurchaseDialog(itemId)) {
+          showDialog($("#log-purchase-dialog"), actionButton);
+        }
+      } else if (action === "log-last") {
+        if (prepareLogPurchaseDialog(itemId, { repeatLast: true })) {
           showDialog($("#log-purchase-dialog"), actionButton);
         }
       } else if (action === "edit") {
@@ -1422,15 +1464,20 @@
       toast(item.completed ? `${item.name} checked off.` : `${item.name} restored.`);
     });
 
-    $("#add-one-time").addEventListener("change", (event) => {
-      const isOneTime = event.target.checked;
-      updateAddThresholdState(isOneTime);
-      setFormStatus($("#add-item-form"), "");
-      if (isOneTime) {
+    $$('input[name="itemType"]').forEach((input) => {
+      input.addEventListener("change", () => {
+        const isOneTime = input.value === "one-time";
+        updateAddItemTypeState(isOneTime);
+        setFormStatus($("#add-item-form"), "");
         const thresholdInput = $("#add-threshold");
         thresholdInput.removeAttribute("aria-invalid");
         $("#add-threshold-error").textContent = "";
-      }
+      });
+    });
+
+    $("#queue-search").addEventListener("input", (event) => {
+      queueSearch = event.currentTarget.value;
+      renderDashboard();
     });
 
     $("#add-item-form").addEventListener("submit", submitAddItem);
