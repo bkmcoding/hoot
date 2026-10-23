@@ -1,0 +1,123 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usetheme{Madrid}
+\usecolortheme{beaver}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}[frame number]
+
+\usepackage[utf8]{inputenc}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+
+\title[Hoot: Progress Report 1]{Hoot: Progress Report 1}
+\subtitle{Predictive Household Inventory Tracker}
+\author{Michael Hannan}
+\date{Week 9 --- October 22, 2026}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Where We Are}
+  \begin{itemize}
+    \item This is the Week~9 progress check from the project breakdown.
+    \item Original plan for today: basic database, item/purchase save-and-load, and a simple dashboard.
+    \item What works: a working app demo in the browser first.
+    \item The server and database are started, but not finished yet.
+    \item This talk covers three things: \textbf{Done}, \textbf{TODO}, and \textbf{Update}.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task Done --- What You Can Use Today}
+  \begin{itemize}
+    \item \textbf{Dashboard} --- items sorted by how soon they may run out, with clear status labels.
+    \item \textbf{Restock calendar} --- a two-week view of upcoming restock dates.
+    \item \textbf{Add item / Log purchase} --- simple forms to track staples and record what you bought.
+    \item \textbf{Item page} --- purchase history, edit or delete, and a chart of the predicted restock.
+    \item \textbf{One-time list} --- a checklist for one-off needs that should not be predicted.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task Done --- How Predictions Work (For Now)}
+  \begin{itemize}
+    \item New items use a manual guess: ``I usually buy this every X days.''
+    \item After three purchases, Hoot learns the gap between buys and estimates the next date.
+    \item Demo data (milk, eggs, paper towels, and more) is saved in the browser.
+    \item The UI is set up so it can later talk to a real server without a full redesign.
+    \item Planning and design docs are written: breakdown, project plan, product notes, and UI flows.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task Done --- By Project Area}
+  \small
+  \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.1cm} X}
+    \toprule
+    \textbf{Area} & \textbf{Status} \\
+    \midrule
+    Frontend &
+      Mostly done: dashboard, forms, calendar, item page, one-time list \\[4pt]
+    Prediction &
+      Works in the browser demo; not yet saved on the server \\[4pt]
+    Backend / API &
+      Project started; real item and purchase endpoints still needed \\[4pt]
+    Database &
+      Tables are planned; not built in PostgreSQL yet \\[4pt]
+    Barcode lookup &
+      Placeholder on the item page; no live product lookup yet \\[4pt]
+    Testing \& Deploy &
+      Manual demo testing only; no packaging or deploy setup yet \\
+    \bottomrule
+  \end{tabularx}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task TODO --- Next (Weeks 10--12)}
+  \begin{itemize}
+    \item Build the database tables for users, items, purchases, and predictions.
+    \item Finish the server API so items and purchases can be saved for real.
+    \item Connect the front end to that API instead of browser-only storage.
+    \item Move prediction math onto the server and keep a history of each estimate.
+    \item Add barcode lookup so scanning can fill in product details.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task TODO --- Later}
+  \begin{itemize}
+    \item Login and register screens.
+    \item Check how accurate predictions were over time.
+    \item More testing, bug fixes, and optional Docker deploy.
+    \item Nice-to-haves later: shared households, shopping mode, price trends, reminders.
+    \item Final week: demo slides, demo video, final report, and code hand-in.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task Update --- Plan vs.\ Reality}
+  \begin{itemize}
+    \item \textbf{Ahead on the UI:} we planned a basic dashboard; we have ranking, calendar, charts, and full add/edit/delete flows.
+    \item \textbf{Behind on the database:} save-and-load on the server was due now; that work comes next.
+    \item \textbf{Prediction early, but local:} the learning math works in the demo; it still needs to live on the server.
+    \item \textbf{One-time list early:} that checklist was planned later and is already in the demo.
+  \end{itemize}
+\end{frame}
+
+% ---------------------------------------------------------
+\begin{frame}{Task Update --- What Comes Next}
+  \begin{itemize}
+    \item First job: finish the database and server so the app does not rely on browser storage.
+    \item Next: barcode and product lookup once the core tables exist.
+    \item Goal for Progress Report~2 (Nov~10): live API, server predictions, and barcode support started.
+    \item Watch-out: keep the same prediction rules when moving from demo to server.
+  \end{itemize}
+\end{frame}
+
+
+\end{document}

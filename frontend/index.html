@@ -40,7 +40,6 @@
         <nav class="app-nav" aria-label="Primary">
           <button class="nav-button is-active" type="button" data-view="dashboard">Dashboard</button>
           <button class="nav-button" type="button" data-view="one-time">One-time</button>
-          <!-- <button class="nav-button" type="button" data-view="ideas">Feature ideas</button> -->
         </nav>
 
         <div class="header-actions">
@@ -49,7 +48,7 @@
         </div>
 
         <div class="header-utility">
-          <!-- <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button> -->
+          <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
         </div>
       </div>
       </header>
@@ -65,7 +64,9 @@
             </div>
           </div>
 
-          <div class="stats-grid" aria-label="Inventory summary">
+          <div id="dashboard-list" class="item-list"></div>
+
+          <div class="stats-grid" role="group" aria-label="Inventory summary">
             <article class="stat-card">
               <span>Tracked items</span>
               <strong id="stat-tracked">0</strong>
@@ -77,9 +78,9 @@
               <p>Due within three days</p>
             </article>
             <article class="stat-card">
-              <span>Established</span>
+              <span>Learned rhythm</span>
               <strong id="stat-established">0</strong>
-              <p>Using learned intervals</p>
+              <p>Using purchase history</p>
             </article>
             <article class="stat-card">
               <span>One-time</span>
@@ -87,8 +88,6 @@
               <p>Excluded from prediction</p>
             </article>
           </div>
-
-          <div id="dashboard-list" class="item-list" aria-live="polite"></div>
 
           <section class="calendar-panel" aria-labelledby="calendar-title">
             <div class="section-heading">
@@ -114,48 +113,12 @@
               <p class="section-copy">Check off things you only need once in a while. Hoot will not try to predict them.</p>
             </div>
           </div>
-          <div id="one-time-list" class="one-time-list" aria-live="polite"></div>
-        </section>
-
-        <section class="app-view" id="view-ideas" aria-labelledby="ideas-title">
-          <div class="section-heading">
-            <div>
-              <h1 id="ideas-title">Where Hoot can grow</h1>
-              <p class="section-copy">The core tracker is deliberately simple. These are the natural next features.</p>
-            </div>
-          </div>
-
-          <div class="ideas-grid">
-            <article class="idea-card">
-              <h2>Barcode enrichment</h2>
-              <p>Scan a product to auto-fill its name, category, and nutrition details.</p>
-            </article>
-            <article class="idea-card">
-              <h2>Prediction accuracy</h2>
-              <p>Compare predicted dates with actual purchases and show how reliable each estimate is.</p>
-            </article>
-            <article class="idea-card">
-              <h2>Household sharing</h2>
-              <p>Let everyone in a home log purchases and see the same live inventory picture.</p>
-            </article>
-            <article class="idea-card">
-              <h2>Shopping mode</h2>
-              <p>Turn today’s urgent restocks into a compact, checkable store list.</p>
-            </article>
-            <article class="idea-card">
-              <h2>Price trends</h2>
-              <p>Track how each item’s price changes over time and flag unusually good or bad weeks.</p>
-            </article>
-            <article class="idea-card">
-              <h2>Smart reminders</h2>
-              <p>Nudge you only when something is genuinely close to running out.</p>
-            </article>
-          </div>
+          <div id="one-time-list" class="one-time-list"></div>
         </section>
       </main>
 
       <footer class="app-footer">
-        <p>Hoot demo data is synthetic. Predictions update locally and reset with the demo.</p>
+        <p>Hoot demo data is synthetic. Predictions update locally. Use Reset demo to restore the built-in sample.</p>
       </footer>
     </div>
 
@@ -206,7 +169,7 @@
         </div>
 
         <label class="field" for="add-threshold">
-          <span>Restock estimate</span>
+          <span>Typical restock interval</span>
           <input
             id="add-threshold"
             name="reorderThresholdDays"
@@ -362,9 +325,18 @@
           </label>
 
           <label class="field" for="edit-threshold">
-            <span>Expected restock</span>
-            <input id="edit-threshold" name="reorderThresholdDays" type="number" min="1" max="365" step="1" />
-            <small class="field-error" data-error-for="reorderThresholdDays"></small>
+            <span>Typical restock interval</span>
+            <input
+              id="edit-threshold"
+              name="reorderThresholdDays"
+              type="number"
+              min="1"
+              max="365"
+              step="1"
+              aria-describedby="edit-threshold-hint edit-threshold-error"
+            />
+            <small id="edit-threshold-hint" class="field-hint">Days between typical purchases.</small>
+            <small id="edit-threshold-error" class="field-error" data-error-for="reorderThresholdDays"></small>
           </label>
         </div>
 
