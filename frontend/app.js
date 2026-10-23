@@ -268,6 +268,12 @@
       saveState();
       return true;
     },
+    async restoreItem(item, index) {
+      const insertionIndex = clamp(index, 0, state.items.length);
+      state.items.splice(insertionIndex, 0, item);
+      saveState();
+      return clone(state.items[insertionIndex]);
+    },
     async logPurchase(id, purchase) {
       const item = state.items.find((entry) => entry.id === id);
       if (!item) throw new Error("Item not found");
@@ -314,6 +320,7 @@
 
     let predictedDate;
     let method;
+    let technicalMethod;
     let modelVersion;
     let slope = null;
     let intercept = null;
@@ -323,7 +330,8 @@
 
     if (purchaseCount < 3) {
       predictedDate = addDays(latest, item.reorderThresholdDays);
-      method = `Manual ${item.reorderThresholdDays}-day threshold until three purchases exist`;
+      method = `Manual ${item.reorderThresholdDays}-day estimate`;
+      technicalMethod = "Manual estimate";
       modelVersion = "demo-manual-v1";
     } else {
       const yValues = purchaseDates.map((date) => Math.round((date - origin) / DAY_MS));
@@ -358,10 +366,12 @@
           Math.round((latest - origin) / (purchaseCount - 1)),
         );
         predictedDate = addDays(latest, averageGap);
-        method = `Learned from ${purchaseCount} purchases; average interval used as a stable fallback`;
+        method = `Average interval from ${purchaseCount} purchases`;
+        technicalMethod = "Average interval fallback";
       } else {
         predictedDate = addDays(origin, Math.round(nextY));
-        method = `Learned from ${purchaseCount} purchases using interval regression`;
+        method = `Learned from ${purchaseCount} purchases`;
+        technicalMethod = "Linear regression";
         slope = fittedSlope;
         intercept = fittedIntercept;
         rSquared = Number.isFinite(fittedR) ? fittedR : null;
@@ -391,18 +401,22 @@
             ? "Watch"
             : "Steady";
     const maturity = purchaseCount < 3 ? "learning" : "learned";
-    const fitLabel =
+    const fitStrength =
       rSquared === null
         ? null
         : rSquared >= 0.7
-          ? "strong fit"
+          ? "strong"
           : rSquared >= 0.4
-            ? "moderate fit"
-            : "loose fit";
+            ? "moderate"
+            : "loose";
     const confidence =
-      maturity === "learning"
-        ? `Learning · ${purchaseCount}/3 purchases`
-        : `Learned interval · ${fitLabel}`;
+      purchaseCount === 0
+        ? "No purchases yet"
+        : purchaseCount < 3
+        ? `Learning · ${purchaseCount} of 3 purchases`
+        : rSquared === null
+          ? "Moderate rhythm"
+          : `${fitStrength.charAt(0).toUpperCase()}${fitStrength.slice(1)} rhythm`;
 
     return {
       date: predictedDate,
@@ -412,6 +426,7 @@
       statusLabel,
       maturity,
       confidence,
+      technicalMethod,
       modelVersion,
       method,
       purchaseCount,
@@ -470,9 +485,6 @@
           </div>
           <div class="status-stack">
             <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
-            <span class="maturity-chip maturity-${escapeHtml(prediction.maturity)}">
-              ${prediction.maturity === "learned" ? "Learned" : "Learning"}
-            </span>
           </div>
         </div>
         <div
@@ -502,10 +514,8 @@
             <span>Watch</span>
             <span>Steady</span>
           </div>
-          <p class="horizon-note">${escapeHtml(prediction.confidence)} · ${escapeHtml(prediction.modelVersion)}</p>
         </div>
         <div class="item-card-footer">
-          <p>${escapeHtml(prediction.method)}</p>
           <div class="item-actions">
             <button class="btn btn-secondary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
             <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
@@ -761,7 +771,7 @@
           </circle>
         </svg>
         <figcaption>
-          Purchase dates shape the fitted rhythm; the dashed segment projects that rhythm to the next likely restock.
+          Purchase dates shape Hoot’s rhythm; the dashed segment projects that rhythm to the next likely restock.
         </figcaption>
       </figure>
     `;
@@ -769,18 +779,27 @@
 
   function modelExplanation(item, prediction) {
     if (!prediction) {
-      return "This item is deliberately excluded from regression. Hoot treats it as a checkbox rather than a rhythm.";
+      return "One-time items stay on a simple checklist, so Hoot never tries to learn a rhythm from them.";
     }
     if (!prediction.purchaseDates.length) {
-      return "No purchase has been logged yet. The manual threshold is ready, but Hoot will not draw a rhythm from an empty timeline.";
+      return `No purchase has been logged yet. Hoot starts from your ${item.reorderThresholdDays}-day typical interval, and a logged purchase gives it a real date to work from.`;
     }
     if (prediction.maturity === "learning") {
-      return `Hoot is using your manual ${item.reorderThresholdDays}-day estimate until three purchases exist. Each logged purchase adds a date point and moves this item closer to learned prediction.`;
+      return `Hoot is using your ${item.reorderThresholdDays}-day typical interval until this item has three purchases. Each logged purchase gives Hoot another date to learn from.`;
     }
     if (prediction.slope !== null) {
-      return `Hoot fits a line through the ${prediction.purchaseCount} purchase dates. The current fit advances about ${prediction.slope.toFixed(1)} days per purchase, so the next point is projected to ${formatFullDate(prediction.date)}. A new purchase can shift the slope and change that date.`;
+      return `Hoot has learned from ${prediction.purchaseCount} purchases and estimates the next restock for ${formatFullDate(prediction.date)}. The current rhythm moves about ${prediction.slope.toFixed(1)} days between purchases, and a new purchase can change that date.`;
     }
-    return `The regression fit was not stable enough to project forward, so Hoot used the average interval across ${prediction.purchaseCount} purchases. The next estimate is ${formatFullDate(prediction.date)}.`;
+    return `Hoot averaged the gaps between ${prediction.purchaseCount} purchases and estimates the next restock for ${formatFullDate(prediction.date)}. A new purchase can change that date.`;
+  }
+
+  function fitQualityLabel(prediction) {
+    if (!prediction || prediction.rSquared === null || prediction.rSquared === undefined) {
+      return "Not available";
+    }
+
+    const strength = prediction.rSquared >= 0.7 ? "Strong" : prediction.rSquared >= 0.4 ? "Moderate" : "Loose";
+    return `${strength} fit · ${Math.round(prediction.rSquared * 100)}% R²`;
   }
 
   function renderItemPage(item) {
@@ -820,10 +839,12 @@
       </table>
     `;
     const averageInterval = prediction?.averageInterval;
-    const maturityLabel = prediction
-      ? prediction.maturity === "learned"
-        ? "Learned interval"
-        : "Learning"
+    const learningProgress = prediction
+      ? prediction.purchaseCount === 0
+        ? "No purchases yet"
+        : prediction.purchaseCount < 3
+          ? `${prediction.purchaseCount} of 3 purchases`
+          : "Learned"
       : "Checklist";
     const intervalRange = prediction?.intervals.length
       ? `${Math.min(...prediction.intervals)}–${Math.max(...prediction.intervals)} days`
@@ -831,9 +852,7 @@
     const backLabel =
       itemReturnView === "one-time"
         ? "Back to one-time items"
-        : itemReturnView === "ideas"
-          ? "Back to feature ideas"
-          : "Back to dashboard";
+        : "Back to dashboard";
     const productStatusLabel =
       productInfo.status === "not-connected" ? "Not connected" : productInfo.status;
 
@@ -857,7 +876,17 @@
           ${
             item.isOneTime
               ? `<span>One-time item</span><strong>Excluded from prediction</strong><p>Hoot keeps this on a simple checklist so it never distorts recurring-item estimates.</p>`
-              : `<span>Next predicted restock</span><strong>${formatFullDate(prediction.date)} · ${formatDue(prediction.daysUntil)}</strong><p>${escapeHtml(prediction.method)} (${escapeHtml(prediction.modelVersion)}).</p>`
+              : `<span>Next predicted restock</span><strong>${formatFullDate(prediction.date)} · ${formatDue(prediction.daysUntil)}</strong>
+                <p>${escapeHtml(prediction.confidence)}</p>
+                <details class="estimate-disclosure">
+                  <summary>How this estimate works</summary>
+                  <p>${escapeHtml(modelExplanation(item, prediction))}</p>
+                  <dl class="analysis-facts">
+                    <div><dt>Method</dt><dd>${escapeHtml(prediction.technicalMethod)}</dd></div>
+                    <div><dt>Model</dt><dd>${escapeHtml(prediction.modelVersion)}</dd></div>
+                    <div><dt>Fit quality</dt><dd>${escapeHtml(fitQualityLabel(prediction))}</dd></div>
+                  </dl>
+                </details>`
           }
         </article>
 
@@ -866,8 +895,8 @@
           <strong>${averageInterval ? `${averageInterval.toFixed(1)} days average` : "Building rhythm"}</strong>
           <dl class="analysis-facts">
             <div><dt>Interval range</dt><dd>${intervalRange}</dd></div>
-            <div><dt>Data maturity</dt><dd>${maturityLabel}</dd></div>
-            <div><dt>Fit quality</dt><dd>${prediction?.rSquared === null || prediction?.rSquared === undefined ? "Not available" : `${Math.round(prediction.rSquared * 100)}% R²`}</dd></div>
+            <div><dt>Learning progress</dt><dd>${learningProgress}</dd></div>
+            <div><dt>Estimate source</dt><dd>${escapeHtml(prediction.method)}</dd></div>
           </dl>
         </article>
 
@@ -890,7 +919,6 @@
             </div>
           </div>
           ${predictionChart(item, prediction)}
-          <p class="model-explanation">${escapeHtml(modelExplanation(item, prediction))}</p>
         </section>
 
         <section>
@@ -1029,7 +1057,7 @@
       return null;
     }
     if (!isOneTime && (!Number.isFinite(threshold) || threshold < 1 || threshold > 365)) {
-      setFieldError(thresholdInput, "Enter a restock estimate between 1 and 365 days.");
+      setFieldError(thresholdInput, "Enter a typical restock interval between 1 and 365 days.");
       thresholdInput.focus();
       return null;
     }
@@ -1203,7 +1231,7 @@
       return;
     }
     if (!item.isOneTime && (!Number.isFinite(threshold) || threshold < 1 || threshold > 365)) {
-      setFieldError(thresholdInput, "Enter a restock estimate between 1 and 365 days.");
+      setFieldError(thresholdInput, "Enter a typical restock interval between 1 and 365 days.");
       thresholdInput.focus();
       return;
     }
@@ -1228,12 +1256,28 @@
     showDialog($("#confirm-dialog"));
   }
 
-  function toast(message, kind = "success") {
+  function toast(message, kind = "success", action = null) {
     const toastElement = document.createElement("div");
     toastElement.className = `toast toast-${kind}`;
     toastElement.textContent = message;
+
+    if (action) {
+      const actionButton = document.createElement("button");
+      actionButton.className = "toast-action";
+      actionButton.type = "button";
+      actionButton.textContent = action.label;
+      actionButton.addEventListener("click", async () => {
+        window.clearTimeout(removeTimer);
+        toastElement.remove();
+        await action.onAction();
+      });
+      toastElement.append(actionButton);
+    }
+
     $("#toast-region").append(toastElement);
-    window.setTimeout(() => toastElement.remove(), 3400);
+    const lifetime = action ? 6400 : 3400;
+    toastElement.style.animationDuration = `${lifetime}ms`;
+    const removeTimer = window.setTimeout(() => toastElement.remove(), lifetime);
   }
 
   function showDialog(dialog, trigger = null) {
@@ -1266,20 +1310,30 @@
   }
 
   function requestDelete(itemId, trigger) {
-    const item = state.items.find((entry) => entry.id === itemId);
-    if (!item) return;
+    const itemIndex = state.items.findIndex((entry) => entry.id === itemId);
+    if (itemIndex === -1) return;
+    const item = state.items[itemIndex];
+    const deletedItem = clone(item);
+
     openConfirm({
       title: "Delete this item?",
-      message: `This removes “${item.name}” and its local demo history. This cannot be undone.`,
+      message: `This removes “${item.name}” and its local demo history. You can undo it from the message for a few seconds after deleting.`,
       confirmLabel: "Delete item",
       onConfirm: async () => {
-        await hootApi.deleteItem(item.id);
+        await hootApi.deleteItem(deletedItem.id);
         const returnView = itemReturnView || "dashboard";
         currentItemId = null;
         itemReturnView = "dashboard";
         render();
         setView(returnView);
-        toast(`${item.name} deleted.`);
+        toast(`${deletedItem.name} deleted.`, "success", {
+          label: "Undo",
+          onAction: async () => {
+            await hootApi.restoreItem(deletedItem, itemIndex);
+            render();
+            toast(`${deletedItem.name} restored.`);
+          },
+        });
       },
     });
     if (trigger instanceof HTMLElement) lastDialogTrigger = trigger;
