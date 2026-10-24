@@ -66,6 +66,11 @@
     }).format(value);
   }
 
+  function formatQuantity(value, unit) {
+    const amount = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
+    return unit ? `${amount} ${unit}` : amount;
+  }
+
   function createDemoState() {
     return {
       items: [
@@ -568,14 +573,14 @@
       container.innerHTML = hasTrackedItems
         ? `
           <div class="empty-state">
-            <h3>No matches</h3>
+            <h2>No matches</h2>
             <p>Try another name, category, or unit.</p>
             <button class="btn btn-secondary" type="button" data-action="clear-search">Clear search</button>
           </div>
         `
         : `
           <div class="empty-state">
-            <h3>No tracked items yet</h3>
+            <h2>No tracked items yet</h2>
             <p>Add a household staple and Hoot will start learning its restock rhythm.</p>
             <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
           </div>
@@ -669,7 +674,7 @@
     if (!oneTimeItems.length) {
       container.innerHTML = `
         <div class="empty-state">
-          <h3>No one-time items</h3>
+          <h2>No one-time items</h2>
           <p>Use this list for birthday candles, packing tape, or anything that should not enter the prediction model.</p>
           <button class="btn btn-primary" type="button" data-action="add-one-time">Add a one-time item</button>
         </div>
@@ -1213,15 +1218,19 @@
 
     setFormBusy(form, true);
     try {
-      await hootApi.logPurchase(itemSelect.value, {
+      const updatedItem = await hootApi.logPurchase(itemSelect.value, {
         date: toISODate(purchaseDate),
         quantity,
         price,
       });
+      const prediction = predictionFor(updatedItem);
       render();
       setFormStatus(form, "Saved.");
       window.setTimeout(() => closeDialog($("#log-purchase-dialog")), 240);
-      toast("Purchase logged. Prediction updated.");
+      toast(
+        `${updatedItem.name} logged — ${formatQuantity(quantity, updatedItem.unit)} for ${formatMoney(price)}. ` +
+          `Next estimate ${formatFullDate(prediction.date)}.`,
+      );
     } catch {
       setFormBusy(form, false);
       setFormStatus(form, "Could not log the purchase. Try again.", "error");
