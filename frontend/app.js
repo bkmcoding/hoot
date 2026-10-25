@@ -223,6 +223,8 @@
   let lastDialogTrigger = null;
   let pendingConfirm = null;
   let queueSearch = "";
+  let batchRestockFilter = "";
+  let batchRestockSelections = new Map();
   let calendarRange = 7;
   let nextUpObserver = null;
   let observedNextUpCard = null;
@@ -291,6 +293,82 @@
       item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
       saveState();
       return clone(item);
+    },
+    async updatePurchase(itemId, purchaseId, input) {
+      const item = state.items.find((entry) => entry.id === itemId);
+      if (!item) throw new Error("Item not found");
+      const purchase = item.purchases.find((entry) => entry.id === purchaseId);
+      if (!purchase) throw new Error("Purchase not found");
+      purchase.date = input.date;
+      purchase.quantity = input.quantity;
+      purchase.price = input.price;
+      item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
+      saveState();
+      return clone(item);
+    },
+    async deletePurchase(itemId, purchaseId) {
+      const item = state.items.find((entry) => entry.id === itemId);
+      if (!item) throw new Error("Item not found");
+      const index = item.purchases.findIndex((entry) => entry.id === purchaseId);
+      if (index === -1) throw new Error("Purchase not found");
+      const [deletedPurchase] = item.purchases.splice(index, 1);
+      saveState();
+      return { item: clone(item), deletedPurchase: clone(deletedPurchase), index };
+    },
+    async restorePurchase(itemId, purchase, index) {
+      const item = state.items.find((entry) => entry.id === itemId);
+      if (!item) throw new Error("Item not found");
+      const insertionIndex = clamp(index ?? item.purchases.length, 0, item.purchases.length);
+      item.purchases.splice(insertionIndex, 0, {
+        id: purchase.id || makeId("purchase"),
+        date: purchase.date,
+        quantity: purchase.quantity,
+        price: purchase.price,
+      });
+      item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
+      saveState();
+      return clone(item);
+    },
+    async logBatchPurchases(records) {
+      if (!Array.isArray(records) || !records.length) return { updatedItems: [], createdPurchases: [] };
+      const createdPurchases = [];
+      const updatedItemIds = new Set();
+
+      for (const record of records) {
+        const item = state.items.find((entry) => entry.id === record.itemId);
+        if (!item) continue;
+        const purchase = {
+          id: makeId("purchase"),
+          date: record.date,
+          quantity: record.quantity,
+          price: record.price ?? null,
+        };
+        item.purchases.push(purchase);
+        item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
+        createdPurchases.push({ itemId: item.id, purchaseId: purchase.id, purchase: clone(purchase) });
+        updatedItemIds.add(item.id);
+      }
+
+      saveState();
+      const affectedItems = state.items.filter((item) => updatedItemIds.has(item.id));
+      return { updatedItems: clone(affectedItems), createdPurchases };
+    },
+    async restoreBatchPurchases(createdPurchases) {
+      if (!Array.isArray(createdPurchases) || !createdPurchases.length) return [];
+      const affectedItemIds = new Set();
+
+      for (const entry of createdPurchases) {
+        const item = state.items.find((i) => i.id === entry.itemId);
+        if (!item) continue;
+        const index = item.purchases.findIndex((p) => p.id === entry.purchaseId);
+        if (index !== -1) {
+          item.purchases.splice(index, 1);
+          affectedItemIds.add(item.id);
+        }
+      }
+
+      saveState();
+      return clone(state.items.filter((item) => affectedItemIds.has(item.id)));
     },
     async toggleOneTime(id, completed) {
       const item = state.items.find((entry) => entry.id === id);
@@ -543,8 +621,72 @@
     $("#stat-one-time").textContent = String(oneTime.length);
   }
 
+  function horizonPositionFor(daysUntil) {
+    if (daysUntil < 0) {
+      const progress = Math.max(0, (daysUntil + 7) / 7);
+      return 4 + progress * (33.333 - 4);
+    }
+    if (daysUntil <= 3) {
+      const progress = daysUntil / 3;
+      return 33.333 + progress * (50.0 - 33.333);
+    }
+    if (daysUntil <= 7) {
+      const progress = (daysUntil - 3) / 4;
+      return 50.0 + progress * (69.048 - 50.0);
+    }
+    const progress = Math.min(1, (daysUntil - 7) / 7);
+    return 69.048 + progress * (96.0 - 69.048);
+  }
+
+  function formatHorizonPointerLabel(daysUntil) {
+    if (daysUntil < 0) {
+      const days = Math.abs(daysUntil);
+      return `${days}d overdue`;
+    }
+    if (daysUntil === 0) return "Today";
+    if (daysUntil === 1) return "Tomorrow";
+    return `In ${daysUntil}d`;
+  }
+
+  function restockHorizonLane(item, prediction) {
+    const position = horizonPositionFor(prediction.daysUntil);
+    const label = formatHorizonPointerLabel(prediction.daysUntil);
+    const align = position < 12 ? "left" : position > 88 ? "right" : "center";
+
+    return `
+      <div
+        class="restock-horizon horizon-${escapeHtml(prediction.zone)}"
+        role="group"
+        aria-label="${escapeHtml(item.name)} is in the ${escapeHtml(prediction.statusLabel)} zone. Predicted restock ${formatFullDate(prediction.date)}, ${formatDue(prediction.daysUntil)}."
+      >
+        <div class="horizon-summary">
+          <div>
+            <span>Next predicted restock</span>
+            <strong>${formatFullDate(prediction.date)}</strong>
+          </div>
+          <span class="horizon-due">${formatDue(prediction.daysUntil)}</span>
+        </div>
+        <div class="horizon-rail" aria-hidden="true">
+          <span class="horizon-segment segment-overdue"></span>
+          <span class="horizon-segment segment-buy-now"></span>
+          <span class="horizon-segment segment-watch"></span>
+          <span class="horizon-segment segment-steady"></span>
+          <span class="horizon-today-line" title="Today reference"></span>
+          <span class="horizon-pointer" data-align="${align}" style="left:${position.toFixed(2)}%">
+            <span>${escapeHtml(label)}</span>
+          </span>
+        </div>
+        <div class="horizon-labels" aria-hidden="true">
+          <span>Overdue</span>
+          <span>Buy now</span>
+          <span>Watch</span>
+          <span>Steady</span>
+        </div>
+      </div>
+    `;
+  }
+
   function nextUpCard(item, prediction) {
-    const todayPosition = 100 / 3;
     const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
     const logLastButton = item.purchases.length
       ? `<button class="btn btn-secondary" type="button" data-action="log-last" data-id="${escapeHtml(item.id)}">Log last</button>`
@@ -569,34 +711,7 @@
             <p>${escapeHtml(item.category)}${unitText}</p>
           </div>
         </div>
-        <div
-          class="restock-horizon"
-          role="group"
-          aria-label="${escapeHtml(item.name)} is in the ${escapeHtml(prediction.statusLabel)} zone. Predicted restock ${formatFullDate(prediction.date)}, ${formatDue(prediction.daysUntil)}."
-        >
-          <div class="horizon-summary">
-            <div>
-              <span>Next predicted restock</span>
-              <strong>${formatFullDate(prediction.date)}</strong>
-            </div>
-            <span class="horizon-due">${formatDue(prediction.daysUntil)}</span>
-          </div>
-          <div class="horizon-rail" aria-hidden="true">
-            <span class="horizon-segment segment-overdue"></span>
-            <span class="horizon-segment segment-buy-now"></span>
-            <span class="horizon-segment segment-watch"></span>
-            <span class="horizon-segment segment-steady"></span>
-            <span class="horizon-today" style="left:${todayPosition.toFixed(2)}%">
-              <span>Today</span>
-            </span>
-          </div>
-          <div class="horizon-labels" aria-hidden="true">
-            <span>Overdue</span>
-            <span>Buy now</span>
-            <span>Watch</span>
-            <span>Steady</span>
-          </div>
-        </div>
+        ${restockHorizonLane(item, prediction)}
         <div class="item-card-footer">
           <div class="item-actions">
             <button class="btn btn-primary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
@@ -689,7 +804,7 @@
       <section class="search-results" id="search-results" aria-labelledby="search-results-heading">
         <div class="search-results-heading">
           <h2 id="search-results-heading">Search results</h2>
-          <p id="search-result-count">${resultCount}</p>
+          <p id="search-result-count" role="status" aria-live="polite">${resultCount}</p>
         </div>
         ${
           matchCount
@@ -997,25 +1112,46 @@
           <tr>
             <td data-label="Date">${formatFullDate(parseDate(purchase.date))}</td>
             <td data-label="Quantity">${purchase.quantity} ${escapeHtml(item.unit || "unit")}</td>
-            <td data-label="Total price">${formatPurchasePrice(purchase.price)}</td>
+            <td data-label="Total price" class="history-price-cell">${formatPurchasePrice(purchase.price)}</td>
+            <td data-label="Actions" class="history-actions-cell">
+              <div class="history-actions-group">
+                <button
+                  class="btn btn-secondary btn-sm"
+                  type="button"
+                  data-action="edit-purchase"
+                  data-id="${escapeHtml(item.id)}"
+                  data-purchase-id="${escapeHtml(purchase.id)}"
+                  aria-label="Edit purchase on ${formatFullDate(parseDate(purchase.date))}"
+                >Edit</button>
+                <button
+                  class="btn btn-ghost btn-sm history-delete-btn"
+                  type="button"
+                  data-action="delete-purchase"
+                  data-id="${escapeHtml(item.id)}"
+                  data-purchase-id="${escapeHtml(purchase.id)}"
+                  aria-label="Delete purchase on ${formatFullDate(parseDate(purchase.date))}"
+                >Delete</button>
+              </div>
+            </td>
           </tr>
         `,
       )
       .join("");
     const history = `
       <table class="history-table">
-        <caption> Purchase history for ${escapeHtml(item.name)}</caption>
+        <caption>Purchase history for ${escapeHtml(item.name)}</caption>
         <thead>
           <tr>
             <th scope="col">Date</th>
             <th scope="col">Quantity</th>
-            <th scope="col">Total price</th>
+            <th scope="col" class="history-price-col">Total price</th>
+            <th scope="col" class="history-actions-header">Actions</th>
           </tr>
         </thead>
         <tbody>
           ${
             historyRows ||
-            `<tr><td colspan="3" class="history-empty">No purchase history yet.</td></tr>`
+            `<tr><td colspan="4" class="history-empty">No purchase history yet.</td></tr>`
           }
         </tbody>
       </table>
@@ -1050,6 +1186,8 @@
             ${prediction ? escapeHtml(prediction.statusLabel) : "Checklist"}
           </span>
         </header>
+
+        ${prediction ? restockHorizonLane(item, prediction) : ""}
 
         <div class="analysis-grid">
         <article class="analysis-card">
@@ -1091,7 +1229,7 @@
         </section>
 
         <section>
-          <h3>Purchase history</h3>
+          <h2>Purchase history</h2>
           ${history}
         </section>
 
@@ -1157,7 +1295,7 @@
     $$(".field-error", form).forEach((error) => {
       error.textContent = "";
     });
-    $$("input[aria-invalid]", form).forEach((input) => {
+    $$("[aria-invalid]", form).forEach((input) => {
       input.removeAttribute("aria-invalid");
     });
   }
@@ -1385,6 +1523,246 @@
     }
   }
 
+  function updateBatchRestockSubmitButton() {
+    const selectedCount = Array.from(batchRestockSelections.values()).filter((e) => e.selected).length;
+    const submitBtn = $("#batch-restock-submit");
+    if (!submitBtn) return;
+    submitBtn.textContent = selectedCount > 0
+      ? `Restock ${selectedCount} staple${selectedCount === 1 ? "" : "s"}`
+      : "Select staples to restock";
+    if (selectedCount === 0) {
+      submitBtn.setAttribute("aria-disabled", "true");
+    } else {
+      submitBtn.removeAttribute("aria-disabled");
+    }
+  }
+
+  function renderBatchRestockList() {
+    const container = $("#batch-restock-container");
+    if (!container) return;
+
+    const query = batchRestockFilter.trim().toLowerCase();
+    const tracked = rankedTrackedEntries();
+    if (!tracked.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <p>No tracked staples in your inventory. Add tracked items first.</p>
+        </div>
+      `;
+      return;
+    }
+
+    const filtered = tracked.filter(({ item }) => {
+      if (!query) return true;
+      return (
+        item.name.toLowerCase().includes(query) ||
+        (item.category && item.category.toLowerCase().includes(query)) ||
+        (item.unit && item.unit.toLowerCase().includes(query))
+      );
+    });
+
+    const totalSelected = Array.from(batchRestockSelections.values()).filter((e) => e.selected).length;
+    const visibleSelected = filtered.filter(({ item }) => batchRestockSelections.get(item.id)?.selected).length;
+    const hiddenSelected = totalSelected - visibleSelected;
+
+    const hiddenNotice = hiddenSelected > 0
+      ? `
+        <div class="batch-filter-notice" role="status">
+          <span>${hiddenSelected} pre-selected staple${hiddenSelected === 1 ? "" : "s"} hidden by filter</span>
+          <button type="button" class="batch-clear-filter-btn" data-action="clear-batch-filter">Show all</button>
+        </div>
+      `
+      : "";
+
+    if (!filtered.length) {
+      container.innerHTML = `
+        ${hiddenNotice}
+        <div class="batch-empty-filter">
+          <p>No staples match “${escapeHtml(batchRestockFilter)}”.</p>
+          <button type="button" class="btn btn-secondary btn-sm" data-action="clear-batch-filter">Clear filter</button>
+        </div>
+      `;
+      return;
+    }
+
+    const recommended = filtered.filter(
+      ({ prediction }) => prediction.zone === "overdue" || prediction.zone === "buy-now",
+    );
+    const other = filtered.filter(
+      ({ prediction }) => prediction.zone !== "overdue" && prediction.zone !== "buy-now",
+    );
+
+    function renderGroup(title, entries, isRecommended = false) {
+      if (!entries.length) return "";
+      const rows = entries
+        .map(({ item, prediction }) => {
+          const stateData = batchRestockSelections.get(item.id) || { selected: isRecommended, quantity: 1 };
+          const isSelected = stateData.selected;
+          const qty = stateData.quantity;
+
+          return `
+            <div class="batch-row ${isSelected ? "is-selected" : ""}" data-item-id="${escapeHtml(item.id)}">
+              <label class="batch-choice" for="batch-check-${escapeHtml(item.id)}">
+                <input
+                  type="checkbox"
+                  class="batch-check"
+                  id="batch-check-${escapeHtml(item.id)}"
+                  data-batch-item="${escapeHtml(item.id)}"
+                  ${isSelected ? "checked" : ""}
+                  aria-label="Restock ${escapeHtml(item.name)}"
+                />
+                <span class="batch-item-info">
+                  <span class="batch-item-header">
+                    <strong>${escapeHtml(item.name)}</strong>
+                    <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+                  </span>
+                  <small class="batch-item-meta">${escapeHtml(item.category)}${item.unit ? ` · ${escapeHtml(item.unit)}` : ""} · ${formatDue(prediction.daysUntil)}</small>
+                </span>
+              </label>
+              <div class="batch-stepper" ${isSelected ? "" : 'style="display:none;"'}>
+                <button
+                  type="button"
+                  class="stepper-btn"
+                  data-stepper="dec"
+                  data-item-id="${escapeHtml(item.id)}"
+                  aria-label="Decrease ${escapeHtml(item.name)} quantity"
+                >−</button>
+                <input
+                  type="number"
+                  class="stepper-input"
+                  data-stepper-input="${escapeHtml(item.id)}"
+                  value="${qty}"
+                  min="0.01"
+                  step="1"
+                  inputmode="decimal"
+                  aria-label="${escapeHtml(item.name)} quantity"
+                />
+                <button
+                  type="button"
+                  class="stepper-btn"
+                  data-stepper="inc"
+                  data-item-id="${escapeHtml(item.id)}"
+                  aria-label="Increase ${escapeHtml(item.name)} quantity"
+                >+</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+      return `
+        <div class="batch-group">
+          <h3 class="batch-group-title">${escapeHtml(title)}</h3>
+          <div class="batch-group-list">${rows}</div>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      ${hiddenNotice}
+      ${renderGroup("Recommended to restock", recommended, true)}
+      ${renderGroup("Other staples", other, false)}
+    `;
+  }
+
+  function prepareBatchRestockDialog() {
+    const tracked = rankedTrackedEntries();
+    if (!tracked.length) {
+      toast("No tracked items to restock yet.");
+      return false;
+    }
+
+    const form = $("#batch-restock-form");
+    form.reset();
+    resetDialogFormState(form);
+
+    const dateInput = $("#batch-restock-date");
+    dateInput.max = toISODate(startOfDay());
+    dateInput.value = toISODate(startOfDay());
+
+    const searchInput = $("#batch-restock-search");
+    searchInput.value = "";
+    batchRestockFilter = "";
+
+    batchRestockSelections.clear();
+    for (const { item, prediction } of tracked) {
+      const isRecommended = prediction.zone === "overdue" || prediction.zone === "buy-now";
+      const lastQty = item.purchases.length
+        ? item.purchases[item.purchases.length - 1].quantity || 1
+        : 1;
+      batchRestockSelections.set(item.id, {
+        selected: isRecommended,
+        quantity: lastQty,
+      });
+    }
+
+    renderBatchRestockList();
+    updateBatchRestockSubmitButton();
+    return true;
+  }
+
+  async function submitBatchRestock(event) {
+    event.preventDefault();
+    const form = $("#batch-restock-form");
+    const dateInput = $("#batch-restock-date");
+    clearFieldErrors(form);
+
+    const dateVal = dateInput.value;
+    const tripDate = dateVal ? parseDate(dateVal) : null;
+    if (!tripDate) {
+      setFieldError(dateInput, "Choose the trip date.");
+      dateInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+    if (tripDate > startOfDay()) {
+      setFieldError(dateInput, "Trip date cannot be in the future.");
+      dateInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+
+    const selectedEntries = Array.from(batchRestockSelections.entries())
+      .filter(([_, data]) => data.selected && data.quantity > 0);
+
+    if (!selectedEntries.length) {
+      setFormStatus(form, "Select at least one staple to restock.", "error");
+      return;
+    }
+
+    const records = selectedEntries.map(([itemId, data]) => ({
+      itemId,
+      date: toISODate(tripDate),
+      quantity: Number(data.quantity) || 1,
+      price: null,
+    }));
+
+    setFormBusy(form, true);
+    try {
+      const { updatedItems, createdPurchases } = await hootApi.logBatchPurchases(records);
+      render();
+      setFormStatus(form, "Restocked.");
+      window.setTimeout(() => closeDialog($("#batch-restock-dialog")), 240);
+
+      const count = records.length;
+      toast(
+        `Restocked ${count} staple${count === 1 ? "" : "s"}. Predictions updated.`,
+        "success",
+        {
+          label: "Undo all",
+          onAction: async () => {
+            await hootApi.restoreBatchPurchases(createdPurchases);
+            render();
+            toast("Trip restock undone.");
+          },
+        },
+      );
+    } catch {
+      setFormBusy(form, false);
+      setFormStatus(form, "Could not restock selected items. Try again.", "error");
+    }
+  }
+
   function prepareEditItemDialog(itemId) {
     const item = state.items.find((entry) => entry.id === itemId);
     if (!item) return;
@@ -1412,8 +1790,17 @@
     const threshold = Number(thresholdInput.value);
     clearFieldErrors(form);
 
-    if (!nameInput.value.trim()) {
+    const trimmedName = nameInput.value.trim();
+    if (!trimmedName) {
       setFieldError(nameInput, "Give the item a name.");
+      nameInput.focus();
+      return;
+    }
+    const duplicate = state.items.find(
+      (entry) => entry.id !== item.id && entry.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+    );
+    if (duplicate) {
+      setFieldError(nameInput, duplicateItemMessage(duplicate));
       nameInput.focus();
       return;
     }
@@ -1423,16 +1810,113 @@
       return;
     }
 
-    const updatedItem = await hootApi.updateItem(item.id, {
-      name: nameInput.value.trim(),
-      category: $("#edit-category").value,
-      unit: $("#edit-unit").value.trim(),
-      reorderThresholdDays: item.isOneTime ? 0 : Math.round(threshold),
-    });
+    setFormBusy(form, true);
+    try {
+      const updatedItem = await hootApi.updateItem(item.id, {
+        name: trimmedName,
+        category: $("#edit-category").value,
+        unit: $("#edit-unit").value.trim(),
+        reorderThresholdDays: item.isOneTime ? 0 : Math.round(threshold),
+      });
 
-    render();
-    closeDialog($("#edit-item-dialog"));
-    toast("Item updated.");
+      render();
+      setFormStatus(form, "Saved.");
+      window.setTimeout(() => closeDialog($("#edit-item-dialog")), 240);
+      toast("Item updated.");
+    } catch {
+      setFormBusy(form, false);
+      setFormStatus(form, "Could not update the item. Try again.", "error");
+    }
+  }
+
+  function prepareEditPurchaseDialog(itemId, purchaseId) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item) return false;
+    const purchase = item.purchases.find((entry) => entry.id === purchaseId);
+    if (!purchase) return false;
+
+    const form = $("#edit-purchase-form");
+    form.reset();
+    resetDialogFormState(form);
+
+    $("#edit-purchase-item-id").value = item.id;
+    $("#edit-purchase-id").value = purchase.id;
+
+    const dateInput = $("#edit-purchase-date");
+    dateInput.max = toISODate(startOfDay());
+    dateInput.value = purchase.date;
+
+    const qtyInput = $("#edit-purchase-quantity");
+    qtyInput.value = String(purchase.quantity ?? 1);
+
+    const priceInput = $("#edit-purchase-price");
+    priceInput.value = purchase.price !== null && purchase.price !== undefined ? String(purchase.price) : "";
+
+    return true;
+  }
+
+  async function submitEditPurchase(event) {
+    event.preventDefault();
+    const form = $("#edit-purchase-form");
+    const itemId = $("#edit-purchase-item-id").value;
+    const purchaseId = $("#edit-purchase-id").value;
+    const dateInput = $("#edit-purchase-date");
+    const quantityInput = $("#edit-purchase-quantity");
+    const priceInput = $("#edit-purchase-price");
+
+    clearFieldErrors(form);
+
+    const dateVal = dateInput.value;
+    const purchaseDate = dateVal ? parseDate(dateVal) : null;
+    const quantity = Number(quantityInput.value);
+    const rawPrice = priceInput.value.trim();
+    const price = rawPrice === "" ? null : Number(rawPrice);
+
+    if (!purchaseDate) {
+      setFieldError(dateInput, "Choose the purchase date.");
+      dateInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+    if (purchaseDate > startOfDay()) {
+      setFieldError(dateInput, "Purchase date cannot be in the future.");
+      dateInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setFieldError(quantityInput, "Enter a quantity greater than zero.");
+      quantityInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+    if (price !== null && (!Number.isFinite(price) || price < 0)) {
+      setFieldError(priceInput, "Enter a valid price, or leave it blank if unknown.");
+      priceInput.focus();
+      setFormStatus(form, "Fix the highlighted field.", "error");
+      return;
+    }
+
+    setFormBusy(form, true);
+    try {
+      const updatedItem = await hootApi.updatePurchase(itemId, purchaseId, {
+        date: toISODate(purchaseDate),
+        quantity,
+        price,
+      });
+      const prediction = predictionFor(updatedItem);
+      render();
+      setFormStatus(form, "Saved.");
+      window.setTimeout(() => closeDialog($("#edit-purchase-dialog")), 240);
+      toast(
+        prediction
+          ? `Purchase updated. Next restock estimate ${formatFullDate(prediction.date)}.`
+          : "Purchase updated.",
+      );
+    } catch {
+      setFormBusy(form, false);
+      setFormStatus(form, "Could not update the purchase. Try again.", "error");
+    }
   }
 
   function openConfirm({ title, message, confirmLabel, onConfirm }) {
@@ -1470,6 +1954,14 @@
   function showDialog(dialog, trigger = null) {
     lastDialogTrigger = trigger instanceof HTMLElement ? trigger : document.activeElement;
     if (!dialog.open) dialog.showModal();
+
+    if (dialog.id === "batch-restock-dialog") {
+      const searchTarget = dialog.querySelector("#batch-restock-search");
+      if (searchTarget) {
+        searchTarget.focus();
+        return;
+      }
+    }
 
     const firstControl = Array.from(
       dialog.querySelectorAll(
@@ -1526,6 +2018,42 @@
     if (trigger instanceof HTMLElement) lastDialogTrigger = trigger;
   }
 
+  function requestDeletePurchase(itemId, purchaseId, trigger) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item) return;
+    const purchaseIndex = item.purchases.findIndex((entry) => entry.id === purchaseId);
+    if (purchaseIndex === -1) return;
+    const targetPurchase = item.purchases[purchaseIndex];
+    const purchaseDateLabel = formatFullDate(parseDate(targetPurchase.date));
+
+    openConfirm({
+      title: "Delete this purchase?",
+      message: `Remove the purchase of ${targetPurchase.quantity} ${escapeHtml(item.unit || "unit")} on ${purchaseDateLabel}? Rhythm calculations and prediction dates will update immediately.`,
+      confirmLabel: "Delete purchase",
+      onConfirm: async () => {
+        const { item: updatedItem, deletedPurchase, index } = await hootApi.deletePurchase(item.id, targetPurchase.id);
+        render();
+        const prediction = predictionFor(updatedItem);
+        const nextRestockMsg = prediction
+          ? ` Next restock recalculated to ${formatFullDate(prediction.date)}.`
+          : "";
+        toast(`Purchase on ${purchaseDateLabel} removed.${nextRestockMsg}`, "success", {
+          label: "Undo",
+          onAction: async () => {
+            const restoredItem = await hootApi.restorePurchase(updatedItem.id, deletedPurchase, index);
+            render();
+            const restoredPrediction = predictionFor(restoredItem);
+            const restoredMsg = restoredPrediction
+              ? ` Restock estimate ${formatFullDate(restoredPrediction.date)}.`
+              : "";
+            toast(`Purchase restored.${restoredMsg}`);
+          },
+        });
+      },
+    });
+    if (trigger instanceof HTMLElement) lastDialogTrigger = trigger;
+  }
+
   function requestReset(trigger) {
     openConfirm({
       title: "Reset the demo?",
@@ -1566,6 +2094,8 @@
           showDialog($("#add-item-dialog"), dialogTrigger);
         } else if (name === "log-purchase") {
           if (prepareLogPurchaseDialog()) showDialog($("#log-purchase-dialog"), dialogTrigger);
+        } else if (name === "batch-restock") {
+          if (prepareBatchRestockDialog()) showDialog($("#batch-restock-dialog"), dialogTrigger);
         }
         return;
       }
@@ -1610,6 +2140,14 @@
         showDialog($("#edit-item-dialog"), actionButton);
       } else if (action === "delete") {
         requestDelete(itemId, actionButton);
+      } else if (action === "edit-purchase") {
+        const purchaseId = actionButton.dataset.purchaseId;
+        if (prepareEditPurchaseDialog(itemId, purchaseId)) {
+          showDialog($("#edit-purchase-dialog"), actionButton);
+        }
+      } else if (action === "delete-purchase") {
+        const purchaseId = actionButton.dataset.purchaseId;
+        requestDeletePurchase(itemId, purchaseId, actionButton);
       }
     });
 
@@ -1649,6 +2187,76 @@
     $("#add-item-form").addEventListener("submit", submitAddItem);
     $("#log-purchase-form").addEventListener("submit", submitLogPurchase);
     $("#edit-item-form").addEventListener("submit", submitEditItem);
+    $("#edit-purchase-form").addEventListener("submit", submitEditPurchase);
+    $("#batch-restock-form").addEventListener("submit", submitBatchRestock);
+
+    $("#batch-restock-search")?.addEventListener("input", (event) => {
+      batchRestockFilter = event.currentTarget.value;
+      renderBatchRestockList();
+    });
+
+    $("#batch-restock-container")?.addEventListener("change", (event) => {
+      const check = event.target.closest(".batch-check");
+      if (check) {
+        const itemId = check.dataset.batchItem;
+        const currentData = batchRestockSelections.get(itemId) || { selected: false, quantity: 1 };
+        currentData.selected = check.checked;
+        batchRestockSelections.set(itemId, currentData);
+
+        const row = check.closest(".batch-row");
+        if (row) {
+          row.classList.toggle("is-selected", check.checked);
+          const stepper = row.querySelector(".batch-stepper");
+          if (stepper) stepper.style.display = check.checked ? "inline-flex" : "none";
+        }
+        updateBatchRestockSubmitButton();
+        return;
+      }
+
+      const input = event.target.closest(".stepper-input");
+      if (input) {
+        const itemId = input.dataset.stepperInput;
+        const currentData = batchRestockSelections.get(itemId) || { selected: true, quantity: 1 };
+        const val = Math.max(0.01, Number(input.value) || 1);
+        input.value = String(val);
+        currentData.quantity = val;
+        batchRestockSelections.set(itemId, currentData);
+      }
+    });
+
+    $("#batch-restock-container")?.addEventListener("click", (event) => {
+      const clearBtn = event.target.closest('[data-action="clear-batch-filter"]');
+      if (clearBtn) {
+        batchRestockFilter = "";
+        const searchInput = $("#batch-restock-search");
+        if (searchInput) {
+          searchInput.value = "";
+          searchInput.focus();
+        }
+        renderBatchRestockList();
+        return;
+      }
+
+      const btn = event.target.closest(".stepper-btn");
+      if (!btn) return;
+      const itemId = btn.dataset.itemId;
+      const action = btn.dataset.stepper;
+      const currentData = batchRestockSelections.get(itemId) || { selected: true, quantity: 1 };
+      let qty = Number(currentData.quantity) || 1;
+
+      if (action === "inc") {
+        qty = Math.round((qty + 1) * 100) / 100;
+      } else if (action === "dec") {
+        qty = Math.max(0.01, Math.round((qty - 1) * 100) / 100);
+      }
+
+      currentData.quantity = qty;
+      batchRestockSelections.set(itemId, currentData);
+
+      const row = btn.closest(".batch-row");
+      const input = row?.querySelector(".stepper-input");
+      if (input) input.value = String(qty);
+    });
 
     $("#reset-demo").addEventListener("click", (event) => requestReset(event.currentTarget));
 
