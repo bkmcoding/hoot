@@ -211,6 +211,9 @@
   let lastDialogTrigger = null;
   let pendingConfirm = null;
   let queueSearch = "";
+  let nextUpObserver = null;
+  let observedNextUpCard = null;
+  let nextUpCardVisible = false;
 
   function makeId(prefix) {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -227,6 +230,9 @@
       return clone(item);
     },
     async addItem(input) {
+      const duplicate = findDuplicateItem(input.name);
+      if (duplicate) throw createDuplicateItemError(duplicate);
+
       const item = {
         id: makeId("item"),
         name: input.name,
@@ -454,6 +460,63 @@
     );
   }
 
+  function findDuplicateItem(name) {
+    const normalizedName = String(name ?? "").trim().toLowerCase();
+    if (!normalizedName) return null;
+    return state.items.find((item) => item.name.trim().toLowerCase() === normalizedName) ?? null;
+  }
+
+  function duplicateItemMessage(item) {
+    return item.isOneTime
+      ? `${item.name} already exists.`
+      : `${item.name} already exists. Log a purchase instead.`;
+  }
+
+  function createDuplicateItemError(item) {
+    const error = new Error(duplicateItemMessage(item));
+    error.name = "DuplicateItemError";
+    return error;
+  }
+
+  function rankedTrackedEntries() {
+    return state.items
+      .filter((item) => !item.isOneTime)
+      .map((item) => ({ item, prediction: predictionFor(item) }))
+      .sort((left, right) => left.prediction.date - right.prediction.date);
+  }
+
+  function rankedTrackedItems() {
+    return rankedTrackedEntries().map(({ item }) => item);
+  }
+
+  function updateMobileDock() {
+    const shouldHide = currentView === "dashboard" && nextUpCardVisible;
+    $(".header-actions").classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("mobile-dock-hidden", shouldHide);
+  }
+
+  function initNextUpObserver() {
+    if (!("IntersectionObserver" in window)) return;
+    nextUpObserver = new IntersectionObserver(
+      ([entry]) => {
+        nextUpCardVisible = entry.isIntersecting;
+        updateMobileDock();
+      },
+      { threshold: 0 },
+    );
+  }
+
+  function syncNextUpDock() {
+    const nextCard = $("#dashboard-list .item-card:first-child");
+    if (observedNextUpCard && observedNextUpCard !== nextCard && nextUpObserver) {
+      nextUpObserver.unobserve(observedNextUpCard);
+    }
+    observedNextUpCard = nextCard;
+    if (nextCard && nextUpObserver) nextUpObserver.observe(nextCard);
+    if (!nextCard) nextUpCardVisible = false;
+    updateMobileDock();
+  }
+
   function renderStats() {
     const tracked = state.items.filter((item) => !item.isOneTime);
     const oneTime = state.items.filter((item) => item.isOneTime);
@@ -468,7 +531,7 @@
   }
 
   function nextUpCard(item, prediction) {
-    const todayPosition = clamp((7 + prediction.daysUntil) / 21, 0, 1) * 100;
+    const todayPosition = 100 / 3;
     const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
     const logLastButton = item.purchases.length
       ? `<button class="btn btn-secondary" type="button" data-action="log-last" data-id="${escapeHtml(item.id)}">Log last</button>`
@@ -558,11 +621,7 @@
 
   function renderDashboard() {
     const searchTerm = queueSearch.trim().toLowerCase();
-    const tracked = state.items
-      .filter((item) => !item.isOneTime)
-      .map((item) => ({ item, prediction: predictionFor(item) }))
-      .filter(({ item }) => matchesQueueSearch(item, searchTerm))
-      .sort((left, right) => left.prediction.date - right.prediction.date);
+    const tracked = rankedTrackedEntries().filter(({ item }) => matchesQueueSearch(item, searchTerm));
 
     const container = $("#dashboard-list");
     const searchField = $("#queue-search-field");
@@ -585,6 +644,7 @@
             <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
           </div>
         `;
+      syncNextUpDock();
       return;
     }
 
@@ -593,6 +653,7 @@
       ${nextUpCard(nextUp.item, nextUp.prediction)}
       ${remainingItems.length ? `<div class="item-list">${remainingItems.map(({ item, prediction }) => itemRow(item, prediction)).join("")}</div>` : ""}
     `;
+    syncNextUpDock();
   }
 
   function calendarItemButton(item, prediction) {
@@ -970,7 +1031,7 @@
 
   function updatePurchaseSelect(selectedId = null) {
     const select = $("#purchase-item");
-    const tracked = state.items.filter((item) => !item.isOneTime);
+    const tracked = rankedTrackedItems();
     if (!tracked.length) {
       select.innerHTML = `<option value="">No tracked items yet</option>`;
       select.disabled = true;
@@ -1013,6 +1074,8 @@
       if (button.dataset.view === nextView) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
+    if (nextView === "dashboard") syncNextUpDock();
+    else updateMobileDock();
   }
 
   function clearFieldErrors(form) {
@@ -1088,6 +1151,12 @@
       nameInput.focus();
       return null;
     }
+    const duplicate = findDuplicateItem(nameInput.value);
+    if (duplicate) {
+      setFieldError(nameInput, duplicateItemMessage(duplicate));
+      nameInput.focus();
+      return null;
+    }
     if (!isOneTime && (!Number.isFinite(threshold) || threshold < 1 || threshold > 365)) {
       setFieldError(thresholdInput, "Enter a typical restock interval between 1 and 365 days.");
       thresholdInput.focus();
@@ -1138,7 +1207,7 @@
   }
 
   function prepareLogPurchaseDialog(itemId = null, { repeatLast = false } = {}) {
-    const tracked = state.items.filter((item) => !item.isOneTime);
+    const tracked = rankedTrackedItems();
     const form = $("#log-purchase-form");
     const fields = $("#purchase-fields");
     const emptyState = $("#purchase-empty-state");
@@ -1414,7 +1483,7 @@
       if (dialogTrigger) {
         const name = dialogTrigger.dataset.dialog;
         if (name === "add-item") {
-          prepareAddItemDialog(false);
+          prepareAddItemDialog(currentView === "one-time");
           showDialog($("#add-item-dialog"), dialogTrigger);
         } else if (name === "log-purchase") {
           if (prepareLogPurchaseDialog()) showDialog($("#log-purchase-dialog"), dialogTrigger);
@@ -1526,6 +1595,7 @@
   function init() {
     if (!state.items.length) state = createDemoState();
     bindEvents();
+    initNextUpObserver();
     render();
     setView(currentView);
   }
