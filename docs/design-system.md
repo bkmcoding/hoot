@@ -109,7 +109,7 @@ Every `horizon-{zone}` element sets `--zone`, `--zone-ink`, `--zone-bg` and `--z
 | Card hover | 220ms out-expo | Lift by 1–2px and deepen the border |
 | View change | 220ms out-expo | Fade with a 6px rise |
 | Dialog open | 180ms out-expo | Fade with a 10px rise and backdrop fade |
-| Toast | 3400ms timeline | Rise in over the first 6%, fade out over the last 8% |
+| Toast | 3400ms normal; 6400ms with Undo | Rise in over the first 6%, fade out over the last 8% |
 | Today marker | 3.2s loop | Faint pulse ring |
 | Logo | 7s loop | Owl-Moon breathing |
 
@@ -121,30 +121,36 @@ Every `horizon-{zone}` element sets `--zone`, `--zone-ink`, `--zone-bg` and `--z
 ### Header
 
 - Sticky paper header, 72px minimum height on desktop.
-- Brand, segmented pill navigation, task actions, and the demo utility sit in one scan line on desktop. A hairline divider sets the utility apart.
+- Brand, segmented pill navigation, task actions, and the visible **Reset demo** utility sit in one scan line on desktop. A hairline divider sets the utility apart.
+- Task actions read **Log purchase**, then **Add item**.
+- Global **Log purchase** opens with the highest-urgency tracked item. Global **Add item** follows the active view: tracked staple on Dashboard, one-time need on One-time.
 - The active navigation button has a paper fill on the parchment track and sets `aria-current="page"`.
 - At tablet width, the header becomes two rows: brand, actions, and utility on top, with navigation below.
 - At phone width:
   - brand and utility stay at the top, and the subtitle hides;
   - primary navigation fills the row and scrolls horizontally if needed;
-  - **Add item** and **Log purchase** sit in a fixed bottom action dock;
+  - **Log purchase** and **Add item** sit in a fixed bottom action dock;
+  - the dock is hidden while the **Next up** card is visible and returns once that card leaves the viewport;
+  - **Reset demo** remains at least 44px tall;
   - `.app-frame` reserves `--dock-height` of bottom padding so the dock never covers content.
 
 ### Dashboard order
 
 1. Page title and task context.
-2. Summary ledger: four connected cells in one bordered panel.
-3. Ranked restock queue.
-4. Fourteen-day restock calendar.
+2. Queue search, aligned with the dashboard heading.
+3. Focused **Next up** decision for the highest-urgency tracked item.
+4. Compact ranked restock queue for the remaining items.
+5. Quiet inventory summary strip: four connected cells on quiet paper, visually subordinate to the queue.
+6. Seven-day restock calendar with an **All 14 days** expansion.
 
 ### Breakpoints
 
 | Width | Behavior |
 | --- | --- |
-| Above 1120px | Restock cards use a three-column decision layout. |
-| 981–1120px | Restock cards use two columns, with method and actions spanning the bottom. |
-| 661–980px | The header becomes two rows, and the summary, ideas, and analysis grids use two columns. |
-| 660px and below | Single-column content, a fixed action dock, history rows as labeled cards, stacked fields, and sticky 48px dialog actions. |
+| Above 1120px | The **Next up** card uses a three-column decision layout; queue rows stay compact. |
+| 981–1120px | The **Next up** card uses two columns, with actions spanning the bottom; queue rows stay compact. |
+| 661–980px | The header becomes two rows, and the summary and analysis grids use two columns. |
+| 660px and below | Single-column content, a fixed action dock with observer-driven visibility, two-line compact queue rows, a tightened **Next up** card, history rows as labeled cards, stacked fields, and sticky 48px dialog actions. |
 
 ## Components
 
@@ -156,6 +162,8 @@ Every `horizon-{zone}` element sets `--zone`, `--zone-ink`, `--zone-bg` and `--z
 | Secondary | Common supporting action | Paper surface, warm strong border, charcoal text |
 | Ghost | Tertiary or low-frequency action | Transparent, secondary text, parchment hover |
 | Danger | Destructive confirmation | Filled terracotta, paper text |
+
+Compact controls such as the calendar range buttons are 36px on desktop and 44px on phones.
 
 Required states:
 
@@ -170,6 +178,7 @@ Required states:
 - An error replaces or augments the hint and names the recovery.
 - Every error is associated with its control through `aria-describedby`.
 - Every invalid control sets `aria-invalid="true"`.
+- Exact duplicate names, ignoring case and surrounding spaces, are rejected with a field-level recovery message. Tracked duplicates suggest logging a purchase instead.
 - Inputs and selects are 46px tall and stay at 16px on mobile to prevent input zoom.
 - Selects use a drawn chevron and native behavior.
 
@@ -187,25 +196,37 @@ Required states:
 - The lane has four segments sized `7fr 3.5fr 4fr 6.5fr`, matching Overdue (−7 to 0), Buy now (0 to 3), Watch (4 to 7) and Steady (8 to 14 days). That lines them up with the Today marker position from `app.js`.
 - The active zone segment has full color and its label turns zone-colored. Other segments stay visible at about 32% strength.
 - A night Today marker carries a small “Today” label and a faint pulse ring.
-- The lane is always supported by the predicted date, the due chip, the status chip, and the confidence note.
+- The Today marker is fixed at the Overdue/Buy-now boundary, 33.333% of the lane.
+- The lane is always supported by the predicted date, the due chip, and the status chip.
 - It is not a progress bar and never implies certainty.
+
+### Next up decision and queue rows
+
+- The highest-urgency tracked item renders as the **Next up** card.
+- The card uses an `<h2>` item title, a **Next up** label, the status chip, the full horizon lane, and the dashboard's one primary **Log purchase** action.
+- When the focused item has purchase history, the card offers a secondary **Log last** accelerator. It opens Log Purchase with today’s date, the most recent quantity, and a known, non-zero total price prefilled.
+- Global **Log purchase** opens with the highest-urgency tracked item. Global **Add item** follows the active view: tracked staple on Dashboard, one-time need on One-time.
+- Remaining items render as compact ranked rows using `<h3>` titles, a status chip, a predicted date, and secondary actions.
+- Queue search matches name, category, and unit while the global **Next up** card remains in place. Matches render beneath a **Search results** heading as compact rows, and the count names the query. If the only match is the focused item, the section says so without repeating the card. A no-match result offers **Clear search**; the search field hides only when no tracked items exist.
+- Queue rows use the zone rail but omit the horizon lane and repeated Today marker.
+- The lane appears only on the **Next up** card and item detail.
 
 ### Status chips
 
 - Prediction chips use the status ink, background, and border.
-- Maturity chips are outline-only: solid for Learned, dashed for Learning.
 - Chips are never the only status signal.
 
 ### Restock card
 
-- Desktop: identity and status, the horizon lane, then the method and actions (separated by a hairline divider).
+- Desktop: identity and status, the horizon lane, then the actions (separated by a hairline divider).
 - A 4px inset rail in the zone tone runs down the left edge. It is a pseudo-element inside the padding, not a border.
-- The item name opens detail.
-- **Log purchase** is secondary, and **Details** is ghost.
+- The item name opens detail with a persistent warm underline and an expanded pointer target. Explicit **Details** buttons remain available.
+- **Log purchase** is primary on the **Next up** card and secondary on queue rows; **Details** is secondary on the focused card and ghost on queue rows.
 
 ### Restock calendar
 
-- A fourteen-day horizontal strip of paper day cards, 148px wide. Only the calendar viewport scrolls horizontally.
+- The schedule defaults to the next seven days and can expand to fourteen. Compact **Next 7 days** and **All 14 days** controls set the range; the caption and calendar label follow the selection.
+- A horizontal strip of paper day cards, 148px wide. Only the calendar viewport scrolls horizontally.
 - Past-due items appear in a dedicated terracotta card at the front.
 - Today uses a 2px sage border, a light sage tint, and a night numeral.
 - Each item is a small button with a zone dot, the name, and zone-colored due text.
@@ -217,19 +238,25 @@ Required states:
 - Checkboxes are native inputs styled as 26px circles, which turn sage with a drawn check when checked.
 - Active items sort before completed items.
 - Completed items stay visible with muted, struck-through names.
+- The One-time heading offers a secondary **Add one-time item** action.
 
 ### Item detail
 
 - Back navigation and item identity lead.
-- Prediction, rhythm, and product intelligence use paper analysis cards with hairline fact rows.
+- Prediction and rhythm use paper analysis cards with hairline fact rows.
+- Prediction language is household-friendly. Method, model version, and fit quality stay inside a technical disclosure.
 - The chart sits on quiet paper with a warm hairline grid.
   - Observed purchases are charcoal points.
   - The fitted rhythm is a solid sage line.
   - The projection is a dashed amber line ending in an amber ring.
 - Purchase history is a semantic table on wide screens. At phone width, rows display as labeled cards built from `data-label`.
-- Delete is destructive and requires confirmation.
+- Delete is destructive, requires confirmation, and offers Undo from the success toast for a few seconds.
 
 ### Dialogs
+
+- Add Item begins with a two-path segmented choice: **Tracked staple** or **One-time need**.
+- Common fields are name, category, and unit. The typical restock interval appears only for tracked staples.
+- Selecting the one-time path hides the interval field instead of leaving a disabled roadmap-like control in the main flow.
 
 - Use the native `<dialog>` element.
 - Width: `min(640px, 100vw - 32px)`. The confirmation dialog is `min(460px, 100vw - 32px)`.
@@ -253,6 +280,8 @@ Empty states use quiet paper with a dashed warm border. They are inline and acti
 
 - Toasts are small paper chips with a strong border, a 4px semantic inset rail, and text.
 - Success uses the sage rail, and errors use the terracotta rail.
+- Success copy names the concrete change; purchase feedback names the item, quantity, total price or “price unknown,” and updated next estimate.
+- A destructive toast may include one Undo action; its lifetime is longer than a standard toast.
 - On mobile, toasts span the width above the action dock.
 
 ## Accessibility floor
@@ -263,6 +292,7 @@ Empty states use quiet paper with a dashed warm border. They are inline and acti
 - Focus the first useful control when a dialog opens, and restore focus to the trigger when it closes.
 - Announce busy and success states politely.
 - Keep every task keyboard-complete.
+- Keep compact phone controls at least 44px tall.
 - Respect `prefers-reduced-motion`.
 
 ## Anti-goals
@@ -274,7 +304,7 @@ Empty states use quiet paper with a dashed warm border. They are inline and acti
 - No custom form widgets where native controls work.
 - No Unicode glyph or emoji icon system.
 - No unexplained disabled state.
-- No toast-only recovery path.
+- No recovery path that exists only as a vague toast; delete Undo supplements a clear confirmation.
 - No color-only status.
 
 ## Change control
