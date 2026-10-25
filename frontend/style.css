@@ -848,6 +848,41 @@ input[type="date"] {
   gap: 10px;
 }
 
+.search-results {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.search-results-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--border);
+}
+
+.search-results-heading h2 {
+  font-size: 20px;
+}
+
+#search-result-count {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.search-results-note {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.search-results .empty-state {
+  padding: var(--space-6);
+}
+
 .item-card {
   position: relative;
   display: grid;
@@ -945,6 +980,7 @@ input[type="date"] {
 }
 
 .item-title-button {
+  position: relative;
   padding: 0;
   border: 0;
   background: none;
@@ -952,15 +988,25 @@ input[type="date"] {
   font-weight: 700;
   text-align: left;
   text-decoration: underline;
-  text-decoration-color: transparent;
+  text-decoration-color: var(--border-control);
   text-underline-offset: 4px;
   text-decoration-thickness: 1.5px;
   border-radius: 4px;
   transition: text-decoration-color var(--duration-fast) var(--ease-standard);
 }
 
+.item-title-button::before {
+  content: "";
+  position: absolute;
+  inset: -8px -4px;
+}
+
 .item-title-button:hover {
-  text-decoration-color: var(--border-control);
+  text-decoration-color: var(--focus);
+}
+
+.item-title-button:active {
+  text-decoration-color: var(--focus);
 }
 
 .status-stack {
@@ -1152,6 +1198,43 @@ input[type="date"] {
 
 .calendar-panel {
   margin-top: var(--space-10);
+}
+
+.calendar-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.calendar-range-button {
+  min-height: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-quiet);
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background-color var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard), box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.calendar-range-button:hover {
+  background: var(--surface-tint);
+  border-color: var(--border-control);
+  color: var(--ink);
+}
+
+.calendar-range-button:active {
+  transform: translateY(1px);
+}
+
+.calendar-range-button.is-active {
+  background: var(--surface);
+  border-color: var(--border-control);
+  color: var(--ink);
+  box-shadow: var(--highlight), 0 1px 2px rgba(58, 44, 24, 0.08);
 }
 
 .calendar-viewport {
@@ -1980,8 +2063,12 @@ input[type="date"] {
   }
 
   .header-utility .btn {
-    min-height: 40px;
+    min-height: 44px;
     padding: 0 var(--space-3);
+  }
+
+  .calendar-range-button {
+    min-height: 44px;
   }
 
   .app-nav {

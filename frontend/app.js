@@ -66,6 +66,18 @@
     }).format(value);
   }
 
+  function isUnknownPurchasePrice(value) {
+    return value === null || value === undefined || value === "" || Number(value) === 0;
+  }
+
+  function formatPurchasePrice(value) {
+    return isUnknownPurchasePrice(value) ? "Price unknown" : formatMoney(value);
+  }
+
+  function purchasePricePhrase(value) {
+    return isUnknownPurchasePrice(value) ? "price unknown" : formatMoney(value);
+  }
+
   function formatQuantity(value, unit) {
     const amount = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
     return unit ? `${amount} ${unit}` : amount;
@@ -211,6 +223,7 @@
   let lastDialogTrigger = null;
   let pendingConfirm = null;
   let queueSearch = "";
+  let calendarRange = 7;
   let nextUpObserver = null;
   let observedNextUpCard = null;
   let nextUpCardVisible = false;
@@ -620,24 +633,17 @@
   }
 
   function renderDashboard() {
-    const searchTerm = queueSearch.trim().toLowerCase();
-    const tracked = rankedTrackedEntries().filter(({ item }) => matchesQueueSearch(item, searchTerm));
+    const rawSearchTerm = queueSearch.trim();
+    const searchTerm = rawSearchTerm.toLowerCase();
+    const tracked = rankedTrackedEntries();
 
     const container = $("#dashboard-list");
     const searchField = $("#queue-search-field");
     const hasTrackedItems = state.items.some((item) => !item.isOneTime);
     searchField.hidden = !hasTrackedItems;
 
-    if (!tracked.length) {
-      container.innerHTML = hasTrackedItems
-        ? `
-          <div class="empty-state">
-            <h2>No matches</h2>
-            <p>Try another name, category, or unit.</p>
-            <button class="btn btn-secondary" type="button" data-action="clear-search">Clear search</button>
-          </div>
-        `
-        : `
+    if (!hasTrackedItems) {
+      container.innerHTML = `
           <div class="empty-state">
             <h2>No tracked items yet</h2>
             <p>Add a household staple and Hoot will start learning its restock rhythm.</p>
@@ -649,9 +655,60 @@
     }
 
     const [nextUp, ...remainingItems] = tracked;
+    const focusedCard = nextUpCard(nextUp.item, nextUp.prediction);
+
+    if (!searchTerm) {
+      container.innerHTML = `
+        ${focusedCard}
+        ${
+          remainingItems.length
+            ? `<div class="item-list">${remainingItems
+                .map(({ item, prediction }) => itemRow(item, prediction))
+                .join("")}</div>`
+            : ""
+        }
+      `;
+      syncNextUpDock();
+      return;
+    }
+
+    const matches = tracked.filter(({ item }) => matchesQueueSearch(item, searchTerm));
+    const matchCount = matches.length;
+    const matchWord = matchCount === 1 ? "match" : "matches";
+    const resultCount = matchCount
+      ? `${matchCount} ${matchWord} for \u201C${escapeHtml(rawSearchTerm)}\u201D.`
+      : `No matches for \u201C${escapeHtml(rawSearchTerm)}\u201D.`;
+    const compactMatches = matches.filter(({ item }) => item.id !== nextUp.item.id);
+    const focusedMatchNote =
+      matchCount && !compactMatches.length
+        ? `<p class="search-results-note">The match is the focused Next up item above.</p>`
+        : "";
+
     container.innerHTML = `
-      ${nextUpCard(nextUp.item, nextUp.prediction)}
-      ${remainingItems.length ? `<div class="item-list">${remainingItems.map(({ item, prediction }) => itemRow(item, prediction)).join("")}</div>` : ""}
+      ${focusedCard}
+      <section class="search-results" id="search-results" aria-labelledby="search-results-heading">
+        <div class="search-results-heading">
+          <h2 id="search-results-heading">Search results</h2>
+          <p id="search-result-count">${resultCount}</p>
+        </div>
+        ${
+          matchCount
+            ? `${focusedMatchNote}${
+                compactMatches.length
+                  ? `<div class="item-list">${compactMatches
+                      .map(({ item, prediction }) => itemRow(item, prediction))
+                      .join("")}</div>`
+                  : ""
+              }`
+            : `
+              <div class="empty-state">
+                <h2>No matches</h2>
+                <p>Try another name, category, or unit.</p>
+                <button class="btn btn-secondary" type="button" data-action="clear-search">Clear search</button>
+              </div>
+            `
+        }
+      </section>
     `;
     syncNextUpDock();
   }
@@ -672,11 +729,29 @@
     `;
   }
 
+  function calendarRangeWord(range) {
+    return range === 7 ? "seven" : "fourteen";
+  }
+
+  function syncCalendarRangeControls() {
+    $$("[data-calendar-range]").forEach((button) => {
+      const isSelected = Number(button.dataset.calendarRange) === calendarRange;
+      button.classList.toggle("is-active", isSelected);
+      button.setAttribute("aria-pressed", String(isSelected));
+    });
+  }
+
   function renderRestockCalendar() {
     const tracked = state.items
       .filter((item) => !item.isOneTime)
       .map((item) => ({ item, prediction: predictionFor(item) }));
     const container = $("#restock-calendar");
+    const rangeWord = calendarRangeWord(calendarRange);
+    const rangeLabel = `Expected restocks for the next ${rangeWord} days`;
+
+    $("#calendar-caption").textContent = `${rangeLabel}.`;
+    container.setAttribute("aria-label", rangeLabel);
+    syncCalendarRangeControls();
 
     if (!tracked.length) {
       container.innerHTML = `<p class="calendar-empty">Add a tracked item to build its restock calendar.</p>`;
@@ -684,7 +759,7 @@
     }
 
     const overdue = tracked.filter(({ prediction }) => prediction.daysUntil < 0);
-    const dayCards = Array.from({ length: 14 }, (_, index) => {
+    const dayCards = Array.from({ length: calendarRange }, (_, index) => {
       const date = addDays(today, index);
       const dueItems = tracked.filter(
         ({ prediction }) => toISODate(prediction.date) === toISODate(date),
@@ -922,7 +997,7 @@
           <tr>
             <td data-label="Date">${formatFullDate(parseDate(purchase.date))}</td>
             <td data-label="Quantity">${purchase.quantity} ${escapeHtml(item.unit || "unit")}</td>
-            <td data-label="Total price">${formatMoney(purchase.price)}</td>
+            <td data-label="Total price">${formatPurchasePrice(purchase.price)}</td>
           </tr>
         `,
       )
@@ -1234,7 +1309,10 @@
     $("#purchase-date").max = toISODate(startOfDay());
     $("#purchase-date").value = toISODate(startOfDay());
     $("#purchase-quantity").value = String(latestPurchase?.quantity ?? 1);
-    $("#purchase-price").value = String(latestPurchase?.price ?? 0);
+    $("#purchase-price").value =
+      repeatLast && latestPurchase && !isUnknownPurchasePrice(latestPurchase.price)
+        ? String(latestPurchase.price)
+        : "";
     return true;
   }
 
@@ -1251,7 +1329,8 @@
     clearFieldErrors(form);
     setFormStatus(form, "");
     const quantity = Number(quantityInput.value);
-    const price = Number(priceInput.value);
+    const rawPrice = priceInput.value.trim();
+    const price = isUnknownPurchasePrice(rawPrice) ? null : Number(rawPrice);
     const purchaseDate = dateInput.value ? parseDate(dateInput.value) : null;
 
     if (!itemSelect.value) {
@@ -1278,8 +1357,8 @@
       setFormStatus(form, "Fix the highlighted field.", "error");
       return;
     }
-    if (!Number.isFinite(price) || price < 0) {
-      setFieldError(priceInput, "Enter a price of zero or more.");
+    if (price !== null && (!Number.isFinite(price) || price < 0)) {
+      setFieldError(priceInput, "Enter a valid price, or leave it blank if unknown.");
       priceInput.focus();
       setFormStatus(form, "Fix the highlighted field.", "error");
       return;
@@ -1297,7 +1376,7 @@
       setFormStatus(form, "Saved.");
       window.setTimeout(() => closeDialog($("#log-purchase-dialog")), 240);
       toast(
-        `${updatedItem.name} logged — ${formatQuantity(quantity, updatedItem.unit)} for ${formatMoney(price)}. ` +
+        `${updatedItem.name} logged — ${formatQuantity(quantity, updatedItem.unit)} for ${purchasePricePhrase(price)}. ` +
           `Next estimate ${formatFullDate(prediction.date)}.`,
       );
     } catch {
@@ -1556,6 +1635,15 @@
     $("#queue-search").addEventListener("input", (event) => {
       queueSearch = event.currentTarget.value;
       renderDashboard();
+    });
+
+    $$("[data-calendar-range]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const range = Number(button.dataset.calendarRange);
+        if (range === calendarRange) return;
+        calendarRange = range;
+        renderRestockCalendar();
+      });
     });
 
     $("#add-item-form").addEventListener("submit", submitAddItem);

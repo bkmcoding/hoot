@@ -79,7 +79,7 @@
             <article class="stat-card">
               <span>Tracked items</span>
               <strong id="stat-tracked">0</strong>
-              <p>Learning your restock rhythm</p>
+              <p>Ranked by expected runout</p>
             </article>
             <article class="stat-card">
               <span>Needs attention</span>
@@ -102,11 +102,25 @@
             <div class="section-heading">
               <div>
                 <h2 id="calendar-title">Restock calendar</h2>
-                <p class="section-copy">A fourteen-day view of expected restocks.</p>
+                <p id="calendar-caption" class="section-copy">Expected restocks for the next seven days.</p>
+              </div>
+              <div class="calendar-controls" role="group" aria-label="Restock calendar range">
+                <button
+                  class="calendar-range-button is-active"
+                  type="button"
+                  data-calendar-range="7"
+                  aria-pressed="true"
+                >Next 7 days</button>
+                <button
+                  class="calendar-range-button"
+                  type="button"
+                  data-calendar-range="14"
+                  aria-pressed="false"
+                >All 14 days</button>
               </div>
             </div>
             <div class="calendar-viewport">
-              <div id="restock-calendar" class="calendar-strip" role="list" aria-label="Predicted restocks for the next fourteen days"></div>
+              <div id="restock-calendar" class="calendar-strip" role="list" aria-label="Expected restocks for the next seven days"></div>
             </div>
           </section>
         </section>
@@ -284,13 +298,11 @@
                 type="number"
                 min="0"
                 step="0.01"
-                value="0"
                 inputmode="decimal"
                 autocomplete="off"
-                required
                 aria-describedby="purchase-price-hint purchase-price-error"
               />
-              <small id="purchase-price-hint" class="field-hint">The amount paid, not per unit.</small>
+              <small id="purchase-price-hint" class="field-hint">Optional. Leave blank or enter 0 if the price is unknown.</small>
               <small id="purchase-price-error" class="field-error" data-error-for="price"></small>
             </label>
           </div>
@@ -325,8 +337,8 @@
         <div class="field-row">
           <label class="field" for="edit-name">
             <span>Name</span>
-            <input id="edit-name" name="name" type="text" required />
-            <small class="field-error" data-error-for="name"></small>
+            <input id="edit-name" name="name" type="text" required aria-describedby="edit-name-error" />
+            <small id="edit-name-error" class="field-error" data-error-for="name"></small>
           </label>
 
           <label class="field" for="edit-category">
