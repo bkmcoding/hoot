@@ -359,6 +359,11 @@ input[type="date"] {
   color: var(--ink-soft);
 }
 
+.one-time-heading-action {
+  flex: none;
+  align-self: flex-end;
+}
+
 .queue-search {
   flex: none;
   width: min(300px, 100%);
@@ -1928,6 +1933,10 @@ input[type="date"] {
     --dock-height: calc(76px + env(safe-area-inset-bottom));
   }
 
+  .hoot-shell.mobile-dock-hidden {
+    --dock-height: 0px;
+  }
+
   h1 {
     font-size: 26px;
   }
@@ -1943,6 +1952,11 @@ input[type="date"] {
   }
 
   .queue-search input {
+    min-height: 48px;
+  }
+
+  .one-time-heading-action {
+    width: 100%;
     min-height: 48px;
   }
 
@@ -1998,6 +2012,10 @@ input[type="date"] {
     border-top: 1px solid var(--border);
     background: var(--surface);
     box-shadow: var(--shadow-dock);
+  }
+
+  .header-actions.is-hidden {
+    display: none;
   }
 
   .header-actions .btn {
