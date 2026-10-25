@@ -193,14 +193,14 @@ A shopper wants to inspect one item’s prediction, rhythm, history, and mainten
 ### Sequence
 
 1. Return context is preserved.
-2. Read status and predicted restock.
+2. Read status, predicted restock, and the zone-aware horizon lane.
 3. Inspect rhythm, confidence, and the estimate explanation.
 4. Compare purchase history.
 5. Log a purchase, edit, or delete the item.
 
 ### States
 
-- **Typical:** prediction, rhythm, chart, and history are separate work areas.
+- **Typical:** the horizon lane, prediction, rhythm, chart, and history are separate work areas.
 - **Learning:** the typical interval, learning progress, and confidence are visible.
 - **Learned:** confidence, estimate source, interval range, and technical disclosure are visible.
 - **No history:** the table says no purchase history exists.
@@ -261,6 +261,7 @@ A user wants a safe way to restore sample data or remove an item.
 - **Log last** prefills the focused item’s latest quantity and a known, non-zero total price while keeping the date at today.
 - Total price is optional; blank or `0` stores an unknown price, and history and success feedback say so plainly.
 - Item titles show a persistent interactive underline, provide an expanded pointer target, and remain backed by explicit **Details** buttons.
+- Item detail renders the same zone-aware horizon lane as **Next up**; its active segment matches the item’s status, while Today remains fixed at the Overdue/Buy-now boundary.
 - The **Next up** decision appears before the compact ranked queue, and the queue appears before the seven-day schedule.
 - The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync.
 - The populated dashboard has exactly one primary action: **Log purchase** on the **Next up** item.

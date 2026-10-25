@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="description" content="Hoot is a predictive household inventory tracker that learns your restock rhythm." />
     <title>Hoot — Predictive Household Inventory Tracker</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
@@ -43,6 +43,7 @@
         </nav>
 
         <div class="header-actions">
+          <button class="btn btn-secondary" type="button" data-dialog="batch-restock">Restock trip</button>
           <button class="btn btn-secondary" type="button" data-dialog="log-purchase">Log purchase</button>
           <button class="btn btn-secondary" type="button" data-dialog="add-item">Add item</button>
         </div>
@@ -51,9 +52,9 @@
           <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
         </div>
       </div>
-      </header>
+    </header>
 
-      <div class="app-frame">
+    <div class="app-frame">
 
       <main class="app-main">
         <section class="app-view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
@@ -133,7 +134,7 @@
           <div class="section-heading">
             <div>
               <h1 id="one-time-title">One-time items</h1>
-              <p class="section-copy">Check off things you only need once in a while. Hoot will not try to predict them.</p>
+              <p class="section-copy">A checklist for irregular household needs, kept strictly separate from your restock rhythm predictions.</p>
             </div>
             <button class="btn btn-secondary one-time-heading-action" type="button" data-action="add-one-time">
               Add one-time item
@@ -153,7 +154,7 @@
         <header class="dialog-header">
           <div>
             <h2 id="add-item-title">Add an item</h2>
-            <p>Pick a path, then add only what it needs.</p>
+            <p>Choose whether Hoot should learn this item’s restock rhythm or keep it on a one-time checklist.</p>
           </div>
           <button class="icon-button" type="button" data-close aria-label="Close add item">
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -187,7 +188,7 @@
         <div class="field-row field-row--2">
           <label class="field" for="add-category">
             <span>Category</span>
-            <select id="add-category" name="category">
+            <select id="add-category" name="category" aria-describedby="add-category-hint">
               <option>Pantry</option>
               <option>Cleaning</option>
               <option>Personal care</option>
@@ -206,7 +207,7 @@
               autocomplete="off"
               aria-describedby="add-unit-hint"
             />
-            <small id="add-unit-hint" class="field-hint">Optional. Example: “half-gallon”.</small>
+            <small id="add-unit-hint" class="field-hint">Optional measurement or package size (e.g., half-gallon, 12-pack).</small>
           </label>
         </div>
 
@@ -224,7 +225,7 @@
             autocomplete="off"
             aria-describedby="add-threshold-hint add-threshold-error"
           />
-          <small id="add-threshold-hint" class="field-hint">Days between typical purchases.</small>
+          <small id="add-threshold-hint" class="field-hint">Initial estimate in days until Hoot learns your rhythm from logged purchases.</small>
           <small id="add-threshold-error" class="field-error" data-error-for="reorderThresholdDays"></small>
         </label>
 
@@ -268,7 +269,7 @@
                 autocomplete="off"
                 aria-describedby="purchase-date-hint purchase-date-error"
               />
-              <small id="purchase-date-hint" class="field-hint">Today or earlier.</small>
+              <small id="purchase-date-hint" class="field-hint">Purchase date (today or earlier).</small>
               <small id="purchase-date-error" class="field-error" data-error-for="date"></small>
             </label>
 
@@ -291,17 +292,21 @@
             </label>
 
             <label class="field" for="purchase-price">
-              <span>Total price</span>
-              <input
-                id="purchase-price"
-                name="price"
-                type="number"
-                min="0"
-                step="0.01"
-                inputmode="decimal"
-                autocomplete="off"
-                aria-describedby="purchase-price-hint purchase-price-error"
-              />
+              <span>Total price ($)</span>
+              <div class="price-input-wrap">
+                <span class="price-currency-mark" aria-hidden="true">$</span>
+                <input
+                  id="purchase-price"
+                  name="price"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputmode="decimal"
+                  placeholder="0.00"
+                  autocomplete="off"
+                  aria-describedby="purchase-price-hint purchase-price-error"
+                />
+              </div>
               <small id="purchase-price-hint" class="field-hint">Optional. Leave blank or enter 0 if the price is unknown.</small>
               <small id="purchase-price-error" class="field-error" data-error-for="price"></small>
             </label>
@@ -326,6 +331,7 @@
         <header class="dialog-header">
           <div>
             <h2 id="edit-item-title">Edit item</h2>
+            <p>Update name, category, unit, or typical restock interval.</p>
           </div>
           <button class="icon-button" type="button" data-close aria-label="Close edit item">
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -343,19 +349,27 @@
 
           <label class="field" for="edit-category">
             <span>Category</span>
-            <select id="edit-category" name="category">
+            <select id="edit-category" name="category" aria-describedby="edit-category-hint">
               <option>Pantry</option>
               <option>Cleaning</option>
               <option>Personal care</option>
               <option>Household</option>
             </select>
+            <small id="edit-category-hint" class="field-hint">Choose the closest household area.</small>
           </label>
         </div>
 
         <div class="field-row">
           <label class="field" for="edit-unit">
             <span>Unit</span>
-            <input id="edit-unit" name="unit" type="text" />
+            <input
+              id="edit-unit"
+              name="unit"
+              type="text"
+              placeholder="half-gallon, roll, tube…"
+              aria-describedby="edit-unit-hint"
+            />
+            <small id="edit-unit-hint" class="field-hint">Optional measurement or package size.</small>
           </label>
 
           <label class="field" for="edit-threshold">
@@ -374,9 +388,141 @@
           </label>
         </div>
 
+        <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
         <footer class="dialog-actions">
           <button class="btn btn-secondary" type="button" data-close>Cancel</button>
-          <button class="btn btn-primary" type="submit">Save changes</button>
+          <button class="btn btn-primary" type="submit" data-loading-label="Saving…">Save changes</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="hoot-dialog" id="edit-purchase-dialog" aria-labelledby="edit-purchase-title">
+      <form id="edit-purchase-form" novalidate>
+        <header class="dialog-header">
+          <div>
+            <h2 id="edit-purchase-title">Edit purchase</h2>
+            <p>Correct date, quantity, or price to update rhythm calculations.</p>
+          </div>
+          <button class="icon-button" type="button" data-close aria-label="Close edit purchase">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+            </svg>
+          </button>
+        </header>
+
+        <input type="hidden" id="edit-purchase-item-id" name="itemId" />
+        <input type="hidden" id="edit-purchase-id" name="purchaseId" />
+
+        <div class="field-row field-row--3">
+          <label class="field" for="edit-purchase-date">
+            <span>Date</span>
+            <input
+              id="edit-purchase-date"
+              name="date"
+              type="date"
+              required
+              autocomplete="off"
+              aria-describedby="edit-purchase-date-hint edit-purchase-date-error"
+            />
+            <small id="edit-purchase-date-hint" class="field-hint">Purchase date (today or earlier).</small>
+            <small id="edit-purchase-date-error" class="field-error" data-error-for="date"></small>
+          </label>
+
+          <label class="field" for="edit-purchase-quantity">
+            <span>Quantity</span>
+            <input
+              id="edit-purchase-quantity"
+              name="quantity"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value="1"
+              inputmode="decimal"
+              autocomplete="off"
+              required
+              aria-describedby="edit-purchase-quantity-hint edit-purchase-quantity-error"
+            />
+            <small id="edit-purchase-quantity-hint" class="field-hint">Units purchased.</small>
+            <small id="edit-purchase-quantity-error" class="field-error" data-error-for="quantity"></small>
+          </label>
+
+          <label class="field" for="edit-purchase-price">
+            <span>Total price ($)</span>
+            <div class="price-input-wrap">
+              <span class="price-currency-mark" aria-hidden="true">$</span>
+              <input
+                id="edit-purchase-price"
+                name="price"
+                type="number"
+                min="0"
+                step="0.01"
+                inputmode="decimal"
+                placeholder="0.00"
+                autocomplete="off"
+                aria-describedby="edit-purchase-price-hint edit-purchase-price-error"
+              />
+            </div>
+            <small id="edit-purchase-price-hint" class="field-hint">Leave blank if unknown.</small>
+            <small id="edit-purchase-price-error" class="field-error" data-error-for="price"></small>
+          </label>
+        </div>
+
+        <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
+        <footer class="dialog-actions">
+          <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+          <button class="btn btn-primary" type="submit" data-loading-label="Saving…">Save changes</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="hoot-dialog batch-restock-dialog" id="batch-restock-dialog" aria-labelledby="batch-restock-title">
+      <form id="batch-restock-form" novalidate>
+        <header class="dialog-header">
+          <div>
+            <h2 id="batch-restock-title">Log shopping trip</h2>
+            <p>Check off the staples you restocked to advance their rhythm.</p>
+          </div>
+          <button class="icon-button" type="button" data-close aria-label="Close shopping trip dialog">
+            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+              <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+            </svg>
+          </button>
+        </header>
+
+        <div class="batch-restock-meta">
+          <label class="field" for="batch-restock-date">
+            <span>Trip date</span>
+            <input
+              id="batch-restock-date"
+              name="date"
+              type="date"
+              required
+              autocomplete="off"
+              aria-describedby="batch-restock-date-hint batch-restock-date-error"
+            />
+            <small id="batch-restock-date-hint" class="field-hint">Applied to all selected items (today or earlier).</small>
+            <small id="batch-restock-date-error" class="field-error" data-error-for="date"></small>
+          </label>
+
+          <label class="field" for="batch-restock-search">
+            <span>Filter staples</span>
+            <input
+              id="batch-restock-search"
+              type="search"
+              placeholder="Filter by name or category…"
+              autocomplete="off"
+              aria-label="Filter staples in shopping trip"
+            />
+          </label>
+        </div>
+
+        <div class="batch-restock-container" id="batch-restock-container" role="region" aria-label="Staples to restock">
+        </div>
+
+        <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
+        <footer class="dialog-actions">
+          <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+          <button class="btn btn-primary" type="submit" id="batch-restock-submit" data-loading-label="Restocking…">Restock selected</button>
         </footer>
       </form>
     </dialog>
@@ -384,7 +530,7 @@
     <dialog class="hoot-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
       <header class="dialog-header">
         <div>
-          <h2 id="confirm-title">Are you sure?</h2>
+          <h2 id="confirm-title">Confirm action</h2>
         </div>
         <button class="icon-button" type="button" data-close aria-label="Close confirmation">
           <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -395,7 +541,7 @@
       <p id="confirm-message">This action cannot be undone.</p>
       <footer class="dialog-actions">
         <button class="btn btn-secondary" type="button" data-close>Cancel</button>
-        <button class="btn btn-danger" id="confirm-action" type="button">Confirm</button>
+        <button class="btn btn-danger" id="confirm-action" type="button">Continue</button>
       </footer>
     </dialog>
 

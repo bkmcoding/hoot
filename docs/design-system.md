@@ -193,10 +193,10 @@ Required states:
 
 ### Restock Horizon Lane
 
-- The lane has four segments sized `7fr 3.5fr 4fr 6.5fr`, matching Overdue (−7 to 0), Buy now (0 to 3), Watch (4 to 7) and Steady (8 to 14 days). That lines them up with the Today marker position from `app.js`.
+- The lane has four segments sized `7fr 3.5fr 4fr 6.5fr`, matching Overdue (−7 to 0), Buy now (0 to 3), Watch (4 to 7) and Steady (8 to 14 days).
 - The active zone segment has full color and its label turns zone-colored. Other segments stay visible at about 32% strength.
-- A night Today marker carries a small “Today” label and a faint pulse ring.
-- The Today marker is fixed at the Overdue/Buy-now boundary, 33.333% of the lane.
+- A subtle Today hairline reference line sits at the Overdue/Buy-now boundary (33.333% of the lane).
+- A dynamic restock pointer glides along the rail matching the item's predicted restock date (`daysUntil`), displaying the due timing (e.g. `Today`, `Tomorrow`, `In 5d`, `2d overdue`) with a tactile pulse ring.
 - The lane is always supported by the predicted date, the due chip, and the status chip.
 - It is not a progress bar and never implies certainty.
 
@@ -243,6 +243,7 @@ Required states:
 ### Item detail
 
 - Back navigation and item identity lead.
+- Tracked items show the zone-aware Restock Horizon Lane beneath the identity header; one-time items do not.
 - Prediction and rhythm use paper analysis cards with hairline fact rows.
 - Prediction language is household-friendly. Method, model version, and fit quality stay inside a technical disclosure.
 - The chart sits on quiet paper with a warm hairline grid.
