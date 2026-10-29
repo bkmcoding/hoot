@@ -224,6 +224,56 @@ A shopper wants to correct an item’s name, category, unit, or typical restock 
 - **Invalid:** name and typical restock interval receive field-level recovery text and focus.
 - **Success:** the dialog closes and the item updates.
 
+## Shopping run
+
+### Job
+
+A shopper standing in an aisle wants one grouped list of everything to buy, a one-tap way to check each item off, and a clear close to the trip.
+
+### Entry points
+
+- Header and mobile dock: **Start shopping run**
+- Primary navigation: **Shopping** (the run view itself is titled **Shopping run**)
+- **Exit run** returns to Dashboard without clearing the cart; **Finish shopping run** opens the receipt.
+
+### Sequence
+
+1. Start the run. Hoot hides the global header and footer so the aisle list owns the screen, and moves focus to the **Shopping run** heading so keyboard and screen-reader users land in the new context.
+2. Scan aisle groups; each group is sorted by urgency: Overdue, Buy now, Watch when included, then One-time.
+3. Tap **Add** once on an item. The item joins the cart and its row collapses to **In cart**.
+4. Use **Show Watch** when planned purchases should be included. Hoot includes Watch automatically when the dashboard's **Next up** item is in Watch.
+5. Review quantity, price, and the next restock estimate in the cart; use **Adjust** or **Undo** to correct a checkoff.
+6. Tap **Finish shopping run** to review the receipt, then **Done** to return to Dashboard or **View purchase history** to inspect the first tracked item.
+7. **Exit run** leaves the cart intact for later.
+
+### Content contract
+
+- The run drafts tracked staples in **Overdue** or **Buy now**, plus every uncompleted one-time need. If the dashboard's **Next up** item is in **Watch**, a fresh run includes Watch so the two surfaces agree.
+- **Watch** staples otherwise appear after **Show Watch** is pressed; the toggle reports its state with `aria-pressed` and is named **Hide Watch items** when active.
+- Groups are categories, sorted alphabetically; items inside a group sort by urgency, then name. Items without a category fall under **Uncategorized**.
+- Each unchecked row shows name, category, unit, status, and due text, with one primary **Add** action.
+- A checked row collapses to a compact **In cart** line: a check mark, the item name, and no status chip or action. Quantity, price, and prediction details live in the cart.
+- Checkoff feedback is in place, not in a toast: the row collapses, the summary changes, and a polite live region names the item and cart count so the finish action stays clear.
+- The empty cart says Add saves immediately and Undo reverses it; it does not imply that the run defers the purchase until Finish.
+- The summary is one compact strip: **Items**, **In cart**, and **Left** for the current run, including checked items that no longer match the default draft.
+- The cart lists each checked item with its quantity, total price (or **Price unknown**), and **Next restock** date. **Adjust** opens the purchase editor for a tracked staple and the item editor for a one-time need.
+- **Finish shopping run** is disabled while the cart is empty. The receipt names the item count, total known spend, and every checked-off item. **Done** clears the run and returns to Dashboard; **View purchase history** clears the run and opens the first tracked item; closing the receipt with Escape or the close button leaves the run intact.
+- The run session — Watch toggle and checked items — persists separately from inventory and survives a reload. A finished run clears it.
+- Completed one-time items and steady tracked staples do not appear.
+- Hoot has one trip flow: the legacy **Restock trip** modal is retired.
+
+### States
+
+- **Immersive:** the global header and footer are hidden, the run title and **Exit run** stay at the top, and **Finish shopping run** closes the list at the bottom.
+- **Typical:** eligible items grouped by aisle, an empty-cart explanation, and a compact summary.
+- **In cart:** the row collapses to a sage **In cart** line, and the cart gains quantity, price, next-restock detail, **Adjust**, and **Undo**.
+- **Watch included:** Watch staples join their aisles in urgency order; hiding them removes only those that are still unchecked.
+- **One-time checked:** the item is completed in the checklist and appears in the cart as a one-time entry.
+- **Empty run:** when nothing is eligible, the summary reads zero, the cart explains what will appear, and Finish is disabled.
+- **Receipt:** a native dialog summarizes the trip without blocking another checkoff until Done is chosen.
+- **Storage unavailable:** the in-memory run still works; only reload persistence is lost.
+- **Failure:** a failed checkoff or undo leaves the run unchanged and shows an error toast naming the item.
+
 ## Reset demo and destructive actions
 
 ### Job
@@ -242,15 +292,15 @@ A user wants a safe way to restore sample data or remove an item.
 
 ## Global feedback
 
-- Mutations show a polite success toast. Purchase feedback names the item, quantity, total price or “price unknown,” and updated next estimate; delete adds a short-lived Undo action.
+- Outside the Shopping run, mutations show a polite success toast. Purchase feedback names the item, quantity, total price or “price unknown,” and updated next estimate; delete adds a short-lived Undo action. The run uses an in-place live-region announcement instead so toasts do not cover the aisle list or finish action.
 - Validation and empty-state recovery are inline.
 - Error copy names what failed and what to do next.
 - Color never carries status alone.
 
 ## Acceptance criteria
 
-- A user can complete Add Item, Log Purchase, one-time toggle, and item detail navigation with keyboard only.
-- Focus starts on the first useful dialog control and returns to the trigger after close.
+- A user can complete Add Item, Log Purchase, one-time toggle, item detail navigation, and a Shopping run with keyboard only.
+- Entering Shopping run moves focus to its heading; **Exit run** returns focus to the Dashboard nav. Focus starts on the first useful dialog control and returns to the trigger after close.
 - Every validation message is associated with its field.
 - Every empty state explains the blocker and the next step.
 - One-time behavior and total-price meaning are visibly explained.
@@ -263,13 +313,13 @@ A user wants a safe way to restore sample data or remove an item.
 - Item titles show a persistent interactive underline, provide an expanded pointer target, and remain backed by explicit **Details** buttons.
 - Item detail renders the same zone-aware horizon lane as **Next up**; its active segment matches the item’s status, while Today remains fixed at the Overdue/Buy-now boundary.
 - The **Next up** decision appears before the compact ranked queue, and the queue appears before the seven-day schedule.
-- The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync.
-- The populated dashboard has exactly one primary action: **Log purchase** on the **Next up** item.
+- The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync. Day cards show the weekday and date once, adding a month label only on the first card and at month boundaries.
+- The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and mobile dock carry **Start shopping run** as the job-level primary action.
 - The Today marker sits at the Overdue/Buy-now boundary, 33.333% of the lane.
 - Exact duplicate names are rejected with a field-level recovery message.
-- On phones, the action dock is hidden while the **Next up** card is visible and does not cover the first queue action.
-- Dynamic headings are sequential: dashboard and one-time empty states use `<h2>` beneath an `<h1>`; queue rows use `<h3>` beneath the focused `<h2>`; item detail uses `<h1>`, then `<h2>`, then `<h3>`.
-- Rendered text meets AA contrast in the checked dashboard, item-detail, one-time, and dialog states (4.5:1 normal text, 3:1 large text).
+- On phones, the action dock stays reachable with **Start shopping run**, **Log purchase**, and **Add item**; the run title spans the first dock row and the two utility actions share the second. Bottom padding keeps the dock from covering the first queue action.
+- Dynamic headings are sequential: dashboard and one-time empty states use `<h2>` beneath an `<h1>`; queue rows use `<h3>` beneath the focused `<h2>`; item detail uses `<h1>`, then `<h2>`, then `<h3>`; Shopping run uses `<h1>`, then `<h2>`.
+- Rendered text meets AA contrast in the checked dashboard, item-detail, one-time, Shopping run, and receipt states (4.5:1 normal text, 3:1 large text).
 - The calendar caption fits without a one-word orphan at 390px.
 - Delete can be undone from the confirmation toast before it disappears.
 - Reset demo is visible, restores the built-in sample, and remains at least 44px tall on phones.
