@@ -66,7 +66,7 @@ async function seedShoppingRun(page) {
 
 async function openShoppingRun(page) {
   await page.goto("/");
-  await page.getByRole("button", { name: "Start shopping run" }).click();
+  await page.getByRole("button", { name: "Shopping", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Shopping run" })).toBeVisible();
 }
 
@@ -89,7 +89,7 @@ test("opens Shopping Run from the header", async ({ page }) => {
 
 test("moves focus into the run and back to the dashboard", async ({ page }) => {
   await page.goto("/");
-  const start = page.getByRole("button", { name: "Start shopping run" });
+  const start = page.getByRole("button", { name: "Shopping", exact: true });
   await start.focus();
   await page.keyboard.press("Enter");
 
