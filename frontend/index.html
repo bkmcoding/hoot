@@ -39,11 +39,12 @@
 
         <nav class="app-nav" aria-label="Primary">
           <button class="nav-button is-active" type="button" data-view="dashboard">Dashboard</button>
+          <button class="nav-button" type="button" data-view="store-run">Shopping</button>
           <button class="nav-button" type="button" data-view="one-time">One-time</button>
         </nav>
 
         <div class="header-actions">
-          <button class="btn btn-secondary" type="button" data-dialog="batch-restock">Restock trip</button>
+          <button class="btn btn-primary" type="button" data-view="store-run">Start shopping run</button>
           <button class="btn btn-secondary" type="button" data-dialog="log-purchase">Log purchase</button>
           <button class="btn btn-secondary" type="button" data-dialog="add-item">Add item</button>
         </div>
@@ -141,6 +142,35 @@
             </button>
           </div>
           <div id="one-time-list" class="one-time-list"></div>
+        </section>
+
+        <section class="app-view store-run-view" id="view-store-run" aria-labelledby="store-run-title">
+          <header class="store-run-header">
+            <div>
+              <h1 id="store-run-title" tabindex="-1">Shopping run</h1>
+              <p>Tap items into the cart. Aisles first, urgency second.</p>
+            </div>
+            <div class="store-run-actions">
+              <button
+                class="btn btn-secondary"
+                type="button"
+                data-action="toggle-watch-items"
+                aria-pressed="false"
+              >Show Watch items</button>
+              <button class="btn btn-secondary" type="button" data-view="dashboard">Exit run</button>
+            </div>
+          </header>
+
+          <div class="store-run-summary" id="store-run-summary"></div>
+          <div class="store-run-groups" id="store-run-groups"></div>
+
+          <section class="store-run-cart" id="store-run-cart" aria-label="Items in cart"></section>
+
+          <footer class="store-run-footer">
+            <button class="btn btn-primary" type="button" data-action="finish-run">Finish shopping run</button>
+          </footer>
+
+          <p class="sr-only" id="store-run-announcer" role="status" aria-live="polite"></p>
         </section>
       </main>
 
@@ -475,56 +505,24 @@
       </form>
     </dialog>
 
-    <dialog class="hoot-dialog batch-restock-dialog" id="batch-restock-dialog" aria-labelledby="batch-restock-title">
-      <form id="batch-restock-form" novalidate>
-        <header class="dialog-header">
-          <div>
-            <h2 id="batch-restock-title">Log shopping trip</h2>
-            <p>Check off the staples you restocked to advance their rhythm.</p>
-          </div>
-          <button class="icon-button" type="button" data-close aria-label="Close shopping trip dialog">
-            <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-              <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
-            </svg>
-          </button>
-        </header>
-
-        <div class="batch-restock-meta">
-          <label class="field" for="batch-restock-date">
-            <span>Trip date</span>
-            <input
-              id="batch-restock-date"
-              name="date"
-              type="date"
-              required
-              autocomplete="off"
-              aria-describedby="batch-restock-date-hint batch-restock-date-error"
-            />
-            <small id="batch-restock-date-hint" class="field-hint">Applied to all selected items (today or earlier).</small>
-            <small id="batch-restock-date-error" class="field-error" data-error-for="date"></small>
-          </label>
-
-          <label class="field" for="batch-restock-search">
-            <span>Filter staples</span>
-            <input
-              id="batch-restock-search"
-              type="search"
-              placeholder="Filter by name or category…"
-              autocomplete="off"
-              aria-label="Filter staples in shopping trip"
-            />
-          </label>
+    <dialog class="hoot-dialog finish-run-dialog" id="finish-run-dialog" aria-labelledby="finish-run-title">
+      <header class="dialog-header">
+        <div>
+          <h2 id="finish-run-title">Shopping run finished</h2>
+          <p id="finish-run-message"></p>
         </div>
-
-        <div class="batch-restock-container" id="batch-restock-container" role="region" aria-label="Staples to restock">
-        </div>
-
-        <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
-        <footer class="dialog-actions">
-          <button class="btn btn-secondary" type="button" data-close>Cancel</button>
-          <button class="btn btn-primary" type="submit" id="batch-restock-submit" data-loading-label="Restocking…">Restock selected</button>
-        </footer>
-      </form>
+        <button class="icon-button" type="button" data-close aria-label="Close run summary">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+          </svg>
+        </button>
+      </header>
+      <div class="finish-run-summary" id="finish-run-summary" role="status" aria-live="polite"></div>
+      <ul class="finish-run-list" id="finish-run-list" aria-label="Items logged in this run"></ul>
+      <footer class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-action="finish-run-history" id="finish-run-history">View purchase history</button>
+        <button class="btn btn-primary" type="button" data-action="finish-run-done" data-autofocus>Done</button>
+      </footer>
     </dialog>
 
     <dialog class="hoot-dialog confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title">
@@ -547,6 +545,6 @@
 
     <div class="toast-region" id="toast-region" role="status" aria-live="polite"></div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>

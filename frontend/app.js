@@ -1,8 +1,21 @@
+import {
+  DAY_MS,
+  addDays,
+  parseDate,
+  predictionFor,
+  startOfDay,
+  toISODate,
+} from "./prediction.js";
+import {
+  buildShoppingRun,
+  groupShoppingRun,
+  shoppingRunSummary,
+} from "./store-run.js";
+
 (() => {
   "use strict";
 
   const STORAGE_KEY = "hoot-demo-state-v1";
-  const DAY_MS = 24 * 60 * 60 * 1000;
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -19,30 +32,6 @@
   const escapeHtml = (value) =>
     String(value ?? "").replace(/[&<>"']/g, (character) => htmlEntities[character]);
 
-  function startOfDay(date = new Date()) {
-    const copy = new Date(date);
-    copy.setHours(0, 0, 0, 0);
-    return copy;
-  }
-
-  function addDays(date, days) {
-    const copy = new Date(date);
-    copy.setDate(copy.getDate() + days);
-    return copy;
-  }
-
-  function toISODate(date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
-  function parseDate(value) {
-    if (value instanceof Date) return startOfDay(value);
-    return startOfDay(new Date(`${value}T00:00:00`));
-  }
-
   const today = startOfDay();
   const daysAgoISO = (days) => toISODate(addDays(today, -days));
 
@@ -53,9 +42,11 @@
     year: "numeric",
   });
   const weekdayDate = new Intl.DateTimeFormat("en-US", { weekday: "short" });
+  const monthDate = new Intl.DateTimeFormat("en-US", { month: "short" });
   const formatDate = (date) => shortDate.format(date);
   const formatFullDate = (date) => longDate.format(date);
   const formatWeekday = (date) => weekdayDate.format(date);
+  const formatMonth = (date) => monthDate.format(date);
 
   function formatMoney(value) {
     return new Intl.NumberFormat("en-US", {
@@ -215,7 +206,44 @@
     }
   }
 
+  const STORE_RUN_KEY = "hoot-demo-store-run-v1";
+
+  function loadStoreRun() {
+    try {
+      const raw = window.localStorage.getItem(STORE_RUN_KEY);
+      if (!raw) return null;
+
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return null;
+
+      return {
+        includeWatch: Boolean(parsed.includeWatch),
+        selected: new Map(parsed.selected ?? []),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function saveStoreRun() {
+    try {
+      window.localStorage.setItem(
+        STORE_RUN_KEY,
+        JSON.stringify({
+          includeWatch: storeRun.includeWatch,
+          selected: Array.from(storeRun.selected.entries()),
+        }),
+      );
+    } catch {
+      // Ignore storage failures; the in-memory run still works.
+    }
+  }
+
   let state = loadState() ?? createDemoState();
+  let storeRun = loadStoreRun() ?? {
+    includeWatch: false,
+    selected: new Map(),
+  };
   let currentView = "dashboard";
   let currentItemId = null;
   let itemReturnView = "dashboard";
@@ -223,9 +251,8 @@
   let lastDialogTrigger = null;
   let pendingConfirm = null;
   let queueSearch = "";
-  let batchRestockFilter = "";
-  let batchRestockSelections = new Map();
   let calendarRange = 7;
+  let pendingRunReceipt = null;
   let nextUpObserver = null;
   let observedNextUpCard = null;
   let nextUpCardVisible = false;
@@ -329,47 +356,6 @@
       saveState();
       return clone(item);
     },
-    async logBatchPurchases(records) {
-      if (!Array.isArray(records) || !records.length) return { updatedItems: [], createdPurchases: [] };
-      const createdPurchases = [];
-      const updatedItemIds = new Set();
-
-      for (const record of records) {
-        const item = state.items.find((entry) => entry.id === record.itemId);
-        if (!item) continue;
-        const purchase = {
-          id: makeId("purchase"),
-          date: record.date,
-          quantity: record.quantity,
-          price: record.price ?? null,
-        };
-        item.purchases.push(purchase);
-        item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
-        createdPurchases.push({ itemId: item.id, purchaseId: purchase.id, purchase: clone(purchase) });
-        updatedItemIds.add(item.id);
-      }
-
-      saveState();
-      const affectedItems = state.items.filter((item) => updatedItemIds.has(item.id));
-      return { updatedItems: clone(affectedItems), createdPurchases };
-    },
-    async restoreBatchPurchases(createdPurchases) {
-      if (!Array.isArray(createdPurchases) || !createdPurchases.length) return [];
-      const affectedItemIds = new Set();
-
-      for (const entry of createdPurchases) {
-        const item = state.items.find((i) => i.id === entry.itemId);
-        if (!item) continue;
-        const index = item.purchases.findIndex((p) => p.id === entry.purchaseId);
-        if (index !== -1) {
-          item.purchases.splice(index, 1);
-          affectedItemIds.add(item.id);
-        }
-      }
-
-      saveState();
-      return clone(state.items.filter((item) => affectedItemIds.has(item.id)));
-    },
     async toggleOneTime(id, completed) {
       const item = state.items.find((entry) => entry.id === id);
       if (!item) throw new Error("Item not found");
@@ -383,148 +369,6 @@
       return clone(state.items);
     },
   };
-
-  function predictionFor(item) {
-    if (item.isOneTime) return null;
-
-    const purchaseDates = item.purchases
-      .map((purchase) => parseDate(purchase.date))
-      .sort((left, right) => left - right);
-    const origin = purchaseDates.length ? purchaseDates[0] : parseDate(item.createdAt);
-    const latest = purchaseDates.length ? purchaseDates[purchaseDates.length - 1] : origin;
-    const purchaseCount = purchaseDates.length;
-    const intervals = purchaseDates.slice(1).map((date, index) => {
-      const previous = purchaseDates[index];
-      return Math.max(1, Math.round((date - previous) / DAY_MS));
-    });
-    const averageInterval = intervals.length
-      ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length
-      : null;
-
-    let predictedDate;
-    let method;
-    let technicalMethod;
-    let modelVersion;
-    let slope = null;
-    let intercept = null;
-    let rSquared = null;
-    let fittedDates = null;
-    let projectionMode = "manual";
-
-    if (purchaseCount < 3) {
-      predictedDate = addDays(latest, item.reorderThresholdDays);
-      method = `Manual ${item.reorderThresholdDays}-day estimate`;
-      technicalMethod = "Manual estimate";
-      modelVersion = "demo-manual-v1";
-    } else {
-      const yValues = purchaseDates.map((date) => Math.round((date - origin) / DAY_MS));
-      const xValues = yValues.map((_, index) => index);
-      const xMean = xValues.reduce((sum, value) => sum + value, 0) / xValues.length;
-      const yMean = yValues.reduce((sum, value) => sum + value, 0) / yValues.length;
-      const numerator = xValues.reduce(
-        (sum, value, index) => sum + (value - xMean) * (yValues[index] - yMean),
-        0,
-      );
-      const denominator = xValues.reduce((sum, value) => sum + (value - xMean) ** 2, 0);
-      const fittedSlope = denominator === 0 ? 0 : numerator / denominator;
-      const fittedIntercept = yMean - fittedSlope * xMean;
-      const nextY = fittedIntercept + fittedSlope * yValues.length;
-      const lastY = yValues[yValues.length - 1];
-      const fittedYValues = xValues.map((value) => fittedIntercept + fittedSlope * value);
-      const residualSum = yValues.reduce(
-        (sum, value, index) => sum + (value - fittedYValues[index]) ** 2,
-        0,
-      );
-      const totalSum = yValues.reduce((sum, value) => sum + (value - yMean) ** 2, 0);
-      const fittedR = totalSum > 0 ? 1 - residualSum / totalSum : null;
-
-      if (
-        !Number.isFinite(fittedSlope) ||
-        fittedSlope <= 0 ||
-        !Number.isFinite(nextY) ||
-        nextY <= lastY
-      ) {
-        const averageGap = Math.max(
-          1,
-          Math.round((latest - origin) / (purchaseCount - 1)),
-        );
-        predictedDate = addDays(latest, averageGap);
-        method = `Average interval from ${purchaseCount} purchases`;
-        technicalMethod = "Average interval fallback";
-      } else {
-        predictedDate = addDays(origin, Math.round(nextY));
-        method = `Learned from ${purchaseCount} purchases`;
-        technicalMethod = "Linear regression";
-        slope = fittedSlope;
-        intercept = fittedIntercept;
-        rSquared = Number.isFinite(fittedR) ? fittedR : null;
-        fittedDates = fittedYValues.map((value) => addDays(origin, Math.round(value)));
-        projectionMode = "regression";
-      }
-      modelVersion = "demo-ols-v1";
-    }
-
-    const daysUntil = Math.ceil((predictedDate - today) / DAY_MS);
-
-    const zone =
-      daysUntil < 0
-        ? "overdue"
-        : daysUntil <= 3
-          ? "buy-now"
-          : daysUntil <= 7
-            ? "watch"
-            : "steady";
-    const status = zone;
-    const statusLabel =
-      zone === "overdue"
-        ? "Overdue"
-        : zone === "buy-now"
-          ? "Buy now"
-          : zone === "watch"
-            ? "Watch"
-            : "Steady";
-    const maturity = purchaseCount < 3 ? "learning" : "learned";
-    const fitStrength =
-      rSquared === null
-        ? null
-        : rSquared >= 0.7
-          ? "strong"
-          : rSquared >= 0.4
-            ? "moderate"
-            : "loose";
-    const confidence =
-      purchaseCount === 0
-        ? "No purchases yet"
-        : purchaseCount < 3
-        ? `Learning · ${purchaseCount} of 3 purchases`
-        : rSquared === null
-          ? "Moderate rhythm"
-          : `${fitStrength.charAt(0).toUpperCase()}${fitStrength.slice(1)} rhythm`;
-
-    return {
-      date: predictedDate,
-      daysUntil,
-      zone,
-      status,
-      statusLabel,
-      maturity,
-      confidence,
-      technicalMethod,
-      modelVersion,
-      method,
-      purchaseCount,
-      origin,
-      latest,
-      purchaseDates,
-      intervals,
-      averageInterval,
-      slope,
-      intercept,
-      rSquared,
-      fittedDates,
-      projectionMode,
-    };
-  }
 
   function formatDue(daysUntil) {
     if (daysUntil < 0) {
@@ -580,9 +424,15 @@
     return rankedTrackedEntries().map(({ item }) => item);
   }
 
+  function nextUpIsVisible(card) {
+    if (!card) return false;
+    const rect = card.getBoundingClientRect();
+    return rect.bottom > 0 && rect.top < window.innerHeight;
+  }
+
   function updateMobileDock() {
     const shouldHide = currentView === "dashboard" && nextUpCardVisible;
-    $(".header-actions").classList.toggle("is-hidden", shouldHide);
+    $(".header-actions")?.classList.toggle("is-hidden", shouldHide);
     document.body.classList.toggle("mobile-dock-hidden", shouldHide);
   }
 
@@ -604,14 +454,14 @@
     }
     observedNextUpCard = nextCard;
     if (nextCard && nextUpObserver) nextUpObserver.observe(nextCard);
-    if (!nextCard) nextUpCardVisible = false;
+    nextUpCardVisible = nextUpIsVisible(nextCard);
     updateMobileDock();
   }
 
   function renderStats() {
     const tracked = state.items.filter((item) => !item.isOneTime);
     const oneTime = state.items.filter((item) => item.isOneTime);
-    const predictions = tracked.map(predictionFor);
+    const predictions = tracked.map((item) => predictionFor(item));
     const attention = predictions.filter((prediction) => prediction.daysUntil <= 3).length;
     const established = tracked.filter((item) => item.purchases.length >= 3).length;
 
@@ -882,22 +732,23 @@
       const items = dueItems.length
         ? dueItems.map(({ item, prediction }) => calendarItemButton(item, prediction)).join("")
         : `<li><span class="calendar-clear">Clear</span></li>`;
+      const monthLabel = index === 0 || date.getDate() === 1 ? formatMonth(date) : "";
 
       return `
-        <article class="calendar-day ${index === 0 ? "is-today" : ""}" role="listitem">
+        <li class="calendar-day ${index === 0 ? "is-today" : ""}">
           <header>
             <span>${formatWeekday(date)}</span>
             <strong>${date.getDate()}</strong>
-            <small>${formatDate(date)}</small>
+            <small>${monthLabel}</small>
           </header>
           <ul class="calendar-items">${items}</ul>
-        </article>
+        </li>
       `;
     });
 
     const overdueCard = overdue.length
       ? `
-        <article class="calendar-day calendar-overdue" role="listitem">
+        <li class="calendar-day calendar-overdue">
           <header>
             <span>Past due</span>
             <strong>${overdue.length}</strong>
@@ -906,7 +757,7 @@
           <ul class="calendar-items">
             ${overdue.map(({ item, prediction }) => calendarItemButton(item, prediction)).join("")}
           </ul>
-        </article>
+        </li>
       `
       : "";
 
@@ -956,6 +807,411 @@
       `,
       )
       .join("");
+  }
+
+  function renderStoreRunRow(entry) {
+    const { item } = entry;
+    const isInCart = storeRun.selected.has(item.id);
+
+    if (isInCart) {
+      return `
+        <article class="store-run-row is-in-cart" data-item-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)} in cart">
+          <span class="run-check" aria-hidden="true">
+            <svg viewBox="0 0 16 16" focusable="false"><path d="M3.5 8.4l2.9 2.9 6.1-6.6" /></svg>
+          </span>
+          <div class="store-run-row-main">
+            <strong>${escapeHtml(item.name)}</strong>
+            <small>In cart</small>
+          </div>
+        </article>
+      `;
+    }
+
+    const prediction = item.isOneTime ? null : predictionFor(item, today);
+    const urgency = prediction ? prediction.statusLabel : "Checklist";
+    const timing = prediction ? formatDue(prediction.daysUntil) : "One-time need";
+    const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
+
+    return `
+      <article class="store-run-row" data-item-id="${escapeHtml(item.id)}">
+        <div class="store-run-row-main">
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${escapeHtml(item.category)}${unitText} · ${escapeHtml(urgency)} · ${escapeHtml(timing)}</small>
+        </div>
+        <button
+          class="btn btn-primary"
+          type="button"
+          data-action="toggle-run-item"
+          data-id="${escapeHtml(item.id)}"
+          aria-label="Add ${escapeHtml(item.name)} to cart"
+          aria-pressed="false"
+        >Add</button>
+      </article>
+    `;
+  }
+
+  function storeRunCartDetail(item, selection) {
+    const purchase = selection?.purchaseId
+      ? item.purchases.find((entry) => entry.id === selection.purchaseId)
+      : null;
+    const details = [];
+
+    if (purchase) {
+      details.push(
+        `${formatQuantity(purchase.quantity, item.unit)} · ${formatPurchasePrice(purchase.price)}`,
+      );
+    } else if (item.isOneTime) {
+      details.push("One-time checklist");
+    }
+
+    if (!item.isOneTime) {
+      const prediction = predictionFor(item, today);
+      if (prediction) details.push(`Next restock ${formatDate(prediction.date)}`);
+    }
+
+    return details.join(" · ");
+  }
+
+  function renderStoreRunCart(entries) {
+    const cart = $("#store-run-cart");
+    const selectedEntries = entries
+      .filter((entry) => storeRun.selected.has(entry.item.id))
+      .map((entry) => ({ ...entry, selection: storeRun.selected.get(entry.item.id) }));
+
+    const countLabel = `${selectedEntries.length} ${
+      selectedEntries.length === 1 ? "item" : "items"
+    }`;
+
+    if (!selectedEntries.length) {
+      cart.innerHTML = `
+        <header class="store-run-cart-header">
+          <h2>In cart</h2>
+          <span>0 items</span>
+        </header>
+        <div class="store-run-cart-empty">
+          <strong>Cart is empty</strong>
+          <p>Tap Add beside an item. It saves the change now; Undo in the cart reverses it.</p>
+        </div>
+      `;
+      return;
+    }
+
+    cart.innerHTML = `
+      <header class="store-run-cart-header">
+        <h2>In cart</h2>
+        <span>${countLabel}</span>
+      </header>
+      <ul class="store-run-cart-list">
+        ${selectedEntries
+          .map(
+            ({ item, selection }) => `
+          <li>
+            <div class="store-run-cart-item">
+              <strong>${escapeHtml(item.name)}</strong>
+              <small>${escapeHtml(storeRunCartDetail(item, selection))}</small>
+            </div>
+            <div class="store-run-cart-actions">
+              <button
+                class="btn btn-secondary btn-sm"
+                type="button"
+                data-action="adjust-run-item"
+                data-id="${escapeHtml(item.id)}"
+                aria-label="Adjust ${escapeHtml(item.name)}"
+              >Adjust</button>
+              <button
+                class="btn btn-ghost btn-sm"
+                type="button"
+                data-action="undo-run-item"
+                data-id="${escapeHtml(item.id)}"
+                aria-label="Undo ${escapeHtml(item.name)}"
+              >Undo</button>
+            </div>
+          </li>
+        `,
+          )
+          .join("")}
+      </ul>
+    `;
+  }
+
+  function renderStoreRun() {
+    const view = $("#view-store-run");
+    if (!view) return;
+
+    updateWatchToggle();
+
+    const currentEntries = buildShoppingRun(state.items, {
+      includeWatch: storeRun.includeWatch,
+      referenceDate: today,
+    });
+    const roster = new Map(currentEntries.map((entry) => [entry.item.id, entry]));
+
+    for (const selectedId of storeRun.selected.keys()) {
+      if (roster.has(selectedId)) continue;
+
+      const item = state.items.find((candidate) => candidate.id === selectedId);
+      if (!item) continue;
+
+      roster.set(selectedId, {
+        item,
+        type: item.isOneTime ? "one-time" : "tracked",
+        priority: storeRun.selected.get(selectedId)?.priority ?? 4,
+      });
+    }
+
+    const entries = [...roster.values()];
+    const groups = groupShoppingRun(entries);
+    const summary = shoppingRunSummary(entries, new Set(storeRun.selected.keys()));
+
+    $("#store-run-summary").innerHTML = `
+      <article><span>Items</span><strong>${summary.total}</strong></article>
+      <article><span>In cart</span><strong>${summary.inCart}</strong></article>
+      <article><span>Left</span><strong>${summary.remaining}</strong></article>
+    `;
+
+    $("#store-run-groups").innerHTML = groups
+      .map(
+        (group) => `
+        <section class="store-run-group" aria-label="${escapeHtml(group.category)} aisle">
+          <h2>${escapeHtml(group.category)}</h2>
+          <div class="store-run-group-items">
+            ${group.entries.map(renderStoreRunRow).join("")}
+          </div>
+        </section>
+      `,
+      )
+      .join("");
+
+    renderStoreRunCart(entries);
+
+    const finishButton = $('.store-run-footer [data-action="finish-run"]');
+    if (finishButton) finishButton.disabled = summary.inCart === 0;
+  }
+
+  function updateWatchToggle() {
+    const button = $('[data-action="toggle-watch-items"]');
+    if (!button) return;
+
+    button.textContent = storeRun.includeWatch ? "Hide Watch" : "Show Watch";
+    button.setAttribute(
+      "aria-label",
+      storeRun.includeWatch ? "Hide Watch items" : "Show Watch items",
+    );
+    button.setAttribute("aria-pressed", String(storeRun.includeWatch));
+  }
+
+  function announceRun(message) {
+    const announcer = $("#store-run-announcer");
+    if (announcer) announcer.textContent = message;
+  }
+
+  function focusNextRunRow(itemId) {
+    const rows = [...document.querySelectorAll("#store-run-groups .store-run-row")];
+    const currentIndex = rows.findIndex((row) => row.dataset.itemId === itemId);
+    const orderedRows =
+      currentIndex < 0
+        ? rows
+        : [...rows.slice(currentIndex + 1), ...rows.slice(0, currentIndex)];
+    const nextButton = orderedRows
+      .map((row) => row.querySelector('[data-action="toggle-run-item"]'))
+      .find((button) => button && !button.disabled);
+
+    if (nextButton) {
+      nextButton.focus();
+      return;
+    }
+
+    document
+      .querySelector(
+        `#store-run-cart [data-action="undo-run-item"][data-id="${CSS.escape(itemId)}"]`,
+      )
+      ?.focus();
+  }
+
+  async function toggleShoppingRunItem(itemId, trigger) {
+  const item = state.items.find((entry) => entry.id === itemId);
+  if (!item || storeRun.selected.has(itemId)) return;
+
+  const currentEntry = buildShoppingRun(state.items, {
+    includeWatch: storeRun.includeWatch,
+    referenceDate: today,
+  }).find((candidate) => candidate.item.id === itemId);
+  const priority = currentEntry?.priority ?? 4;
+
+  try {
+    if (item.isOneTime) {
+      await hootApi.toggleOneTime(itemId, true);
+      storeRun.selected.set(itemId, { type: "one-time", priority });
+      } else {
+        const latest = latestPurchaseFor(item);
+        const updatedItem = await hootApi.logPurchase(itemId, {
+          date: toISODate(today),
+          quantity: latest?.quantity ?? 1,
+          price: latest?.price ?? null,
+        });
+        const createdPurchase = updatedItem.purchases[updatedItem.purchases.length - 1];
+        if (!createdPurchase) throw new Error("Purchase not created");
+
+        storeRun.selected.set(itemId, {
+          type: "tracked",
+          purchaseId: createdPurchase.id,
+          priority,
+        });
+      }
+
+      saveStoreRun();
+      render();
+      announceRun(
+        `${item.name} added to cart. ${storeRun.selected.size} in cart.`,
+      );
+      focusNextRunRow(itemId);
+    } catch {
+      toast(`Could not add ${item.name}. Try again.`, "error");
+    }
+  }
+
+  function adjustShoppingRunItem(itemId, trigger) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    const selection = storeRun.selected.get(itemId);
+    if (!item || !selection) return;
+
+    if (selection.type === "tracked" && selection.purchaseId) {
+      if (prepareEditPurchaseDialog(itemId, selection.purchaseId)) {
+        showDialog($("#edit-purchase-dialog"), trigger);
+      }
+      return;
+    }
+
+    prepareEditItemDialog(itemId);
+    showDialog($("#edit-item-dialog"), trigger);
+  }
+
+  async function undoShoppingRunItem(itemId, trigger) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    const selection = storeRun.selected.get(itemId);
+    if (!item || !selection) return;
+
+    try {
+      if (selection.type === "tracked" && selection.purchaseId) {
+        const purchaseExists = item.purchases.some((purchase) => purchase.id === selection.purchaseId);
+        if (purchaseExists) await hootApi.deletePurchase(itemId, selection.purchaseId);
+      } else if (item.isOneTime) {
+        await hootApi.toggleOneTime(itemId, false);
+      }
+
+      storeRun.selected.delete(itemId);
+      saveStoreRun();
+      render();
+      document
+        .querySelector(
+          `.store-run-row[data-item-id="${CSS.escape(itemId)}"] [data-action="toggle-run-item"]`,
+        )
+        ?.focus();
+      announceRun(
+        `${item.name} ${selection.type === "one-time" ? "restored" : "removed from cart"}. ${
+          storeRun.selected.size
+        } in cart.`,
+      );
+    } catch {
+      toast(`Could not undo ${item.name}. Try again.`, "error");
+    }
+  }
+
+  function buildRunReceipt() {
+    const entries = [];
+
+    for (const [itemId, selection] of storeRun.selected) {
+      const item = state.items.find((candidate) => candidate.id === itemId);
+      if (!item) continue;
+      const purchase = selection.purchaseId
+        ? item.purchases.find((entry) => entry.id === selection.purchaseId)
+        : null;
+      entries.push({ item, selection, purchase });
+    }
+
+    const trackedEntries = entries.filter(({ item }) => !item.isOneTime);
+    const knownPrices = trackedEntries
+      .map(({ purchase }) => purchase?.price)
+      .filter((price) => typeof price === "number" && price > 0);
+    const totalSpent = knownPrices.reduce((sum, price) => sum + price, 0);
+    const historyEntry = trackedEntries.find(({ purchase }) => purchase) ?? null;
+
+    return {
+      entries,
+      trackedEntries,
+      totalSpent,
+      hasKnownPrice: knownPrices.length > 0,
+      historyItemId: historyEntry?.item.id ?? null,
+    };
+  }
+
+  function finishShoppingRun(trigger) {
+    const receipt = buildRunReceipt();
+    if (!receipt.entries.length) return;
+
+    const count = receipt.entries.length;
+    const trackedCount = receipt.trackedEntries.length;
+    const itemWord = count === 1 ? "item" : "items";
+    pendingRunReceipt = receipt;
+
+    $("#finish-run-title").textContent = "Shopping run finished";
+    $("#finish-run-message").textContent = `${count} ${itemWord} checked off.${
+      trackedCount
+        ? ` ${trackedCount} ${
+            trackedCount === 1 ? "prediction" : "predictions"
+          } updated.`
+        : " No predictions changed."
+    }`;
+    $("#finish-run-summary").innerHTML = `
+      <strong>${count} ${itemWord}</strong>
+      ${
+        receipt.hasKnownPrice
+          ? `<span>${formatMoney(receipt.totalSpent)} known spend</span>`
+          : `<span>Spending not recorded</span>`
+      }
+    `;
+    $("#finish-run-list").innerHTML = receipt.entries
+      .map(({ item, purchase }) => {
+        const detail = purchase
+          ? `${formatQuantity(purchase.quantity, item.unit)} · ${formatPurchasePrice(purchase.price)}`
+          : "One-time checklist";
+        return `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(detail)}</span></li>`;
+      })
+      .join("");
+    $("#finish-run-history").hidden = !receipt.historyItemId;
+    $("#toast-region").replaceChildren();
+    showDialog($("#finish-run-dialog"), trigger);
+  }
+
+  function completeShoppingRun({ openHistory = false } = {}) {
+    const receipt = pendingRunReceipt;
+    pendingRunReceipt = null;
+    lastDialogTrigger = null;
+    closeDialog($("#finish-run-dialog"));
+    storeRun = {
+      includeWatch: false,
+      selected: new Map(),
+    };
+    saveStoreRun();
+
+    setView("dashboard");
+
+    if (openHistory && receipt?.historyItemId) {
+      openDetail(receipt.historyItemId);
+      $(".item-page .back-button")?.focus({ preventScroll: true });
+      return;
+    }
+
+    $('.nav-button[data-view="dashboard"]')?.focus({ preventScroll: true });
+  }
+
+  function toggleWatchItems(trigger) {
+    storeRun.includeWatch = !storeRun.includeWatch;
+    saveStoreRun();
+    renderStoreRun();
+    announceRun(
+      storeRun.includeWatch ? "Watch items included." : "Watch items hidden.",
+    );
   }
 
   function predictionChart(item, prediction) {
@@ -1179,7 +1435,7 @@
         </button>
         <header class="item-page-header">
           <div>
-            <h1 id="item-analysis-title">${escapeHtml(item.name)}</h1>
+            <h1 id="item-analysis-title" tabindex="-1">${escapeHtml(item.name)}</h1>
             <p>${escapeHtml(item.category)} · ${escapeHtml(item.unit || "No unit specified")} · ${purchases.length} logged purchase${purchases.length === 1 ? "" : "s"}</p>
           </div>
           <span class="status-chip ${prediction ? `status-${escapeHtml(prediction.zone)}` : "status-learning"}">
@@ -1208,7 +1464,18 @@
           }
         </article>
 
-        <article class="analysis-card">
+        ${
+          item.isOneTime
+            ? `<article class="analysis-card">
+          <span>Checklist</span>
+          <strong>Kept off the rhythm model</strong>
+          <dl class="analysis-facts">
+            <div><dt>Tracking mode</dt><dd>Checklist only</dd></div>
+            <div><dt>Prediction</dt><dd>Off</dd></div>
+            <div><dt>Restock rhythm</dt><dd>Not tracked</dd></div>
+          </dl>
+        </article>`
+            : `<article class="analysis-card">
           <span>Rhythm</span>
           <strong>${averageInterval ? `${averageInterval.toFixed(1)} days average` : "Building rhythm"}</strong>
           <dl class="analysis-facts">
@@ -1216,13 +1483,14 @@
             <div><dt>Learning progress</dt><dd>${learningProgress}</dd></div>
             <div><dt>Estimate source</dt><dd>${prediction ? escapeHtml(prediction.method) : "Checklist"}</dd></div>
           </dl>
-        </article>
+        </article>`
+        }
         </div>
 
         <section class="chart-panel">
           <div class="section-heading">
             <div>
-              <h2>How Hoot reads this rhythm</h2>
+              <h2>${item.isOneTime ? "How Hoot handles one-time items" : "How Hoot reads this rhythm"}</h2>
             </div>
           </div>
           ${predictionChart(item, prediction)}
@@ -1265,6 +1533,9 @@
     renderDashboard();
     renderRestockCalendar();
     renderOneTime();
+    if (currentView === "store-run") {
+      renderStoreRun();
+    }
     if (currentView === "item" && currentItemId) {
       const item = state.items.find((entry) => entry.id === currentItemId);
       if (item) renderItemPage(item);
@@ -1272,6 +1543,7 @@
   }
 
   function setView(view) {
+    const previousView = currentView;
     let nextView = view;
     if (nextView === "item") {
       const item = state.items.find((entry) => entry.id === currentItemId);
@@ -1279,6 +1551,7 @@
       else nextView = itemReturnView || "dashboard";
     }
     currentView = nextView;
+    document.body.classList.toggle("is-store-run", nextView === "store-run");
     $$(".app-view").forEach((section) => {
       section.classList.toggle("is-active", section.id === `view-${nextView}`);
     });
@@ -1289,6 +1562,21 @@
     });
     if (nextView === "dashboard") syncNextUpDock();
     else updateMobileDock();
+    if (nextView === "store-run") {
+      if (!storeRun.selected.size) {
+        const [nextUp] = rankedTrackedEntries();
+        if (nextUp?.prediction.zone === "watch" && !storeRun.includeWatch) {
+          storeRun.includeWatch = true;
+          saveStoreRun();
+        }
+      }
+      renderStoreRun();
+      if (previousView !== "store-run") {
+        $("#store-run-title")?.focus();
+      }
+    } else if (previousView === "store-run" && nextView === "dashboard") {
+      $('.nav-button[data-view="dashboard"]')?.focus();
+    }
   }
 
   function clearFieldErrors(form) {
@@ -1523,246 +1811,6 @@
     }
   }
 
-  function updateBatchRestockSubmitButton() {
-    const selectedCount = Array.from(batchRestockSelections.values()).filter((e) => e.selected).length;
-    const submitBtn = $("#batch-restock-submit");
-    if (!submitBtn) return;
-    submitBtn.textContent = selectedCount > 0
-      ? `Restock ${selectedCount} staple${selectedCount === 1 ? "" : "s"}`
-      : "Select staples to restock";
-    if (selectedCount === 0) {
-      submitBtn.setAttribute("aria-disabled", "true");
-    } else {
-      submitBtn.removeAttribute("aria-disabled");
-    }
-  }
-
-  function renderBatchRestockList() {
-    const container = $("#batch-restock-container");
-    if (!container) return;
-
-    const query = batchRestockFilter.trim().toLowerCase();
-    const tracked = rankedTrackedEntries();
-    if (!tracked.length) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <p>No tracked staples in your inventory. Add tracked items first.</p>
-        </div>
-      `;
-      return;
-    }
-
-    const filtered = tracked.filter(({ item }) => {
-      if (!query) return true;
-      return (
-        item.name.toLowerCase().includes(query) ||
-        (item.category && item.category.toLowerCase().includes(query)) ||
-        (item.unit && item.unit.toLowerCase().includes(query))
-      );
-    });
-
-    const totalSelected = Array.from(batchRestockSelections.values()).filter((e) => e.selected).length;
-    const visibleSelected = filtered.filter(({ item }) => batchRestockSelections.get(item.id)?.selected).length;
-    const hiddenSelected = totalSelected - visibleSelected;
-
-    const hiddenNotice = hiddenSelected > 0
-      ? `
-        <div class="batch-filter-notice" role="status">
-          <span>${hiddenSelected} pre-selected staple${hiddenSelected === 1 ? "" : "s"} hidden by filter</span>
-          <button type="button" class="batch-clear-filter-btn" data-action="clear-batch-filter">Show all</button>
-        </div>
-      `
-      : "";
-
-    if (!filtered.length) {
-      container.innerHTML = `
-        ${hiddenNotice}
-        <div class="batch-empty-filter">
-          <p>No staples match “${escapeHtml(batchRestockFilter)}”.</p>
-          <button type="button" class="btn btn-secondary btn-sm" data-action="clear-batch-filter">Clear filter</button>
-        </div>
-      `;
-      return;
-    }
-
-    const recommended = filtered.filter(
-      ({ prediction }) => prediction.zone === "overdue" || prediction.zone === "buy-now",
-    );
-    const other = filtered.filter(
-      ({ prediction }) => prediction.zone !== "overdue" && prediction.zone !== "buy-now",
-    );
-
-    function renderGroup(title, entries, isRecommended = false) {
-      if (!entries.length) return "";
-      const rows = entries
-        .map(({ item, prediction }) => {
-          const stateData = batchRestockSelections.get(item.id) || { selected: isRecommended, quantity: 1 };
-          const isSelected = stateData.selected;
-          const qty = stateData.quantity;
-
-          return `
-            <div class="batch-row ${isSelected ? "is-selected" : ""}" data-item-id="${escapeHtml(item.id)}">
-              <label class="batch-choice" for="batch-check-${escapeHtml(item.id)}">
-                <input
-                  type="checkbox"
-                  class="batch-check"
-                  id="batch-check-${escapeHtml(item.id)}"
-                  data-batch-item="${escapeHtml(item.id)}"
-                  ${isSelected ? "checked" : ""}
-                  aria-label="Restock ${escapeHtml(item.name)}"
-                />
-                <span class="batch-item-info">
-                  <span class="batch-item-header">
-                    <strong>${escapeHtml(item.name)}</strong>
-                    <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
-                  </span>
-                  <small class="batch-item-meta">${escapeHtml(item.category)}${item.unit ? ` · ${escapeHtml(item.unit)}` : ""} · ${formatDue(prediction.daysUntil)}</small>
-                </span>
-              </label>
-              <div class="batch-stepper" ${isSelected ? "" : 'style="display:none;"'}>
-                <button
-                  type="button"
-                  class="stepper-btn"
-                  data-stepper="dec"
-                  data-item-id="${escapeHtml(item.id)}"
-                  aria-label="Decrease ${escapeHtml(item.name)} quantity"
-                >−</button>
-                <input
-                  type="number"
-                  class="stepper-input"
-                  data-stepper-input="${escapeHtml(item.id)}"
-                  value="${qty}"
-                  min="0.01"
-                  step="1"
-                  inputmode="decimal"
-                  aria-label="${escapeHtml(item.name)} quantity"
-                />
-                <button
-                  type="button"
-                  class="stepper-btn"
-                  data-stepper="inc"
-                  data-item-id="${escapeHtml(item.id)}"
-                  aria-label="Increase ${escapeHtml(item.name)} quantity"
-                >+</button>
-              </div>
-            </div>
-          `;
-        })
-        .join("");
-
-      return `
-        <div class="batch-group">
-          <h3 class="batch-group-title">${escapeHtml(title)}</h3>
-          <div class="batch-group-list">${rows}</div>
-        </div>
-      `;
-    }
-
-    container.innerHTML = `
-      ${hiddenNotice}
-      ${renderGroup("Recommended to restock", recommended, true)}
-      ${renderGroup("Other staples", other, false)}
-    `;
-  }
-
-  function prepareBatchRestockDialog() {
-    const tracked = rankedTrackedEntries();
-    if (!tracked.length) {
-      toast("No tracked items to restock yet.");
-      return false;
-    }
-
-    const form = $("#batch-restock-form");
-    form.reset();
-    resetDialogFormState(form);
-
-    const dateInput = $("#batch-restock-date");
-    dateInput.max = toISODate(startOfDay());
-    dateInput.value = toISODate(startOfDay());
-
-    const searchInput = $("#batch-restock-search");
-    searchInput.value = "";
-    batchRestockFilter = "";
-
-    batchRestockSelections.clear();
-    for (const { item, prediction } of tracked) {
-      const isRecommended = prediction.zone === "overdue" || prediction.zone === "buy-now";
-      const lastQty = item.purchases.length
-        ? item.purchases[item.purchases.length - 1].quantity || 1
-        : 1;
-      batchRestockSelections.set(item.id, {
-        selected: isRecommended,
-        quantity: lastQty,
-      });
-    }
-
-    renderBatchRestockList();
-    updateBatchRestockSubmitButton();
-    return true;
-  }
-
-  async function submitBatchRestock(event) {
-    event.preventDefault();
-    const form = $("#batch-restock-form");
-    const dateInput = $("#batch-restock-date");
-    clearFieldErrors(form);
-
-    const dateVal = dateInput.value;
-    const tripDate = dateVal ? parseDate(dateVal) : null;
-    if (!tripDate) {
-      setFieldError(dateInput, "Choose the trip date.");
-      dateInput.focus();
-      setFormStatus(form, "Fix the highlighted field.", "error");
-      return;
-    }
-    if (tripDate > startOfDay()) {
-      setFieldError(dateInput, "Trip date cannot be in the future.");
-      dateInput.focus();
-      setFormStatus(form, "Fix the highlighted field.", "error");
-      return;
-    }
-
-    const selectedEntries = Array.from(batchRestockSelections.entries())
-      .filter(([_, data]) => data.selected && data.quantity > 0);
-
-    if (!selectedEntries.length) {
-      setFormStatus(form, "Select at least one staple to restock.", "error");
-      return;
-    }
-
-    const records = selectedEntries.map(([itemId, data]) => ({
-      itemId,
-      date: toISODate(tripDate),
-      quantity: Number(data.quantity) || 1,
-      price: null,
-    }));
-
-    setFormBusy(form, true);
-    try {
-      const { updatedItems, createdPurchases } = await hootApi.logBatchPurchases(records);
-      render();
-      setFormStatus(form, "Restocked.");
-      window.setTimeout(() => closeDialog($("#batch-restock-dialog")), 240);
-
-      const count = records.length;
-      toast(
-        `Restocked ${count} staple${count === 1 ? "" : "s"}. Predictions updated.`,
-        "success",
-        {
-          label: "Undo all",
-          onAction: async () => {
-            await hootApi.restoreBatchPurchases(createdPurchases);
-            render();
-            toast("Trip restock undone.");
-          },
-        },
-      );
-    } catch {
-      setFormBusy(form, false);
-      setFormStatus(form, "Could not restock selected items. Try again.", "error");
-    }
-  }
-
   function prepareEditItemDialog(itemId) {
     const item = state.items.find((entry) => entry.id === itemId);
     if (!item) return;
@@ -1955,12 +2003,10 @@
     lastDialogTrigger = trigger instanceof HTMLElement ? trigger : document.activeElement;
     if (!dialog.open) dialog.showModal();
 
-    if (dialog.id === "batch-restock-dialog") {
-      const searchTarget = dialog.querySelector("#batch-restock-search");
-      if (searchTarget) {
-        searchTarget.focus();
-        return;
-      }
+    const autofocusTarget = dialog.querySelector("[data-autofocus]");
+    if (autofocusTarget) {
+      autofocusTarget.focus();
+      return;
     }
 
     const firstControl = Array.from(
@@ -1986,6 +2032,8 @@
     currentView = "item";
     render();
     setView("item");
+    window.scrollTo(0, 0);
+    $("#item-analysis-title")?.focus({ preventScroll: true });
   }
 
   function requestDelete(itemId, trigger) {
@@ -2094,8 +2142,6 @@
           showDialog($("#add-item-dialog"), dialogTrigger);
         } else if (name === "log-purchase") {
           if (prepareLogPurchaseDialog()) showDialog($("#log-purchase-dialog"), dialogTrigger);
-        } else if (name === "batch-restock") {
-          if (prepareBatchRestockDialog()) showDialog($("#batch-restock-dialog"), dialogTrigger);
         }
         return;
       }
@@ -2148,6 +2194,20 @@
       } else if (action === "delete-purchase") {
         const purchaseId = actionButton.dataset.purchaseId;
         requestDeletePurchase(itemId, purchaseId, actionButton);
+      } else if (action === "toggle-run-item") {
+        toggleShoppingRunItem(itemId, actionButton);
+      } else if (action === "adjust-run-item") {
+        adjustShoppingRunItem(itemId, actionButton);
+      } else if (action === "undo-run-item") {
+        undoShoppingRunItem(itemId, actionButton);
+      } else if (action === "finish-run") {
+        finishShoppingRun(actionButton);
+      } else if (action === "finish-run-done") {
+        completeShoppingRun();
+      } else if (action === "finish-run-history") {
+        completeShoppingRun({ openHistory: true });
+      } else if (action === "toggle-watch-items") {
+        toggleWatchItems(actionButton);
       }
     });
 
@@ -2188,77 +2248,11 @@
     $("#log-purchase-form").addEventListener("submit", submitLogPurchase);
     $("#edit-item-form").addEventListener("submit", submitEditItem);
     $("#edit-purchase-form").addEventListener("submit", submitEditPurchase);
-    $("#batch-restock-form").addEventListener("submit", submitBatchRestock);
-
-    $("#batch-restock-search")?.addEventListener("input", (event) => {
-      batchRestockFilter = event.currentTarget.value;
-      renderBatchRestockList();
-    });
-
-    $("#batch-restock-container")?.addEventListener("change", (event) => {
-      const check = event.target.closest(".batch-check");
-      if (check) {
-        const itemId = check.dataset.batchItem;
-        const currentData = batchRestockSelections.get(itemId) || { selected: false, quantity: 1 };
-        currentData.selected = check.checked;
-        batchRestockSelections.set(itemId, currentData);
-
-        const row = check.closest(".batch-row");
-        if (row) {
-          row.classList.toggle("is-selected", check.checked);
-          const stepper = row.querySelector(".batch-stepper");
-          if (stepper) stepper.style.display = check.checked ? "inline-flex" : "none";
-        }
-        updateBatchRestockSubmitButton();
-        return;
-      }
-
-      const input = event.target.closest(".stepper-input");
-      if (input) {
-        const itemId = input.dataset.stepperInput;
-        const currentData = batchRestockSelections.get(itemId) || { selected: true, quantity: 1 };
-        const val = Math.max(0.01, Number(input.value) || 1);
-        input.value = String(val);
-        currentData.quantity = val;
-        batchRestockSelections.set(itemId, currentData);
-      }
-    });
-
-    $("#batch-restock-container")?.addEventListener("click", (event) => {
-      const clearBtn = event.target.closest('[data-action="clear-batch-filter"]');
-      if (clearBtn) {
-        batchRestockFilter = "";
-        const searchInput = $("#batch-restock-search");
-        if (searchInput) {
-          searchInput.value = "";
-          searchInput.focus();
-        }
-        renderBatchRestockList();
-        return;
-      }
-
-      const btn = event.target.closest(".stepper-btn");
-      if (!btn) return;
-      const itemId = btn.dataset.itemId;
-      const action = btn.dataset.stepper;
-      const currentData = batchRestockSelections.get(itemId) || { selected: true, quantity: 1 };
-      let qty = Number(currentData.quantity) || 1;
-
-      if (action === "inc") {
-        qty = Math.round((qty + 1) * 100) / 100;
-      } else if (action === "dec") {
-        qty = Math.max(0.01, Math.round((qty - 1) * 100) / 100);
-      }
-
-      currentData.quantity = qty;
-      batchRestockSelections.set(itemId, currentData);
-
-      const row = btn.closest(".batch-row");
-      const input = row?.querySelector(".stepper-input");
-      if (input) input.value = String(qty);
-    });
-
     $("#reset-demo").addEventListener("click", (event) => requestReset(event.currentTarget));
+
+    $("#finish-run-dialog").addEventListener("close", () => {
+      pendingRunReceipt = null;
+    });
 
     $("#confirm-action").addEventListener("click", async () => {
       const action = pendingConfirm;
