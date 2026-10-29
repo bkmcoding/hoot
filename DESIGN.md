@@ -384,6 +384,7 @@ An empty state explains three things in place: why the surface is empty, what th
 - Give every interactive element a visible amber focus ring.
 - Use semantic headings, buttons, labels, tables, and forms.
 - Focus the first useful control when a dialog opens, and restore focus to the trigger when it closes.
+- When item detail opens, reset the page to the top and move focus to the item heading.
 - Announce busy and success states politely.
 - Keep every task keyboard-complete, including entering and leaving the Shopping run.
 - Keep compact phone controls at least 44px tall.

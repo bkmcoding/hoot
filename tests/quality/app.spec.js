@@ -110,6 +110,48 @@ test("uses checklist wording on one-time item details", async ({ page }) => {
   await expect(page.getByText("Building rhythm")).toHaveCount(0);
 });
 
+test("opens item detail at the top with focus on the item heading", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  const queueTitle = page.locator(".item-row .item-title-button").first();
+  const itemName = (await queueTitle.textContent()).trim();
+  await queueTitle.evaluate((button) => button.scrollIntoView({ block: "center" }));
+
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await queueTitle.click();
+
+  await expect(page.locator("#item-analysis-title")).toHaveText(itemName);
+  await expect(page.locator("#item-analysis-title")).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+});
+
+test("keeps purchase-history actions inside the phone viewport", async ({ page }) => {
+  for (const width of [390, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Milk", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Milk", exact: true })).toBeVisible();
+
+    for (const button of [
+      page.getByRole("button", { name: /^Edit purchase on/ }).first(),
+      page.getByRole("button", { name: /^Delete purchase on/ }).first(),
+    ]) {
+      await expect(button).toBeVisible();
+      await button.evaluate((element) => element.scrollIntoView({ block: "center", inline: "center" }));
+      const box = await button.boundingBox();
+      expect(box, `missing action at ${width}px`).not.toBeNull();
+      expect(box.x, `left clipping at ${width}px`).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, `right clipping at ${width}px`).toBeLessThanOrEqual(width + 1);
+    }
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
+});
+
 test("keeps the mobile viewport within the horizontal bounds", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/");
