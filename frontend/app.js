@@ -253,6 +253,9 @@ import {
   let queueSearch = "";
   let calendarRange = 7;
   let pendingRunReceipt = null;
+  let nextUpObserver = null;
+  let observedNextUpCard = null;
+  let nextUpCardVisible = false;
 
   function makeId(prefix) {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
@@ -421,6 +424,40 @@ import {
     return rankedTrackedEntries().map(({ item }) => item);
   }
 
+  function nextUpIsVisible(card) {
+    if (!card) return false;
+    const rect = card.getBoundingClientRect();
+    return rect.bottom > 0 && rect.top < window.innerHeight;
+  }
+
+  function updateMobileDock() {
+    const shouldHide = currentView === "dashboard" && nextUpCardVisible;
+    $(".header-actions")?.classList.toggle("is-hidden", shouldHide);
+    document.body.classList.toggle("mobile-dock-hidden", shouldHide);
+  }
+
+  function initNextUpObserver() {
+    if (!("IntersectionObserver" in window)) return;
+    nextUpObserver = new IntersectionObserver(
+      ([entry]) => {
+        nextUpCardVisible = entry.isIntersecting;
+        updateMobileDock();
+      },
+      { threshold: 0 },
+    );
+  }
+
+  function syncNextUpDock() {
+    const nextCard = $("#dashboard-list .item-card:first-child");
+    if (observedNextUpCard && observedNextUpCard !== nextCard && nextUpObserver) {
+      nextUpObserver.unobserve(observedNextUpCard);
+    }
+    observedNextUpCard = nextCard;
+    if (nextCard && nextUpObserver) nextUpObserver.observe(nextCard);
+    nextUpCardVisible = nextUpIsVisible(nextCard);
+    updateMobileDock();
+  }
+
   function renderStats() {
     const tracked = state.items.filter((item) => !item.isOneTime);
     const oneTime = state.items.filter((item) => item.isOneTime);
@@ -578,6 +615,7 @@ import {
             <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
           </div>
         `;
+      syncNextUpDock();
       return;
     }
 
@@ -595,6 +633,7 @@ import {
             : ""
         }
       `;
+      syncNextUpDock();
       return;
     }
 
@@ -636,6 +675,7 @@ import {
         }
       </section>
     `;
+    syncNextUpDock();
   }
 
   function calendarItemButton(item, prediction) {
@@ -1520,6 +1560,8 @@ import {
       if (button.dataset.view === nextView) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
+    if (nextView === "dashboard") syncNextUpDock();
+    else updateMobileDock();
     if (nextView === "store-run") {
       if (!storeRun.selected.size) {
         const [nextUp] = rankedTrackedEntries();
@@ -2243,6 +2285,7 @@ import {
   function init() {
     if (!state.items.length) state = createDemoState();
     bindEvents();
+    initNextUpObserver();
     render();
     setView(currentView);
   }

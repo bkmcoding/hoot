@@ -76,6 +76,8 @@ test("fits every dock label on phone widths", async ({ page }) => {
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto("/");
+    await page.getByRole("button", { name: "One-time", exact: true }).click();
+    await expect(page.locator(".header-actions")).toBeVisible();
 
     const clipped = await page.evaluate(() =>
       [...document.querySelectorAll(".header-actions .btn")]
@@ -85,6 +87,29 @@ test("fits every dock label on phone widths", async ({ page }) => {
 
     expect(clipped, `clipped dock labels at ${width}px`).toEqual([]);
   }
+});
+
+test("hides the phone dock while Next up is visible and restores it after", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+
+  const dock = page.locator(".header-actions");
+  const nextUp = page.locator("#dashboard-list .item-card").first();
+  const logPurchase = nextUp.getByRole("button", { name: "Log purchase", exact: true });
+
+  await expect(dock).toBeHidden();
+  await expect(nextUp).toBeVisible();
+  await expect(logPurchase).toBeVisible();
+
+  await page.evaluate(() => {
+    const card = document.querySelector("#dashboard-list .item-card");
+    const bottom = card.getBoundingClientRect().bottom + window.scrollY;
+    window.scrollTo(0, bottom + 24);
+  });
+  await expect(dock).toBeVisible();
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await expect(dock).toBeHidden();
 });
 
 test("states each calendar date once", async ({ page }) => {

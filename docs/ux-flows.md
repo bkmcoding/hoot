@@ -318,7 +318,7 @@ A user wants a safe way to restore sample data or remove an item.
 - The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and mobile dock carry **Start shopping run** as the job-level primary action.
 - The Today marker sits at the Overdue/Buy-now boundary, 33.333% of the lane.
 - Exact duplicate names are rejected with a field-level recovery message.
-- On phones, the action dock stays reachable with **Start shopping run**, **Log purchase**, and **Add item**; the run title spans the first dock row and the two utility actions share the second. Bottom padding keeps the dock from covering the first queue action.
+- On phones, the action dock stays reachable with **Start shopping run**, **Log purchase**, and **Add item**; the run title spans the first dock row and the two utility actions share the second. The dock hides while **Next up** is visible and returns once the card leaves the viewport, so it never covers the card or its actions.
 - Dynamic headings are sequential: dashboard and one-time empty states use `<h2>` beneath an `<h1>`; queue rows use `<h3>` beneath the focused `<h2>`; item detail uses `<h1>`, then `<h2>`, then `<h3>`; Shopping run uses `<h1>`, then `<h2>`.
 - Rendered text meets AA contrast in the checked dashboard, item-detail, one-time, Shopping run, and receipt states (4.5:1 normal text, 3:1 large text).
 - The calendar caption fits without a one-word orphan at 390px.
