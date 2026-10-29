@@ -2911,7 +2911,9 @@ body.is-store-run .toast-region {
   }
 
   .history-table td.history-actions-cell {
-    justify-content: flex-end;
+    width: auto;
+    white-space: normal;
+    justify-content: flex-start;
     padding-top: var(--space-2);
   }
 

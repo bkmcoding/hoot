@@ -1395,7 +1395,7 @@ import {
         </button>
         <header class="item-page-header">
           <div>
-            <h1 id="item-analysis-title">${escapeHtml(item.name)}</h1>
+            <h1 id="item-analysis-title" tabindex="-1">${escapeHtml(item.name)}</h1>
             <p>${escapeHtml(item.category)} · ${escapeHtml(item.unit || "No unit specified")} · ${purchases.length} logged purchase${purchases.length === 1 ? "" : "s"}</p>
           </div>
           <span class="status-chip ${prediction ? `status-${escapeHtml(prediction.zone)}` : "status-learning"}">
@@ -1990,6 +1990,8 @@ import {
     currentView = "item";
     render();
     setView("item");
+    window.scrollTo(0, 0);
+    $("#item-analysis-title")?.focus({ preventScroll: true });
   }
 
   function requestDelete(itemId, trigger) {

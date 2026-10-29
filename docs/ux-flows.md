@@ -192,7 +192,7 @@ A shopper wants to inspect one item’s prediction, rhythm, history, and mainten
 
 ### Sequence
 
-1. Return context is preserved.
+1. Return context is preserved; the page opens at the top with focus on the item heading.
 2. Read status, predicted restock, and the zone-aware horizon lane.
 3. Inspect rhythm, confidence, and the estimate explanation.
 4. Compare purchase history.
@@ -312,6 +312,7 @@ A user wants a safe way to restore sample data or remove an item.
 - Total price is optional; blank or `0` stores an unknown price, and history and success feedback say so plainly.
 - Item titles show a persistent interactive underline, provide an expanded pointer target, and remain backed by explicit **Details** buttons.
 - Item detail renders the same zone-aware horizon lane as **Next up**; its active segment matches the item’s status, while Today remains fixed at the Overdue/Buy-now boundary.
+- Item detail opens at the top with focus on the item heading; on phones, the purchase-history Edit and Delete actions remain fully visible.
 - The **Next up** decision appears before the compact ranked queue, and the queue appears before the seven-day schedule.
 - The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync. Day cards show the weekday and date once, adding a month label only on the first card and at month boundaries.
 - The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and mobile dock carry **Start shopping run** as the job-level primary action.
