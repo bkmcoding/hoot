@@ -170,6 +170,7 @@ import {
             data-price-spark-point
             data-date="${escapeHtml(dateLabel)}"
             data-price="${escapeHtml(priceLabel)}"
+            tabindex="${index === points.length - 1 ? "0" : "-1"}"
             aria-label="${escapeHtml(ariaLabel)}"
             style="left: ${((point.x / width) * 100).toFixed(2)}%; top: ${(
               (point.y / height) *
@@ -213,7 +214,9 @@ import {
     if (!spark) return;
 
     $$("[data-price-spark-point]", spark).forEach((candidate) => {
-      candidate.classList.toggle("is-active", candidate === point);
+      const selected = candidate === point;
+      candidate.classList.toggle("is-active", selected);
+      candidate.tabIndex = selected ? 0 : -1;
     });
 
     const readout = $("[data-price-spark-readout]", spark);
@@ -2616,6 +2619,32 @@ import {
     document.addEventListener("focusin", (event) => {
       const point = event.target.closest?.("[data-price-spark-point]");
       if (point) selectPricePoint(point);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const point = event.target.closest?.("[data-price-spark-point]");
+      if (!point) return;
+
+      const spark = point.closest("[data-price-spark]");
+      if (!spark) return;
+      const points = $$("[data-price-spark-point]", spark);
+      const index = points.indexOf(point);
+      let nextIndex = index;
+
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        nextIndex = Math.max(0, index - 1);
+      } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        nextIndex = Math.min(points.length - 1, index + 1);
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = points.length - 1;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      points[nextIndex]?.focus();
     });
 
     document.addEventListener("click", (event) => {

@@ -416,8 +416,10 @@ test("inspects a unit-price point by tap and keyboard", async ({ page }) => {
   await expect(points.first()).toHaveClass(/is-active/);
   await expect(readout).toContainText("$4.29 / half-gallon");
 
-  await page.keyboard.press("Tab");
+  await page.keyboard.press("ArrowRight");
   await expect(points.nth(1)).toBeFocused();
+  await expect(points.nth(1)).toHaveAttribute("tabindex", "0");
+  await expect(points.first()).toHaveAttribute("tabindex", "-1");
   const secondDate = await points.nth(1).getAttribute("data-date");
   expect(secondDate).not.toBeNull();
   await expect(readout).toContainText(secondDate);
@@ -435,6 +437,37 @@ test("inspects a unit-price point by tap and keyboard", async ({ page }) => {
   await expect(lastPoint).toHaveClass(/is-active/);
   await expect(readout).toContainText(lastDate);
   await expect(readout).toContainText("$4.49 / half-gallon");
+});
+
+test("uses one tab stop and arrow keys to walk the price history", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Milk", exact: true }).click();
+
+  const spark = page.locator(".rail-card", { hasText: "Spending" }).locator(".price-spark");
+  const points = spark.locator("[data-price-spark-point]");
+  const readout = spark.locator("[data-price-spark-readout]");
+
+  await expect(spark.locator('[data-price-spark-point][tabindex="0"]')).toHaveCount(1);
+  await expect(points.last()).toHaveAttribute("tabindex", "0");
+
+  await points.last().focus();
+  await expect(readout).toContainText("$4.49 / half-gallon");
+
+  await page.keyboard.press("Home");
+  await expect(points.first()).toBeFocused();
+  await expect(points.first()).toHaveClass(/is-active/);
+  await expect(readout).toContainText("$4.29 / half-gallon");
+
+  await page.keyboard.press("End");
+  await expect(points.last()).toBeFocused();
+
+  await page.keyboard.press("ArrowLeft");
+  await expect(points.nth(1)).toBeFocused();
+  await expect(points.nth(1)).toHaveAttribute("tabindex", "0");
+  await expect(points.last()).toHaveAttribute("tabindex", "-1");
+
+  await page.keyboard.press("Tab");
+  expect(await spark.evaluate((element) => element.contains(document.activeElement))).toBe(false);
 });
 
 test("omits the unit-price sparkline when only one price is known", async ({ page }) => {
