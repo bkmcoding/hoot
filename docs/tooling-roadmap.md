@@ -11,21 +11,26 @@ The app’s strongest future additions should deepen that promise rather than ad
 ## Implemented
 
 - **In-store Shopping Run** (2026-10-28; refined 2026-10-29)
-   - A first-class **Start shopping run** view, also in primary navigation, with aisle/category grouping, one-tap checkoff, a compact progress strip, and cart corrections.
-   - The run is immersive: global chrome hides, **Exit run** preserves the cart, and **Finish shopping run** opens a receipt with counts, known spend, and purchase-history access.
+   - A first-class **Start shopping run** view, also in primary navigation, with aisle/category grouping, one-tap logging, a compact progress strip, and **This trip** corrections.
+   - The run is immersive: global chrome hides, **Exit run** preserves this trip, and **Finish shopping run** opens a receipt with counts, known spend, and purchase-history access.
    - Tracked staples in Overdue or Buy now are drafted automatically. Watch items follow the dashboard's **Next up** state and remain toggleable; all uncompleted one-time needs are included.
-   - Checked rows collapse to a compact **In cart** line; quantity, price, and the next restock estimate live in the cart.
+   - Logged rows collapse to a compact **Logged** line; quantity, price, and the next restock estimate live in **This trip**.
    - The legacy batch **Restock trip** modal is retired. One trip flow.
    - See `docs/adr/0001-unified-in-store-shopping-run.md` and `docs/ux-flows.md`.
+
+- **Post-trip prediction check** (2026-10-29)
+   - The finish receipt asks one optional **Was Hoot right?** question per logged tracked staple, inline rather than in a second dialog.
+   - **Still had some** records the miss on that purchase and moves the next estimate three days later; item detail counts right and early checks.
+   - A correction adjusts the model only; the purchase is already logged, so no purchase is created or edited.
+   - See `docs/ux-flows.md` and `DESIGN.md`.
 
 ## Prioritized Additions
 
 ### P0 — Build Next
 
-1. **Prediction feedback and accuracy loop**
-   - Compare predicted dates with actual purchases.
+1. **Prediction drift reporting**
+   - Compare predicted dates with actual purchases across the whole history.
    - Surface drift, confidence, and whether an item’s rhythm is stable or unstable.
-   - Let the user gently correct an estimate when Hoot is wrong.
 
 2. **Data safety and portability**
    - Add JSON/CSV export and import.
@@ -98,7 +103,7 @@ The app’s strongest future additions should deepen that promise rather than ad
 ## Open Questions
 
 1. ~~Should Shopping Run be a first-class view, a full-screen mode, or a persistent drawer?~~ **Resolved:** a first-class, immersive view reachable from **Start shopping run** and primary navigation (ADR-0001).
-2. Should prediction corrections create a new purchase, or only adjust the model?
+2. ~~Should prediction corrections create a new purchase, or only adjust the model?~~ **Resolved:** the post-trip check only adjusts the model; the purchase was already logged during the run.
 3. Should reminders use browser notifications, email, or a compact in-app digest?
 4. Should barcode support start with manual entry or wait for camera scanning?
 5. Should export/import support only Hoot’s current state, or also include a portable purchase-history format?

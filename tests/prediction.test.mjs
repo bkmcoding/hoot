@@ -3,7 +3,9 @@ import assert from "node:assert/strict";
 
 import {
   DAY_MS,
+  EARLY_RESTOCK_SHIFT_DAYS,
   addDays,
+  likelyWindowFor,
   parseDate,
   predictionFor,
   startOfDay,
@@ -82,6 +84,127 @@ test("predictionFor learns a stable recurring rhythm", () => {
   assert.equal(prediction.daysUntil, 0);
   assert.equal(prediction.zone, "buy-now");
   assert.equal(prediction.statusLabel, "Buy now");
+});
+
+test("predictionFor moves the next estimate later after a still-had-some check", () => {
+  const today = parseDate("2026-10-19");
+  const purchases = [
+    { id: "one", date: "2026-09-28" },
+    { id: "two", date: "2026-10-05" },
+    { id: "three", date: "2026-10-12" },
+  ];
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-09-28",
+    reorderThresholdDays: 7,
+    purchases,
+  };
+  const base = predictionFor(item, today);
+  const corrected = predictionFor(
+    {
+      ...item,
+      purchases: [
+        ...purchases.slice(0, 2),
+        {
+          ...purchases[2],
+          feedback: { verdict: "early", predictedDate: "2026-10-19" },
+        },
+      ],
+    },
+    today,
+  );
+
+  assert.equal(base.feedbackShiftDays, 0);
+  assert.equal(corrected.feedbackShiftDays, EARLY_RESTOCK_SHIFT_DAYS);
+  assert.equal(
+    toISODate(corrected.date),
+    toISODate(addDays(base.date, EARLY_RESTOCK_SHIFT_DAYS)),
+  );
+  assert.equal(corrected.daysUntil, base.daysUntil + EARLY_RESTOCK_SHIFT_DAYS);
+});
+
+test("predictionFor ignores right checks and checks on older purchases", () => {
+  const today = parseDate("2026-10-19");
+  const purchases = [
+    { id: "one", date: "2026-09-28" },
+    { id: "two", date: "2026-10-05" },
+    { id: "three", date: "2026-10-12" },
+  ];
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-09-28",
+    reorderThresholdDays: 7,
+    purchases,
+  };
+  const base = predictionFor(item, today);
+  const right = predictionFor(
+    {
+      ...item,
+      purchases: [
+        ...purchases.slice(0, 2),
+        { ...purchases[2], feedback: { verdict: "right" } },
+      ],
+    },
+    today,
+  );
+  const older = predictionFor(
+    {
+      ...item,
+      purchases: [
+        purchases[0],
+        { ...purchases[1], feedback: { verdict: "early" } },
+        purchases[2],
+      ],
+    },
+    today,
+  );
+
+  assert.equal(toISODate(right.date), toISODate(base.date));
+  assert.equal(right.feedbackShiftDays, 0);
+  assert.equal(toISODate(older.date), toISODate(base.date));
+  assert.equal(older.feedbackShiftDays, 0);
+});
+
+test("likelyWindowFor spans the shortest and longest gaps", () => {
+  const prediction = {
+    intervals: [35, 5, 15],
+    latest: parseDate("2026-10-25"),
+    date: parseDate("2026-11-14"),
+  };
+
+  const window = likelyWindowFor(prediction);
+
+  assert.ok(window);
+  assert.equal(toISODate(window.start), "2026-10-30");
+  assert.equal(toISODate(window.end), "2026-11-29");
+  assert.equal(window.shortestGap, 5);
+  assert.equal(window.longestGap, 35);
+  assert.equal(window.wide, true);
+});
+
+test("likelyWindowFor needs at least two gaps", () => {
+  assert.equal(likelyWindowFor(null), null);
+  assert.equal(
+    likelyWindowFor({
+      intervals: [30],
+      latest: parseDate("2026-10-16"),
+      date: parseDate("2026-11-15"),
+    }),
+    null,
+  );
+});
+
+test("likelyWindowFor keeps the model date inside the window", () => {
+  const window = likelyWindowFor({
+    intervals: [9, 11],
+    latest: parseDate("2026-10-25"),
+    date: parseDate("2026-11-01"),
+  });
+
+  assert.ok(window);
+  assert.equal(toISODate(window.start), "2026-11-01");
+  assert.equal(toISODate(window.end), "2026-11-05");
+  assert.equal(window.wide, false);
 });
 
 test("predictionFor classifies watch and steady zones", () => {

@@ -14,6 +14,8 @@ Ubiquitous language for the Hoot household inventory and predictive restock syst
   The domestic metric of consumption (e.g., `40-count box`, `gallon`, `2-pack`, `bottles`).
 - **Typical Interval**
   The user-defined baseline restock cadence (in days) used when fewer than 3 purchase events have been logged.
+- **Buying Rhythm Ledger**
+  The item-detail vertical timeline: one node per purchase with its quantity, price, and unit price, a labeled gap between nodes, and a distinct hollow estimate node. It is both the rhythm chart and the purchase history.
 
 ---
 
@@ -27,7 +29,15 @@ Ubiquitous language for the Hoot household inventory and predictive restock syst
   - **Watch ($4\text{d} \dots 7\text{d}$):** Depletion approaching; candidate for opportunistic purchase if visiting that store.
   - **Steady ($\ge 8\text{d}$):** Well-stocked; no action needed.
 - **Confidence Rating**
-  Household-facing assessment of model reliability based on sample size and variance (e.g. *High confidence*, *Learning rhythm*).
+  Household-facing assessment of model reliability based on sample size and variance. The item page names the sample, measured gaps, gap range, and whether the estimate still uses the manual interval.
+- **Gap Range**
+  The longest measured gap minus the shortest. A small range supports a tighter likely window; a large range widens it and lowers the confidence label.
+- **Known Spend**
+  The sum of purchase totals that were actually recorded. Blank or `0` prices are unknown and excluded, so the page says **Known spend** rather than implying a complete total.
+- **Unit Price**
+  A purchase’s total price divided by its quantity, used to compare pack sizes across purchases (e.g. two half-gallons for $8.98 is $4.49 each).
+- **Price History Sparkline**
+  A compact line in **Spending** that plots known unit prices against their purchase dates. It skips unknown prices rather than interpolating them and appears only when at least two known prices exist. Each point is a labeled button: tapping the plot selects the nearest price, Tab reaches every point, and the card readout names the selected date and unit price.
 - **Rhythm Engine**
   Ordinary Least Squares (OLS) linear regression fitted across cumulative purchase dates, with automatic fallback to average interval when variance or slope inversion occurs.
 
@@ -39,13 +49,15 @@ Ubiquitous language for the Hoot household inventory and predictive restock syst
   An immersive purchasing session combining auto-drafted Tracked Staples (Overdue / Buy Now, plus Watch when relevant) and open One-time Needs into one aisle-grouped list. It is the single trip flow; the old batch **Restock trip** modal is retired.
 - **Shopping Run Mode**
   The distraction-free state of the app while a Shopping Run is active: global navigation and chrome recede, the run title and **Exit run** stay at the top, and the finish action closes the list. Optimized for one-handed aisle use.
-- **Check-off Restock**
-  The atomic action during an in-store run where tapping an item records it as purchased with default quantities, updates regression projections, and moves the item to the cart. The aisle row then collapses to a compact **In cart** line.
+- **Log Restock**
+  The atomic action during an in-store run where tapping **Log** records the item as purchased with default quantities, updates regression projections, and marks it as logged in **This trip**. The aisle row then collapses to a compact **Logged** line.
 - **Finish Receipt**
-  The end-of-run dialog that names the number of items checked off, known spend, and each item. **Done** clears the run; **View purchase history** opens the first tracked item; dismissing the receipt leaves the run active.
+  The end-of-run dialog that names the number of items logged, known spend, and each item. **Done** clears the run; **View purchase history** opens the first tracked item; dismissing the receipt leaves the run active.
+- **Prediction Check**
+  The receipt’s optional **Was Hoot right?** answer stored on a logged purchase: **Yes, I was out** agrees with the estimate, while **Still had some** marks it early and moves the next estimate three days later. It corrects the model only; it never creates or edits a purchase.
 - **Aisle / Category Bucket**
   Logical grouping of items (e.g., *Produce*, *Dairy & Refrigerated*, *Pantry*, *Household & Paper*, *Personal Care*) arranged to match supermarket layouts and minimize physical backtracking.
-- **Cart Summary**
-  The run's compact **Items**, **In cart**, and **Left** strip, backed by a cart list that carries each item's quantity, total price, and next restock estimate.
+- **Trip Summary**
+  The run's compact **Items**, **Logged**, and **Left** strip, backed by **This trip**, which carries each item's quantity, total price, and next restock estimate.
 - **Log Last Accelerator**
   A zero-friction shortcut that prefills a restock with today's date and the most recent quantity and known price.

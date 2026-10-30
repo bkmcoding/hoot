@@ -12,7 +12,7 @@
   <body class="hoot-shell">
     <header class="app-header">
       <div class="header-frame">
-        <a class="brand" href="#view-dashboard" data-view="dashboard" aria-label="Hoot home">
+        <a class="brand" href="#/dashboard" data-view="dashboard" aria-label="Hoot home">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
               <defs>
@@ -148,7 +148,7 @@
           <header class="store-run-header">
             <div>
               <h1 id="store-run-title" tabindex="-1">Shopping run</h1>
-              <p>Tap items into the cart. Aisles first, urgency second.</p>
+              <p>Tap Log as you pick up each item. Aisles first, urgency second.</p>
             </div>
             <div class="store-run-actions">
               <button
@@ -161,14 +161,20 @@
             </div>
           </header>
 
-          <div class="store-run-summary" id="store-run-summary"></div>
-          <div class="store-run-groups" id="store-run-groups"></div>
+          <div class="store-run-body">
+            <div class="store-run-aisles">
+              <div class="store-run-summary" id="store-run-summary"></div>
+              <div class="store-run-groups" id="store-run-groups"></div>
+            </div>
 
-          <section class="store-run-cart" id="store-run-cart" aria-label="Items in cart"></section>
+            <aside class="store-run-trip" aria-label="This trip">
+              <section class="store-run-cart" id="store-run-cart" aria-label="Items logged this trip"></section>
 
-          <footer class="store-run-footer">
-            <button class="btn btn-primary" type="button" data-action="finish-run">Finish shopping run</button>
-          </footer>
+              <footer class="store-run-footer">
+                <button class="btn btn-primary" type="button" data-action="finish-run">Finish shopping run</button>
+              </footer>
+            </aside>
+          </div>
 
           <p class="sr-only" id="store-run-announcer" role="status" aria-live="polite"></p>
         </section>
@@ -518,7 +524,11 @@
         </button>
       </header>
       <div class="finish-run-summary" id="finish-run-summary" role="status" aria-live="polite"></div>
-      <ul class="finish-run-list" id="finish-run-list" aria-label="Items logged in this run"></ul>
+      <p class="finish-run-hint" id="finish-run-hint" hidden>
+        Tracked staples below were on this list because Hoot expected them. Tell it if you still had some and it will wait longer next time.
+      </p>
+      <ul class="finish-run-list" id="finish-run-list" aria-label="Trip items and prediction checks"></ul>
+      <p class="sr-only" id="prediction-check-status" role="status" aria-live="polite"></p>
       <footer class="dialog-actions">
         <button class="btn btn-secondary" type="button" data-action="finish-run-history" id="finish-run-history">View purchase history</button>
         <button class="btn btn-primary" type="button" data-action="finish-run-done" data-autofocus>Done</button>

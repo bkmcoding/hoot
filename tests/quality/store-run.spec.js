@@ -77,14 +77,28 @@ test.beforeEach(async ({ page }) => {
 test("opens Shopping Run from the header", async ({ page }) => {
   await openShoppingRun(page);
 
-  await expect(page.getByRole("region", { name: "Items in cart" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Items logged this trip" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Finish shopping run" })).toBeDisabled();
   await expect(page.getByRole("button", { name: "Exit run" })).toBeVisible();
   await expect(page.locator(".app-header")).toBeHidden();
   await expect(page.locator(".app-footer")).toBeHidden();
   await expect(page.locator(".store-run-cart-empty")).toContainText(
-    "It saves the change now; Undo in the cart reverses it."
+    "Hoot saves the change now; Undo here reverses it."
   );
+});
+
+test("uses immediate logging language instead of cart language", async ({ page }) => {
+  await openShoppingRun(page);
+
+  const run = page.locator("#view-store-run");
+  await expect(run.getByText(/cart/i)).toHaveCount(0);
+  await expect(page.locator("#store-run-summary")).toContainText("Logged");
+  await expect(
+    page.getByRole("button", { name: "Log Overdue Milk", exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Items logged this trip" })
+  ).toBeVisible();
 });
 
 test("moves focus into the run and back to the dashboard", async ({ page }) => {
@@ -102,6 +116,19 @@ test("moves focus into the run and back to the dashboard", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Upcoming restocks" })).toBeVisible();
 });
 
+test("resets the run to the top when entered from a scrolled dashboard", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Shopping", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Shopping run" })).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  await expect(page.locator("#store-run-summary")).toBeInViewport({ ratio: 1 });
+});
+
 test("groups aisles and sorts urgency inside each aisle", async ({ page }) => {
   await openShoppingRun(page);
 
@@ -117,23 +144,64 @@ test("groups aisles and sorts urgency inside each aisle", async ({ page }) => {
   await expect(pantryRows.nth(1).locator("strong")).toHaveText("Buy-now Eggs");
 });
 
-test("logs a purchase and moves a tracked item into the cart", async ({ page }) => {
+test("puts the trip beside the aisles on desktop and stacks it on tablet", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openShoppingRun(page);
+
+  const aisles = page.locator(".store-run-aisles");
+  const trip = page.locator(".store-run-trip");
+  const [aislesBox, tripBox] = await Promise.all([
+    aisles.boundingBox(),
+    trip.boundingBox(),
+  ]);
+
+  expect(tripBox.x).toBeGreaterThanOrEqual(aislesBox.x + aislesBox.width + 16);
+  expect(Math.abs(tripBox.y - aislesBox.y)).toBeLessThanOrEqual(1);
+  await expect(trip).toHaveCSS("position", "sticky");
+  await expect(trip.getByRole("button", { name: "Finish shopping run" })).toBeVisible();
+
+  const desktopOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(desktopOverflow, "desktop overflow").toBeLessThanOrEqual(0);
+
+  await page.setViewportSize({ width: 980, height: 900 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Shopping", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Shopping run" })).toBeVisible();
+
+  const [tabletAisles, tabletTrip] = await Promise.all([
+    aisles.boundingBox(),
+    trip.boundingBox(),
+  ]);
+
+  expect(tabletTrip.y).toBeGreaterThanOrEqual(tabletAisles.y + tabletAisles.height);
+  await expect(trip).toHaveCSS("position", "static");
+  await expect(trip.getByRole("button", { name: "Finish shopping run" })).toBeVisible();
+
+  const tabletOverflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(tabletOverflow, "tablet overflow").toBeLessThanOrEqual(0);
+});
+
+test("logs a purchase and marks a tracked item as logged", async ({ page }) => {
   await openShoppingRun(page);
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await expect(
     page.locator("#store-run-cart").getByText("Overdue Milk")
   ).toBeVisible();
   const checkedRow = page.locator(".store-run-row.is-in-cart", { hasText: "Overdue Milk" });
-  await expect(checkedRow).toContainText("In cart");
+  await expect(checkedRow).toContainText("Logged");
   await expect(checkedRow.locator(".status-chip")).toHaveCount(0);
   await expect(checkedRow.getByRole("button")).toHaveCount(0);
   await expect(page.locator("#store-run-announcer")).toHaveText(
-    "Overdue Milk added to cart. 1 in cart."
+    "Overdue Milk logged. 1 logged this trip."
   );
 
   const purchase = await page.evaluate(() => {
@@ -166,37 +234,37 @@ test("keeps a checked row in its aisle position", async ({ page }) => {
 
   await pantryRows
     .first()
-    .getByRole("button", { name: "Add Overdue Milk to cart" })
+    .getByRole("button", { name: "Log Overdue Milk", exact: true })
     .click();
 
   await expect(pantryRows.locator("strong")).toHaveText(orderBefore);
   await expect(pantryRows.first()).toHaveClass(/is-in-cart/);
-  await expect(pantryRows.first()).toContainText("In cart");
+  await expect(pantryRows.first()).toContainText("Logged");
 });
 
 test("keeps keyboard focus moving through the aisle", async ({ page }) => {
   await openShoppingRun(page);
 
-  await page.getByRole("button", { name: "Add Overdue Milk to cart" }).focus();
+  await page.getByRole("button", { name: "Log Overdue Milk", exact: true }).focus();
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("button", { name: "Add Buy-now Eggs to cart" })
+    page.getByRole("button", { name: "Log Buy-now Eggs", exact: true })
   ).toBeFocused();
 
   await page.keyboard.press("Enter");
   await expect(
-    page.getByRole("button", { name: "Add One-time Candles to cart" })
+    page.getByRole("button", { name: "Log One-time Candles", exact: true })
   ).toBeFocused();
 });
 
-test("names each Add action for its item", async ({ page }) => {
+test("names each Log action for its item", async ({ page }) => {
   await openShoppingRun(page);
 
   await expect(
-    page.getByRole("button", { name: "Add Overdue Milk to cart" })
+    page.getByRole("button", { name: "Log Overdue Milk", exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Add One-time Candles to cart" })
+    page.getByRole("button", { name: "Log One-time Candles", exact: true })
   ).toBeVisible();
 });
 
@@ -205,7 +273,7 @@ test("completes a one-time item on checkoff", async ({ page }) => {
 
   await page
     .locator(".store-run-row", { hasText: "One-time Candles" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await expect(
@@ -226,7 +294,7 @@ test("undo restores a tracked purchase", async ({ page }) => {
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await page
@@ -250,7 +318,7 @@ test("undo restores a one-time item", async ({ page }) => {
 
   await page
     .locator(".store-run-row", { hasText: "One-time Candles" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await page
@@ -269,12 +337,12 @@ test("undo restores a one-time item", async ({ page }) => {
   expect(completed).toBe(false);
 });
 
-test("opens the existing purchase editor from a tracked cart row", async ({ page }) => {
+test("opens the existing purchase editor from a tracked logged row", async ({ page }) => {
   await openShoppingRun(page);
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await page
@@ -285,12 +353,12 @@ test("opens the existing purchase editor from a tracked cart row", async ({ page
   await expect(page.getByRole("heading", { name: "Edit purchase" })).toBeVisible();
 });
 
-test("opens the existing item editor from a one-time cart row", async ({ page }) => {
+test("opens the existing item editor from a one-time logged row", async ({ page }) => {
   await openShoppingRun(page);
 
   await page
     .locator(".store-run-row", { hasText: "One-time Candles" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await page
@@ -301,22 +369,22 @@ test("opens the existing item editor from a one-time cart row", async ({ page })
   await expect(page.getByRole("heading", { name: "Edit item" })).toBeVisible();
 });
 
-test("finishes the run, clears the cart, and returns to Dashboard", async ({ page }) => {
+test("finishes the run, clears the trip, and returns to Dashboard", async ({ page }) => {
   await openShoppingRun(page);
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
   await page
     .locator(".store-run-row", { hasText: "One-time Candles" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
 
   await page.getByRole("button", { name: "Finish shopping run" }).click();
   await expect(page.getByRole("heading", { name: "Shopping run finished" })).toBeVisible();
   await expect(page.locator("#finish-run-message")).toHaveText(
-    "2 items checked off. 1 prediction updated."
+    "2 items logged. 1 prediction updated."
   );
   await expect(page.locator("#finish-run-summary")).toContainText("2 items");
   await expect(page.locator("#finish-run-summary")).toContainText("$4.50 known spend");
@@ -335,12 +403,65 @@ test("finishes the run, clears the cart, and returns to Dashboard", async ({ pag
   expect(session.selected).toEqual([]);
 });
 
+test("records a prediction check and applies a still-had-some shift", async ({ page }) => {
+  await openShoppingRun(page);
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+  await page
+    .locator(".store-run-row", { hasText: "One-time Candles" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+  await page.getByRole("button", { name: "Finish shopping run" }).click();
+
+  const milkEntry = page.locator("#finish-run-list li", { hasText: "Overdue Milk" });
+  const candleEntry = page.locator("#finish-run-list li", { hasText: "One-time Candles" });
+  const check = milkEntry.locator(".prediction-check");
+
+  await expect(page.locator("#finish-run-hint")).toBeVisible();
+  await expect(check).toContainText("was Hoot right?");
+  await expect(candleEntry.locator(".prediction-check")).toHaveCount(0);
+
+  const early = check.getByRole("button", { name: "Still had some" });
+  await early.click();
+
+  await expect(early).toHaveAttribute("aria-pressed", "true");
+  await expect(check.locator("[data-check-result]")).toHaveText(
+    /Still had some · next estimate moved to/
+  );
+  await expect(page.locator("#prediction-check-status")).toContainText(
+    "Overdue Milk marked still had some."
+  );
+
+  const afterEarly = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+    const item = state.items.find((entry) => entry.id === "item-overdue");
+    return item.purchases[item.purchases.length - 1].feedback;
+  });
+  expect(afterEarly.verdict).toBe("early");
+  expect(afterEarly.predictedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+  const right = check.getByRole("button", { name: "Yes, I was out" });
+  await right.click();
+
+  await expect(right).toHaveAttribute("aria-pressed", "true");
+  await expect(early).toHaveAttribute("aria-pressed", "false");
+  await expect(check.locator("[data-check-result]")).toHaveText(/Right · next estimate/);
+
+  await page.getByRole("button", { name: "View purchase history" }).click();
+  await expect(
+    page.locator(".rail-card", { hasText: "Your checks" })
+  ).toContainText("1 right");
+});
+
 test("opens purchase history from the finish receipt", async ({ page }) => {
   await openShoppingRun(page);
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
   await page.getByRole("button", { name: "Finish shopping run" }).click();
   await page.getByRole("button", { name: "View purchase history" }).click();
@@ -408,7 +529,7 @@ test("dismissing the receipt keeps the run active", async ({ page }) => {
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
   await page.getByRole("button", { name: "Finish shopping run" }).click();
   await page.keyboard.press("Escape");
@@ -470,7 +591,7 @@ test("has no critical accessibility violations on the finish receipt", async ({ 
 
   await page
     .locator(".store-run-row", { hasText: "Overdue Milk" })
-    .getByRole("button", { name: "Add" })
+    .getByRole("button", { name: /^Log / })
     .click();
   await page.getByRole("button", { name: "Finish shopping run" }).click();
 

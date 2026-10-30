@@ -1,4 +1,5 @@
 export const DAY_MS = 24 * 60 * 60 * 1000;
+export const EARLY_RESTOCK_SHIFT_DAYS = 3;
 
 export function startOfDay(date = new Date()) {
   const copy = new Date(date);
@@ -28,9 +29,13 @@ export function predictionFor(item, referenceDate = startOfDay()) {
   if (item.isOneTime) return null;
 
   const today = startOfDay(referenceDate);
-  const purchaseDates = item.purchases
-    .map((purchase) => parseDate(purchase.date))
-    .sort((left, right) => left - right);
+  const sortedPurchases = [...item.purchases].sort(
+    (left, right) => parseDate(left.date) - parseDate(right.date),
+  );
+  const purchaseDates = sortedPurchases.map((purchase) => parseDate(purchase.date));
+  const latestPurchase = sortedPurchases[sortedPurchases.length - 1] ?? null;
+  const feedbackShiftDays =
+    latestPurchase?.feedback?.verdict === "early" ? EARLY_RESTOCK_SHIFT_DAYS : 0;
   const origin = purchaseDates.length ? purchaseDates[0] : parseDate(item.createdAt);
   const latest = purchaseDates.length ? purchaseDates[purchaseDates.length - 1] : origin;
   const purchaseCount = purchaseDates.length;
@@ -105,6 +110,8 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     modelVersion = "demo-ols-v1";
   }
 
+  if (feedbackShiftDays) predictedDate = addDays(predictedDate, feedbackShiftDays);
+
   const daysUntil = Math.ceil((predictedDate - today) / DAY_MS);
   const zone =
     daysUntil < 0
@@ -163,5 +170,25 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     rSquared,
     fittedDates,
     projectionMode,
+    feedbackShiftDays,
+  };
+}
+
+export function likelyWindowFor(prediction) {
+  if (!prediction || prediction.intervals.length < 2) return null;
+
+  const shortestGap = Math.min(...prediction.intervals);
+  const longestGap = Math.max(...prediction.intervals);
+  const earliest = addDays(prediction.latest, shortestGap);
+  const latest = addDays(prediction.latest, longestGap);
+  const start = new Date(Math.min(earliest.getTime(), prediction.date.getTime()));
+  const end = new Date(Math.max(latest.getTime(), prediction.date.getTime()));
+
+  return {
+    start,
+    end,
+    shortestGap,
+    longestGap,
+    wide: (end - start) / DAY_MS > 7,
   };
 }
