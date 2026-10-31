@@ -148,6 +148,45 @@ test("hides the phone dock while Next up is visible and restores it after", asyn
   await expect(dock).toBeHidden();
 });
 
+test("fits all three navigation tabs at 320px without scrolling", async ({ page }) => {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 700 });
+    await page.goto("/");
+
+    const nav = page.locator(".app-nav");
+    const overflow = await nav.evaluate((element) => element.scrollWidth - element.clientWidth);
+    expect(overflow, `navigation overflow at ${width}px`).toBeLessThanOrEqual(0);
+
+    for (const name of ["Dashboard", "One-time", "Shopping"]) {
+      const tab = page.getByRole("button", { name, exact: true });
+      await expect(tab).toBeVisible();
+      const box = await tab.boundingBox();
+      expect(box.x, `left clipping of ${name} at ${width}px`).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width, `right clipping of ${name} at ${width}px`).toBeLessThanOrEqual(
+        width + 1
+      );
+      expect(
+        await tab.evaluate((element) => element.scrollWidth > element.clientWidth),
+        `clipped ${name} label at ${width}px`
+      ).toBe(false);
+    }
+  }
+});
+
+test("keeps one door into the shopping run and the reset control in the footer", async ({ page }) => {
+  await page.setViewportSize({ width: 980, height: 800 });
+  await page.goto("/");
+
+  const header = page.locator(".app-header");
+  await expect(header.getByRole("button", { name: /shopping run/i })).toHaveCount(0);
+  await expect(header.getByRole("button", { name: "Shopping", exact: true })).toHaveCount(1);
+  await expect(header.getByRole("button", { name: /reset/i })).toHaveCount(0);
+  await expect(page.locator(".app-footer").getByRole("button", { name: "Reset demo" })).toBeVisible();
+
+  const brand = await page.locator(".brand").boundingBox();
+  expect(brand.width, "brand link spans the header row").toBeLessThan(280);
+});
+
 test("shows the full week in a two-column phone calendar", async ({ page }) => {
   for (const width of [320, 390, 440]) {
     await page.setViewportSize({ width, height: 900 });

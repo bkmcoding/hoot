@@ -239,8 +239,7 @@ A shopper standing in an aisle wants one grouped list of everything to buy, a on
 
 ### Entry points
 
-- Header and mobile dock: **Start shopping run**
-- Primary navigation: **Shopping** (the run view itself is titled **Shopping run**)
+- Primary navigation: **Shopping** is the only entry point. There is no separate header or dock button, so the run has one door. The run view itself is titled **Shopping run**.
 - **Exit run** returns to Dashboard without clearing this trip; **Finish shopping run** opens the receipt.
 
 ### Sequence
@@ -297,7 +296,7 @@ A user wants a safe way to restore sample data or remove an item.
 - Reset confirms that local changes will be cleared.
 - Cancel is always available before the action runs.
 - Delete shows a success message with **Undo**; selecting it restores the item and confirms restoration.
-- Reset demo is visible in the header utility and restores the built-in sample.
+- Reset demo sits in the footer beside the sample-data note and restores the built-in sample.
 
 ## Global feedback
 
@@ -330,14 +329,15 @@ A user wants a safe way to restore sample data or remove an item.
 - The **Next up** decision appears before the compact ranked queue, and the queue appears before the seven-day schedule.
 - Until an item has three purchases, the **Next up** card names **Learning**, its purchase progress, and the manual interval source; its date heading reads **Estimated restock**.
 - The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync. Day cards show the weekday and date once, adding a month label only on the first card and at month boundaries. It is a responsive grid at every width, with no horizontal scrolling: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px.
-- The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and mobile dock carry **Start shopping run** as the job-level primary action.
+- The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and dock carry no primary action; the **Shopping** tab is the only way into the run.
 - The Today marker sits at the Overdue/Buy-now boundary, 33.333% of the lane.
 - Exact duplicate names are rejected with a field-level recovery message.
-- On phones, the action dock stays reachable with **Start shopping run**, **Log purchase**, and **Add item**; the run title spans the first dock row and the two utility actions share the second. The dock hides while **Next up** is visible and returns once the card leaves the viewport, so it never covers the card or its actions.
+- On phones, the action dock holds **Log purchase** and **Add item** in one row. The dock hides while **Next up** is visible and returns once the card leaves the viewport, so it never covers the card or its actions.
 - Dynamic headings are sequential: dashboard and one-time empty states use `<h2>` beneath an `<h1>`; queue rows use `<h3>` beneath the focused `<h2>`; item detail uses `<h1>` then `<h2>` section headings; Shopping run uses `<h1>`, then `<h2>`.
 - Rendered text meets AA contrast in the checked dashboard, item-detail, one-time, Shopping run, and receipt states (4.5:1 normal text, 3:1 large text).
 - The calendar caption fits without a one-word orphan at 390px.
 - Delete can be undone from the confirmation toast before it disappears.
-- Reset demo is visible, restores the built-in sample, and remains at least 44px tall on phones.
+- Reset demo is visible in the footer, restores the built-in sample, and remains at least 44px tall on phones.
+- All three navigation tabs render in full at 320px without a scroll container or a clipped label, and the brand link's hit area matches the lockup rather than the header row.
 - The interface remains usable at 1440, 980, 390, and 320px.
 - No page-level horizontal overflow occurs, and the schedule never scrolls horizontally.

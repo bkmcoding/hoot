@@ -92,11 +92,6 @@ typography:
     fontSize: "36px"
     fontWeight: 750
     lineHeight: 1
-  wordmark:
-    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, system-ui, Roboto, Helvetica Neue, Arial, sans-serif"
-    fontSize: "19px"
-    fontWeight: 800
-    lineHeight: 1.15
   card-title:
     fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, system-ui, Roboto, Helvetica Neue, Arial, sans-serif"
     fontSize: "18px"
@@ -165,12 +160,14 @@ components:
     rounded: "{rounded.control}"
     padding: "0 14px"
     height: "46px"
-  navigation-active:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink}"
-    rounded: "{rounded.pill}"
-    padding: "0 16px"
-    height: "36px"
+  navigation-tab:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink-faint}"
+    fontSize: "12px"
+    fontWeight: "700"
+    letterSpacing: "0.08em"
+    textTransform: "uppercase"
+    activeIndicator: "2px {colors.night}"
   status-overdue:
     backgroundColor: "{colors.overdue-background}"
     textColor: "{colors.overdue}"
@@ -201,7 +198,7 @@ Three layers build the world:
 
 - **Warm Utility** is the interface language: familiar controls, compact rows, tabular data, one obvious next action.
 - **Warm Ledger** is the material: cream canvas, paper surfaces, hairline warm borders, soft inset highlights.
-- **Calm Nocturn** is a restrained night accent: the Owl-Moon mark, the Today marker, and a few date numerals. There is no dark mode.
+- **Calm Nocturn** is a restrained night accent: the brand lockup, the favicon tile, the Today marker, and a few date numerals. There is no dark mode.
 
 **Key Characteristics:**
 
@@ -213,15 +210,45 @@ Three layers build the world:
 
 ## Brand
 
-### Owl-Moon mark
+### Feather mark
 
-A rounded night-ink tile holds a cream moon with a crescent bite at the upper right. Two small almond eyes with amber irises sit in the remaining moon body, suggesting a watchful owl without a face, beak, or mascot.
+The mark is an owl’s feather drawn as a quill: one closed silhouette with two sharp points, the quill tail at the lower left and the vane tip at the upper right. The owl is in the name, not in the drawing; the feather carries the writing and record-keeping idea instead.
 
-- Source: `frontend/favicon.svg` (48×48) and the inline header SVG in `frontend/index.html`, which share the same geometry.
-- The crescent is an SVG mask, so the mark stays flat on any background.
-- No gradients, glow, outlines, or literal owl features.
-- In the header the moon group breathes very slowly (7s, about 2.5% scale). This is the only brand animation, and reduced motion disables it.
-- The “Hoot” wordmark and the “Predictive household inventory” subtitle stay beside the mark.
+- Source: `frontend/favicon.svg` (48×48, cream feather on a night tile), `frontend/icons/icon.svg` (full-bleed install source), and the inline header SVG in `frontend/index.html`. All three carry the same path.
+- The quill is part of the outline, not a separate stem: the silhouette narrows continuously from the vane to a point. There is no stroke, so there is no round cap to disagree with the sharp vane.
+- The shaft slit and barbs are a single knockout subpath with `fill-rule="evenodd"`. Never redraw them as strokes; a constant-width line would undo the cut.
+- The cuts are a subpath rather than a mask, so the mark can be inlined more than once on a page without id collisions.
+- No gradients, glow, outlines, eyes, beaks, or literal owl features.
+- The mark is static. There is no brand animation.
+
+### Wordmark
+
+“Hoot” is Fraunces 900 at `opsz 144`, `SOFT 100`, `WONK 1`, outlined to SVG paths so the app ships no web font. Lowercase and hand-set: the second o is smaller and lifted, the t is tilted, and a single amber full stop sits at the baseline.
+
+- Source: the inline `brand-word` SVG in `frontend/index.html`.
+- The amber dot is the only color in the identity. It is a period, not a status signal.
+- Do not re-set the wordmark in system text, and do not load Fraunces at runtime.
+
+### Lockup
+
+- 42px feather, 18px wordmark, 8px gap, optically centered in the header. The feather's box carries a little air on the right, so the gap reads as roughly 14px.
+- The header carries the name only. There is no tagline: product description belongs in the page title, the meta description, and the first line of each view.
+
+### App icons
+
+- Install icons are full-bleed night squares with no baked rounding; iOS and Android apply their own mask. The 48px favicon keeps its 14px radius because it sits in browser chrome, and crops its viewBox tighter so the feather fills 74% of the tile instead of 56%: at 16px the mark needs the extra weight.
+- The set is `icons/apple-touch-icon.png` (180), `icons/icon-192.png`, `icons/icon-512.png`, and `icons/icon-maskable-512.png`.
+- `favicon.ico` carries the same path at 16, 32, and 48 for browsers and Windows shells that do not read the SVG favicon. It is a 32-bit BMP icon, not a PNG wrapped in an ICO, so older shells render it.
+- The feather fills about 56% of the tile height. The maskable icon scales it to 86% of that, so it stays inside the safe circle.
+- `manifest.webmanifest` names the app “Hoot” with no tagline, cream background and theme, and a standalone display.
+
+### Voice
+
+- Write about the screen, not the brand. No “Hoot leads with…” or “Hoot learns…” in the UI. Use plain second person, or no subject at all.
+- No ad language: no “effortless”, “never run out”, “smart”, “seamless”, or “your new”.
+- Prefer the concrete noun — restock date, checklist, purchase history — over model language such as prediction model, rhythm calculations, or estimates.
+- Keep provenance out of the UI. Method names, model versions, fit scores, and R² belong in code and tests, not on the item page. Explain what the date is based on in words instead.
+- “Hoot” belongs in the page title, the meta description, and accessibility labels, not in body copy.
 
 ## Colors
 
@@ -244,9 +271,9 @@ Each status has an ink, a background, a border, and a rail tone. The ink always 
 - **Cream Canvas** is the app ground.
 - **Paper** is the card, panel, input, and dialog surface.
 - **Quiet Paper** is used for hover, empty states, and nested quiet panels.
-- **Parchment** is used for the navigation track, table headers, and disabled controls.
+- **Parchment** is used for table headers and disabled controls.
 - **Charcoal Ink** carries primary text. Two warm gray-brown levels carry secondary copy and metadata.
-- **Night** (`#1a2b33`) is reserved for the logo tile, the Today marker, and today’s date numeral.
+- **Night** (`#1a2b33`) is reserved for the brand lockup, the favicon tile, the Today marker, and today’s date numeral.
 
 ### Named Rules
 
@@ -267,19 +294,20 @@ Hoot uses one system sans family with no external fonts. The stack names the pla
 - **Label:** 12px, uppercase, 0.08em tracking.
 - **Metadata:** 12–13px.
 - **Button:** 14px, weight 700.
+- **Navigation tab:** 12px, uppercase, 0.08em tracking, weight 700, with a 2px night rule under the active destination.
 
 **The Compare Rule.** Dates, quantities, prices, intervals, and model values use tabular numerals.
 
 ## Layout
 
-The shell has a sticky paper header, segmented pill navigation, a visible Reset demo utility, a 1200px content width, and an 8px rhythm. The dashboard heading carries a lightweight queue search, then leads with a focused **Next up** decision, a compact ranked restock queue, a quiet inventory summary strip, and the seven-day calendar with an **All 14 days** expansion. Header and dock actions read **Log purchase**, then **Add item**.
+The shell has a sticky paper header, ledger-tab navigation, a visible Reset demo control in the footer, a 1200px content width, and an 8px rhythm. The dashboard heading carries a lightweight queue search, then leads with a focused **Next up** decision, a compact ranked restock queue, a quiet inventory summary strip, and the seven-day calendar with an **All 14 days** expansion. Header and dock actions read **Log purchase**, then **Add item**.
 
 ### Shell behavior
 
-- **Desktop:** the header is at least 72px tall and holds the brand, segmented navigation, task actions, and Reset demo utility in one scan line. A hairline divider separates the utility.
-- **Tablet (661–980px):** the header becomes two rows: brand, actions, and utility on top, navigation below; the summary uses two columns; item detail becomes one column with the rhythm ledger before the reference rail, which uses two columns; the calendar uses four columns.
-- **Phone (≤660px):** the subtitle hides, primary navigation fills the row and may scroll horizontally, and **Log purchase** and **Add item** move to a fixed bottom action dock. The dock is hidden while **Next up** is visible and on item detail, then returns once the user leaves that surface. Queue rows compress to two lines, ledger entries stack date above details, fields stack, and dialog actions become sticky. The calendar uses two columns.
-- `.app-frame` reserves `--dock-height` of bottom padding so the dock never covers content. Reset demo remains at least 44px tall.
+- **Desktop:** the header is at least 72px tall and holds the brand, ledger-tab navigation, and task actions in one scan line. The header carries no primary action: navigation is the only way into the Shopping run, and the dashboard's **Next up** card owns **Log purchase**.
+- **Tablet (661–980px):** the header becomes two rows: brand and actions on top, navigation below; the summary uses two columns; item detail becomes one column with the rhythm ledger before the reference rail, which uses two columns; the calendar uses four columns.
+- **Phone (≤660px):** the brand takes its own row and the three ledger tabs share the next at equal width, without a scroll container; **Log purchase** and **Add item** move to a single-row fixed bottom dock. The dock is hidden while **Next up** is visible and on item detail, then returns once the user leaves that surface. Queue rows compress to two lines, ledger entries stack date above details, fields stack, and dialog actions become sticky. The calendar uses two columns.
+- `.app-frame` reserves `--dock-height` of bottom padding so the dock never covers content. Reset demo sits in the footer and remains at least 44px tall on phones.
 
 ### Routes and browser history
 
@@ -310,7 +338,7 @@ Cards rest on paper with a hairline border, a 1px inset highlight, and a soft of
 - Inner panels, calendar days, and toasts: 14px.
 - Cards and panels: 18px.
 - Dialogs: 20px.
-- Navigation, chips, and lane ends are pill-shaped.
+- Chips and lane ends are pill-shaped. Navigation is not: the tabs sit on the header's baseline with a 2px active rule and no container.
 
 ## Motion
 
@@ -320,8 +348,7 @@ Motion is calm and communicates state. Interface timing is 160–220ms.
 - Dialog open: 180ms fade and rise over a fading backdrop.
 - Toast: a short rise in and fade out within its 3.4s life, or 6.4s when it contains Undo.
 - Lane: the Today marker sends out a slow, faint pulse ring.
-- Logo: the slow Owl-Moon breathing effect.
-- `prefers-reduced-motion` removes transforms, pulses, breathing, and entrances.
+- `prefers-reduced-motion` removes transforms, pulses, and entrances.
 
 ## Components
 
@@ -424,7 +451,7 @@ An empty state explains three things in place: why the surface is empty, what th
 ### Don't:
 
 - **Don't** add gradients, glass panels, glow, or decorative charts.
-- **Don't** turn the owl into a mascot or literal illustration.
+- **Don't** draw an owl, an eye, or a moon. The feather is the mark; the owl stays in the name.
 - **Don't** add a dark mode or night theme.
 - **Don't** use color as the only status signal.
 - **Don't** hide validation, empty-state, or destructive consequences in a toast alone; an Undo action supplements a clear confirmation, never replaces it.

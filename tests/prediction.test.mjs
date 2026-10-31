@@ -50,9 +50,7 @@ test("predictionFor uses the manual estimate while learning", () => {
 
   const prediction = predictionFor(item, today);
 
-  assert.equal(prediction.technicalMethod, "Manual estimate");
   assert.equal(prediction.maturity, "learning");
-  assert.equal(prediction.modelVersion, "demo-manual-v1");
   assert.equal(prediction.method, "Manual 7-day estimate");
   assert.equal(toISODate(prediction.date), "2026-10-22");
   assert.equal(prediction.daysUntil, -4);
@@ -75,9 +73,7 @@ test("predictionFor learns a stable recurring rhythm", () => {
 
   const prediction = predictionFor(item, today);
 
-  assert.equal(prediction.technicalMethod, "Linear regression");
   assert.equal(prediction.maturity, "learned");
-  assert.equal(prediction.modelVersion, "demo-ols-v1");
   assert.equal(prediction.projectionMode, "regression");
   assert.equal(prediction.confidence, "Strong rhythm");
   assert.equal(toISODate(prediction.date), "2026-10-19");
