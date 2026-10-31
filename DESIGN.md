@@ -294,7 +294,7 @@ Hoot uses one system sans family with no external fonts. The stack names the pla
 - **Label:** 12px, uppercase, 0.08em tracking.
 - **Metadata:** 12–13px.
 - **Button:** 14px, weight 700.
-- **Navigation tab:** 12px, uppercase, 0.08em tracking, weight 700, with a 2px night rule under the active destination.
+- **Navigation tab:** 12px, uppercase, 0.08em tracking, weight 700, with a 2px night rule under the active destination. Below 360px it drops to 11px and 0.05em so all three labels fit a 320px viewport under wider fallback faces.
 
 **The Compare Rule.** Dates, quantities, prices, intervals, and model values use tabular numerals.
 

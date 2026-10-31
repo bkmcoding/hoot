@@ -3454,6 +3454,14 @@ body.is-store-run .toast-region {
   }
 }
 
+@media (max-width: 360px) {
+  .nav-button {
+    /* Linux and older Windows fall back to wider faces; the labels have to fit a third of 320. */
+    font-size: 11px;
+    letter-spacing: 0.05em;
+  }
+}
+
 @media (max-width: 440px) {
   .calendar-day {
     min-height: 0;
