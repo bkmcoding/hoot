@@ -450,6 +450,8 @@ test("shows the full week in a two-column phone calendar", async ({ page }) => {
   for (const width of [320, 390, 440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
+    await page.locator('[data-dashboard-view-option="calendar"]').click();
+    await page.getByRole("button", { name: "Next 7 days" }).click();
 
     const strip = page.locator("#restock-calendar");
     const columns = await strip.evaluate(
@@ -506,6 +508,8 @@ test("fits the full seven- and fourteen-day calendar at tablet and desktop width
   for (const { width, columns7, columns14 } of cases) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/");
+    await page.locator('[data-dashboard-view-option="calendar"]').click();
+    await page.getByRole("button", { name: "Next 7 days" }).click();
 
     const strip = page.locator("#restock-calendar");
     await expect(page.locator(".calendar-day")).toHaveCount(8);
@@ -569,6 +573,8 @@ test("fits the full seven- and fourteen-day calendar at tablet and desktop width
 
 test("states each calendar date once", async ({ page }) => {
   await page.goto("/");
+  await page.locator('[data-dashboard-view-option="calendar"]').click();
+  await page.getByRole("button", { name: "Next 7 days" }).click();
 
   const headers = page.locator(".calendar-day:not(.calendar-overdue) header");
   await expect(headers.first().locator("small")).toHaveText(/^[A-Z][a-z]{2}$/);

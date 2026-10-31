@@ -24,6 +24,12 @@ The app’s strongest future additions should deepen that promise rather than ad
    - A correction adjusts the model only; the purchase is already logged, so no purchase is created or edited.
    - See `docs/ux-flows.md` and `DESIGN.md`.
 
+- **Dashboard density and Steady fold** (2026-10-31)
+   - A persisted **Spacious / Dense** control keeps separate paper rows or compacts the queue into one ledger.
+   - Dense folds Steady rows behind a tinted band that names the exact count and says the items are still tracked; search and **Next up** are never folded.
+   - On the busy sample this cuts the 37-row queue to 23 visible rows plus a 14-row fold, from 3,050px to 1,343px at 1440px.
+   - See `docs/superpowers/specs/2026-10-31-density-view-design.md`, `DESIGN.md`, and `docs/ux-flows.md`.
+
 ## Prioritized Additions
 
 ### P0 — Build Next

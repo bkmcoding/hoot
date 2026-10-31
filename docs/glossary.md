@@ -28,6 +28,10 @@ Ubiquitous language for the Hoot household inventory and predictive restock syst
   - **Buy Now ($0\text{d} \dots 3\text{d}$):** Depletion is imminent within the next grocery cycle.
   - **Watch ($4\text{d} \dots 7\text{d}$):** Depletion approaching; candidate for opportunistic purchase if visiting that store.
   - **Steady ($\ge 8\text{d}$):** Well-stocked; no action needed.
+- **Dashboard Density**
+  The persisted **Spacious / Dense** view choice for the dashboard queue. Spacious keeps separate paper rows; Dense uses one hairline-separated ledger with compact padding. Dense also enables the **Steady Fold**. Density changes presentation only; it never filters items or changes predictions.
+- **Steady Fold**
+  The Dense-only summary band that replaces Steady queue rows with a tinted, dashed band naming the exact count, stating the items are still tracked, and offering **Show steady items** / **Hide steady items**. It never applies to search results or the **Next up** item.
 - **Confidence Rating**
   Household-facing assessment of model reliability based on sample size and variance. The item page names the sample, measured gaps, gap range, and whether the estimate still uses the manual interval.
 - **Gap Range**

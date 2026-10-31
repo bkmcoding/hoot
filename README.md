@@ -14,7 +14,8 @@ Open `http://127.0.0.1:8000` in a browser.
 
 ### Current demo
 
-- Ranked dashboard with a focused Restock Horizon Lane
+- Ranked dashboard with a focused Restock Horizon Lane, queue search, and switchable **Spacious / Dense** density
+- Dense view compacts the queue into one ledger and folds Steady rows behind an explicit count-and-show band, so a 38-staple household stays scannable
 - Seven-day restock calendar with a two-column phone layout and an optional fourteen-day view
 - Add item and log purchase flows
 - Item detail page with a next-restock answer and likely window, a buying-rhythm ledger, confidence and spending detail, and inline purchase editing
@@ -31,6 +32,8 @@ The footer **Sample** select switches between two date-relative samples:
 - **Busy household** — 38 tracked staples and 6 one-time needs, with long purchase histories spread across every urgency zone. Use this one to judge density, scanning, and scrolling at household scale.
 
 Switching replaces local data and clears the shopping-run session, so it asks for confirmation. **Reset demo** restores whichever sample is active. The active sample is mirrored on `document.body.dataset.sample` for tests and review tooling.
+
+The dashboard density control is independent of the sample. **Spacious** is the default; **Dense** keeps every row’s name, status, date, and actions but folds Steady items behind a labelled band that always states their count and that they are still tracked. The choice persists locally and is mirrored on `document.body.dataset.density`.
 
 ### Quality and tooling
 

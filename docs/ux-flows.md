@@ -14,12 +14,14 @@ A shopper wants to know which household staples need attention now and which one
 
 ### Sequence
 
-1. Read the focused **Next up** decision.
-2. Search the queue by name, category, or unit when looking for a specific staple.
-3. Scan the compact ranked queue.
-4. Check the quiet inventory summary.
-5. Select an item or log a purchase.
-6. Use the next-seven-day schedule, or expand it to fourteen days when a wider view is needed.
+1. Choose **List** or **Calendar** in the view switcher directly under the heading.
+2. Read the focused **Next up** decision.
+3. Choose **Spacious** or **Dense** in the heading control when the queue needs more air or more rows per screen.
+4. Search the queue by name, category, or unit when looking for a specific staple.
+5. Scan the compact ranked queue; in Dense, expand the folded Steady rows when needed.
+6. Check the quiet inventory summary.
+7. Select an item or log a purchase.
+8. In **Calendar**, the month grid is the default; switch to the next seven or all fourteen days for the near term.
 
 ### Content contract
 
@@ -29,13 +31,19 @@ A shopper wants to know which household staples need attention now and which one
 - **One-time:** checklist items excluded from prediction.
 - The **Next up** item shows name, category/unit, predicted date, due text, status, the full horizon lane, and one primary **Log purchase** action. If it has purchase history, it also offers **Log last**. When it is **Overdue** and has purchase history, it offers **Still have some** as a secondary action; that records a correction on the latest purchase and moves the estimate three days out from today, so the false Overdue clears without a purchase.
 - Remaining queue rows show name, status, predicted date, and secondary actions. At 360 and narrower, the date sits beside the title and the secondary actions share a full-width second line so the date is never clipped.
+- The **Spacious / Dense** control sits with the queue search in the heading and reports its state with `aria-pressed`. The choice persists locally across reloads and sample switches; `document.body.dataset.density` mirrors `spacious` or `dense`.
+- The **List / Calendar** switcher sits directly under the heading and swaps the main area in place, so the schedule is never below a long queue. **List** is the default and holds **Next up**, the ranked queue, density, search, and the inventory summary. **Calendar** holds the schedule and its 7/14/month range control, and hides the list-only controls. The choice persists locally across reloads and sample switches; `document.body.dataset.dashboardView` mirrors `list` or `calendar`.
+- **Dense** compacts rows into one hairline-separated ledger and folds Steady rows (more than seven days out) behind a tinted, dashed summary band. The band names the exact count, says the items are still tracked, and toggles between **Show steady items** and **Hide steady items** with `aria-expanded` and `aria-controls`. Focus returns to that control after either toggle.
+- Dense never folds search results or the **Next up** item. Search matches every tracked item regardless of the fold.
 - Queue search matches tracked items by name, category, or unit.
 - The global **Next up** decision stays visible during search; matching rows appear under a **Search results** heading with a count that names the query.
 
 ### States
 
 - **Typical:** the highest-urgency item becomes the focused **Next up** decision; remaining items sort by predicted restock date as compact rows.
-- **Search:** the global **Next up** card stays in place. Matching rows render as compact results, the count names the query, and a sole focused-item match is called out instead of duplicated. No matches keep the focused card and offer **Clear search**.
+- **Calendar view:** the schedule replaces the queue and summary directly under the switcher. The heading copy names the active range, density and search are hidden, and the range control moves into the view bar beside the switcher. Day cells carry a status rail and per-item dots, the open day panel labels every item with its status chip, and a day showing only some of its items ends in `+N more`. In **Month**, a brief totals the restocks and days, names planned trips, and repeats the four status counts as a labeled legend; a **Planned trips** row opens each saved plan.
+- **Dense:** the queue becomes one compact ledger; Steady rows are folded behind a summary band that names the count and says they are still tracked. Expanding shows them in rank order and changes the control to **Hide steady items**. The fold is in-memory only and starts collapsed when Dense is chosen.
+- **Search:** the global **Next up** card stays in place. Matching rows render as compact results, the count names the query, and a sole focused-item match is called out instead of duplicated. No matches keep the focused card and offer **Clear search**. Search bypasses the Dense Steady fold so no match is hidden.
 - **Empty:** no tracked items; the state explains prediction cannot start and offers Add item.
 - **Learning:** item detail names the user's typical interval and how many purchases remain before Hoot uses real gaps. On Dashboard, the **Next up** cue names progress and the manual source; at 360px and below it compacts to `1 of 3 · Manual 35-day` so **Log purchase** stays above a 640px viewport.
 - **Learned:** item detail names the average gap between purchases.
@@ -45,7 +53,7 @@ A shopper wants to know which household staples need attention now and which one
 
 ### Job
 
-A shopper wants a near-term view of when items are expected to run out, with the option of a fourteen-day range.
+A shopper wants to see when items are expected to run out — near term, or across a month — and to turn a date into a shopping trip.
 
 ### Entry points
 
@@ -55,16 +63,23 @@ A shopper wants a near-term view of when items are expected to run out, with the
 
 1. Scan today and the next six days.
 2. Read the item names and due text.
-3. Expand to all fourteen days when a wider view is needed.
+3. Expand to all fourteen days, or to **Month**, when a wider view is needed.
 4. Select an item to inspect its rhythm.
+5. In **Month**, open a day to read its items in place.
+6. From an open day, start a shopping run for that date, or save it as a plan.
+7. Reopen a saved plan from the **Planned trips** row above the month grid.
 
 ### States
 
 - **Typical:** a seven-day schedule in a responsive grid: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px. No day requires horizontal scrolling.
 - **Fourteen-day:** the **All 14 days** control expands the grid; fourteen days wrap to two rows on wide desktop, four rows at tablet widths, and eight rows at phone widths. The caption and calendar label follow the selection.
+- **Month:** the **Month** control draws at least thirty days as week rows, starting on the week containing today. Each cell carries the weekday, the date, up to two item names, and an exact “+N more” count. Above the grid, a brief totals the restocks and days, names any planned trips, and a labeled legend repeats the Overdue, Buy now, Watch, and Steady counts. Days with nothing due are blank and inert; days before today are muted.
+- **Open day:** selecting a day inserts one panel after that week's row. It lists each item with its status text and due phrase, marks overdue items first, and holds the day's actions. **Close day** or Escape returns focus to the day it opened.
+- **Planned day:** a saved plan shows a **Planned** chip in its cell and a pill in the **Planned trips** row above the grid. Opening the day lists the plan's items and offers **Resume plan** and **Delete plan**; saving again reads **Update plan for this date** and keeps the same plan. A plan starts from what is due that day, takes any item added during its run, and clears when that run is finished. Plans survive until deleted, a sample switch, or **Reset demo**.
+- **Run from a date:** **Start this shopping run** builds the trip for that date, includes Watch, leaves one-time needs behind unless the date is today, and seeds the trip with the day's plan when one exists. **Exit run** keeps the trip; finishing it clears the date and its plan.
 - **Today:** green border and calm steady tint.
-- **Past due:** a dedicated first cell names the number of overdue items.
-- **Clear day:** the cell says “Clear”.
+- **Past due:** in the seven- and fourteen-day ranges, a dedicated first cell names the number of overdue items; in **Month**, overdue items pin to today's cell and sort first.
+- **Clear day:** the cell says “Clear” in the seven- and fourteen-day ranges.
 - **Empty:** the schedule explains that a tracked item is required.
 
 ## Add Item
@@ -247,7 +262,7 @@ A shopper standing in an aisle wants one grouped list of everything to buy, a on
 ### Sequence
 
 1. Start the run. Hoot hides the global header and footer so the aisle list owns the screen, resets the page to the top, and moves focus to the **Shopping run** heading without scrolling so keyboard and screen-reader users land in the new context. The heading takes focus for context but does not paint a visible focus ring; the next control keeps its amber ring.
-2. Scan aisle groups in the aisle column; each group is sorted by urgency: Overdue, Buy now, Watch when included, then One-time.
+2. Scan the list. It opens ordered by due date — **Overdue**, **Today**, **Tomorrow**, **Next 7 days**, **Later**, then **One-time** — with each row naming its category. Use **Aisle** in the order control above the list to switch to category panels sorted alphabetically, with urgency order inside each group.
 3. Tap **Log** once on an item. Hoot records the purchase or checks off the one-time need immediately, and the row collapses to **Logged**.
 4. Use **Not this trip** on a row you do not need today. Hoot removes it from the aisle without writing a purchase; the skipped strip above the aisles names it and offers **Undo last**.
 5. Use **Add** when something is missing from the draft. The **Add to this trip** sheet searches every item not already in the run, including steady staples, Watch staples, and uncompleted one-time needs. Adding makes an unlogged row; it does not log anything until **Log** is pressed.
@@ -260,8 +275,8 @@ A shopper standing in an aisle wants one grouped list of everything to buy, a on
 
 - The run drafts tracked staples in **Overdue** or **Buy now**, plus every uncompleted one-time need. If the dashboard's **Next up** item is in **Watch**, a fresh run includes Watch so the two surfaces agree.
 - **Watch** staples otherwise appear after **Show Watch** is pressed; the toggle reports its state with `aria-pressed` and is named **Hide Watch items** when active.
-- Groups are categories, sorted alphabetically; items inside a group sort by urgency, then name. Items without a category fall under **Uncategorized**.
-- Each unchecked row shows its name, unit, a status chip, and due text, with one primary **Log** action at the trailing edge and a secondary **Not this trip** action in the metadata line. The category is the aisle heading, not repeated in the row; a 3px zone rail and the chip carry urgency in color and text together. At 660px and below **Log** stays at the trailing edge at least 44px tall; **Not this trip** keeps a 44px target. At 340px and below the unit is omitted from the metadata line so timing and the secondary action stay compact.
+- **Due date** is the default order and groups the list by Overdue, Today, Tomorrow, Next 7 days (2–7), Later (8+), then One-time; tracked items sort by due distance, then name, and one-time items by name. Each row names its category in the metadata line because the group heading is a date window. **Aisle** groups by category, sorted alphabetically, with urgency order inside each group; items without a category fall under **Uncategorized**.
+- Each unchecked row shows its name, unit, a status chip, and due text, with one primary **Log** action at the trailing edge and a secondary **Not this trip** action in the metadata line. In **Aisle** order the category is the heading and is not repeated in the row; a 3px zone rail and the chip carry urgency in color and text together. At 660px and below **Log** stays at the trailing edge at least 44px tall; **Not this trip** keeps a 44px target. At 340px and below the unit is omitted from the metadata line, **Log** narrows to 56px, and the name and chip share one line so the row stays under 110px.
 - A logged row collapses to a compact **Logged** line: a check mark, the item name, and no status chip or action. Quantity, price, and prediction details live in **This trip**.
 - Logging, skipping, adding, and undo feedback is in place, not in a toast: the row changes, the summary or skipped strip updates, and a polite live region names the result so the finish action stays clear. Skipping and adding move focus to the next useful row control; undoing a skip returns focus to that row's **Log** button.
 - The skipped strip above the aisles names up to three skipped items, adds “and N more” when needed, and offers one **Undo last** for the most recent skip. Skipped items are excluded from **Items** and **Left** and are not logged on the receipt.
@@ -363,7 +378,8 @@ A user wants a safe way to restore sample data or remove an item.
 - Prediction-check answers are at least 44px tall on phones; at 320px the receipt scrolls as one sheet with no nested list scroll, and it is 520px wide on desktop.
 - The **Next up** decision appears before the compact ranked queue, and the queue appears before the seven-day schedule.
 - Until an item has three purchases, the **Next up** card names **Learning**, its purchase progress, and the manual interval source; its date heading reads **Estimated restock**.
-- The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync. Day cards show the weekday and date once, adding a month label only on the first card and at month boundaries. It is a responsive grid at every width, with no horizontal scrolling: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px.
+- The restock calendar defaults to Month, offers seven- and fourteen-day strips on request, and keeps its caption and accessible label in sync. Month opens with a summary of restocks, days, and planned trips plus a labeled four-status legend. Day cells carry status color and text, show at most a few names plus `+N more`, and never stretch the grid. It is a responsive grid at every width, with no horizontal scrolling: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px.
+- The Shopping run opens ordered by due date, names each row’s category in that mode, and switches to aisle groups from the order control without losing a logged row.
 - The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and dock carry no primary action; the **Shopping** tab is the only way into the run.
 - The Today marker sits at the Overdue/Buy-now boundary, 33.333% of the lane.
 - Exact duplicate names are rejected with a field-level recovery message.

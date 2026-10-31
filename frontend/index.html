@@ -47,20 +47,79 @@
     <div class="app-frame">
 
       <main class="app-main">
-        <section class="app-view is-active" id="view-dashboard" aria-labelledby="dashboard-title">
+        <section
+          class="app-view is-active"
+          id="view-dashboard"
+          aria-labelledby="dashboard-title"
+          data-dashboard-view="list"
+        >
           <div class="section-heading">
             <div>
               <h1 id="dashboard-title">Upcoming restocks</h1>
-              <p class="section-copy">The next item to decide, then the rest of your staples.</p>
+              <p class="section-copy" id="dashboard-copy">The next item to decide, then the rest of your staples.</p>
+              <p class="section-copy" id="calendar-caption">Expected restocks for the next thirty days.</p>
             </div>
-            <div class="queue-search" id="queue-search-field">
-              <input
-                id="queue-search"
-                type="search"
-                placeholder="Search name, category, or unit"
-                autocomplete="off"
-                aria-label="Search tracked staples by name, category, or unit"
-              />
+            <div class="queue-tools" id="queue-tools">
+              <div class="density-toggle" role="group" aria-label="Dashboard density">
+                <button
+                  class="density-button is-active"
+                  type="button"
+                  data-density="spacious"
+                  aria-pressed="true"
+                >Spacious</button>
+                <button
+                  class="density-button"
+                  type="button"
+                  data-density="dense"
+                  aria-pressed="false"
+                >Dense</button>
+              </div>
+              <div class="queue-search" id="queue-search-field">
+                <input
+                  id="queue-search"
+                  type="search"
+                  placeholder="Search name, category, or unit"
+                  autocomplete="off"
+                  aria-label="Search tracked staples by name, category, or unit"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div class="dashboard-viewbar">
+            <div class="density-toggle view-switcher" role="group" aria-label="Dashboard view">
+              <button
+                class="density-button view-button is-active"
+                type="button"
+                data-dashboard-view-option="list"
+                aria-pressed="true"
+              >List</button>
+              <button
+                class="density-button view-button"
+                type="button"
+                data-dashboard-view-option="calendar"
+                aria-pressed="false"
+              >Calendar</button>
+            </div>
+            <div class="calendar-controls" role="group" aria-label="Restock calendar range">
+              <button
+                class="calendar-range-button"
+                type="button"
+                data-calendar-range="7"
+                aria-pressed="false"
+              >Next 7 days</button>
+              <button
+                class="calendar-range-button"
+                type="button"
+                data-calendar-range="14"
+                aria-pressed="false"
+              >All 14 days</button>
+              <button
+                class="calendar-range-button is-active"
+                type="button"
+                data-calendar-range="30"
+                aria-pressed="true"
+              >Month</button>
             </div>
           </div>
 
@@ -89,27 +148,9 @@
             </article>
           </div>
 
-          <section class="calendar-panel" aria-labelledby="calendar-title">
-            <div class="section-heading">
-              <div>
-                <h2 id="calendar-title">Restock calendar</h2>
-                <p id="calendar-caption" class="section-copy">Expected restocks for the next seven days.</p>
-              </div>
-              <div class="calendar-controls" role="group" aria-label="Restock calendar range">
-                <button
-                  class="calendar-range-button is-active"
-                  type="button"
-                  data-calendar-range="7"
-                  aria-pressed="true"
-                >Next 7 days</button>
-                <button
-                  class="calendar-range-button"
-                  type="button"
-                  data-calendar-range="14"
-                  aria-pressed="false"
-                >All 14 days</button>
-              </div>
-            </div>
+          <section class="calendar-panel" aria-label="Restock calendar">
+            <div class="calendar-brief" id="calendar-brief" hidden></div>
+            <div class="calendar-plans" id="calendar-plans" hidden></div>
             <div class="calendar-viewport">
               <div id="restock-calendar" class="calendar-strip" role="list" aria-label="Expected restocks for the next seven days"></div>
             </div>
@@ -137,7 +178,7 @@
           <header class="store-run-header">
             <div>
               <h1 id="store-run-title" tabindex="-1">Shopping run</h1>
-              <p>Log each item as you pick it up. Aisles first, urgency second.</p>
+              <p id="store-run-subtitle">Log each item as you pick it up. Aisles first, urgency second.</p>
 
             </div>
             <div class="store-run-actions">
@@ -160,6 +201,27 @@
           <div class="store-run-body">
             <div class="store-run-aisles">
               <div class="store-run-summary" id="store-run-summary"></div>
+              <div class="store-run-toolbar">
+                <p class="store-run-toolbar-label" id="store-run-order-label">Order</p>
+                <div
+                  class="density-toggle run-order"
+                  role="group"
+                  aria-labelledby="store-run-order-label"
+                >
+                  <button
+                    class="density-button is-active"
+                    type="button"
+                    data-run-order="due"
+                    aria-pressed="true"
+                  >Due date</button>
+                  <button
+                    class="density-button"
+                    type="button"
+                    data-run-order="aisle"
+                    aria-pressed="false"
+                  >Aisle</button>
+                </div>
+              </div>
               <div class="store-run-skipped" id="store-run-skipped" hidden></div>
               <div class="empty-state store-run-empty" id="store-run-empty" hidden></div>
               <div class="store-run-groups" id="store-run-groups"></div>

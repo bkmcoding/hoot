@@ -31,7 +31,8 @@ Unlike manual shopping list apps that require active memory and maintenance befo
 - **Confirmed capabilities:**
   - Tracked recurring items with category, unit, and threshold settings.
   - Interval-based prediction engine: initial fallback to manual restock threshold until 3 purchase logs exist, switching to interval learning / regression once sufficient history is accumulated.
-  - Urgency-ranked restock dashboard with a focused Next Up horizon lane.
+  - Urgency-ranked restock dashboard with a focused Next Up horizon lane, queue search, and persisted **Spacious / Dense** density.
+  - Dense dashboard compacts the queue into one ledger and folds **Steady** rows (more than seven days out) behind an explicit, counted summary band; search and the Next Up decision are never folded.
   - Horizon schedule calendar with default 7-day view and expandable 14-day view.
   - Item detail view featuring a next-restock answer with a likely window, a buying-rhythm ledger of purchases and gaps, plain-language confidence and spending detail, and inline purchase editing.
   - Dedicated one-time checklist for irregular items explicitly excluded from prediction algorithms.

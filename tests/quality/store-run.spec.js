@@ -125,6 +125,32 @@ test("opens Shopping Run from the header", async ({ page }) => {
   );
 });
 
+test("orders by due date by default and switches to aisles", async ({ page }) => {
+  await openShoppingRun(page);
+
+  const order = page.locator(".run-order");
+  const dueButton = order.getByRole("button", { name: "Due date" });
+  const aisleButton = order.getByRole("button", { name: "Aisle" });
+  await expect(dueButton).toHaveAttribute("aria-pressed", "true");
+
+  const groups = page.locator("#store-run-groups .store-run-group");
+  await expect(groups.locator("h2")).toHaveText(["Overdue", "Next 7 days", "One-time"]);
+  await expect(
+    page.locator(".store-run-row", { hasText: "Overdue Milk" })
+  ).toContainText("Pantry");
+
+  await aisleButton.click();
+
+  await expect(aisleButton).toHaveAttribute("aria-pressed", "true");
+  await expect(dueButton).toHaveAttribute("aria-pressed", "false");
+  await expect(groups.locator("h2")).toHaveText(["Household", "Pantry"]);
+  await expect(
+    page.locator(".store-run-row", { hasText: "Overdue Milk" })
+  ).not.toContainText("Pantry");
+  await expect(page.locator("#store-run-announcer")).toHaveText("Ordered by aisle.");
+  await expect(aisleButton).toBeFocused();
+});
+
 test("uses immediate logging language instead of cart language", async ({ page }) => {
   await openShoppingRun(page);
 
@@ -169,6 +195,7 @@ test("resets the run to the top when entered from a scrolled dashboard", async (
 
 test("groups aisles and sorts urgency inside each aisle", async ({ page }) => {
   await openShoppingRun(page);
+  await page.locator('[data-run-order="aisle"]').click();
 
   const groups = page.locator("#store-run-groups .store-run-group");
   await expect(groups).toHaveCount(2);
@@ -264,6 +291,7 @@ test("logs a purchase and marks a tracked item as logged", async ({ page }) => {
 
 test("keeps a checked row in its aisle position", async ({ page }) => {
   await openShoppingRun(page);
+  await page.locator('[data-run-order="aisle"]').click();
 
   const pantryRows = page
     .locator("#store-run-groups .store-run-group", { hasText: "Pantry" })
@@ -890,6 +918,7 @@ test("recovers an empty run from Show Watch", async ({ page }) => {
 
 test("renders urgency as text and color on run rows", async ({ page }) => {
   await openShoppingRun(page);
+  await page.locator('[data-run-order="aisle"]').click();
 
   const milk = page.locator(".store-run-row", { hasText: "Overdue Milk" });
   await expect(milk).toHaveClass(/horizon-overdue/);

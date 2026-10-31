@@ -12,6 +12,7 @@ import { DEMO_SAMPLES, createDemoStateFor } from "./demo-data.js";
 import {
   buildShoppingRun,
   groupShoppingRun,
+  groupShoppingRunByDue,
   shoppingRunSummary,
 } from "./store-run.js";
 
@@ -323,6 +324,18 @@ import {
   }
 
   const STORE_RUN_KEY = "hoot-demo-store-run-v1";
+  const DENSITY_KEY = "hoot-demo-density-v1";
+  const PLANS_KEY = "hoot-demo-plans-v1";
+  const MONTH_DAYS = 30;
+  const WEEK_DAYS = 7;
+
+  function loadDensity() {
+    try {
+      return window.localStorage.getItem(DENSITY_KEY) === "dense" ? "dense" : "spacious";
+    } catch {
+      return "spacious";
+    }
+  }
 
   function loadStoreRun() {
     try {
@@ -340,6 +353,7 @@ import {
         : [];
 
       return {
+        runDate: typeof parsed.runDate === "string" ? parsed.runDate : null,
         includeWatch: Boolean(parsed.includeWatch),
         selected,
         extraIds: new Set(
@@ -359,6 +373,7 @@ import {
       window.localStorage.setItem(
         STORE_RUN_KEY,
         JSON.stringify({
+          runDate: storeRun.runDate,
           includeWatch: storeRun.includeWatch,
           selected: Array.from(storeRun.selected.entries()),
           extraIds: Array.from(storeRun.extraIds),
@@ -370,13 +385,56 @@ import {
     }
   }
 
+  function loadPlans() {
+    try {
+      const raw = window.localStorage.getItem(PLANS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .filter(
+          (plan) => plan && typeof plan.date === "string" && Array.isArray(plan.itemIds),
+        )
+        .map((plan) => ({
+          id: typeof plan.id === "string" ? plan.id : makeId("plan"),
+          date: plan.date,
+          itemIds: plan.itemIds.filter((id) => typeof id === "string"),
+          includeWatch: Boolean(plan.includeWatch),
+          createdAt: typeof plan.createdAt === "string" ? plan.createdAt : plan.date,
+        }));
+    } catch {
+      return [];
+    }
+  }
+
+  function savePlans() {
+    try {
+      window.localStorage.setItem(PLANS_KEY, JSON.stringify(plans));
+    } catch {
+      // Ignore storage failures; plans still work in memory.
+    }
+  }
+
+  function clearPlans() {
+    plans = [];
+    openCalendarDay = null;
+    try {
+      window.localStorage.removeItem(PLANS_KEY);
+    } catch {
+      // Ignore storage failures; the in-memory plans still clear.
+    }
+  }
+
   let state = loadState() ?? createDemoState();
   let storeRun = loadStoreRun() ?? {
+    runDate: null,
     includeWatch: false,
     selected: new Map(),
     extraIds: new Set(),
     skippedIds: [],
   };
+  let plans = loadPlans();
+  let runOrder = "due";
   let currentView = "dashboard";
   let currentItemId = null;
   let itemReturnView = "dashboard";
@@ -385,7 +443,12 @@ import {
   let pendingConfirm = null;
   let pendingConfirmDismiss = null;
   let queueSearch = "";
-  let calendarRange = 7;
+  const DASHBOARD_VIEW_KEY = "hoot-demo-dashboard-view-v1";
+  let density = loadDensity();
+  let dashboardView = loadDashboardView();
+  let steadyFoldExpanded = false;
+  let calendarRange = 30;
+  let openCalendarDay = null;
   let pendingRunReceipt = null;
   let addToTripSearch = "";
   let nextUpObserver = null;
@@ -608,6 +671,61 @@ import {
     updateMobileDock();
   }
 
+  function syncDensityControls() {
+    $$(".density-toggle [data-density]").forEach((button) => {
+      const isActive = button.dataset.density === density;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    });
+  }
+
+  function loadDashboardView() {
+    try {
+      return window.localStorage.getItem(DASHBOARD_VIEW_KEY) === "calendar" ? "calendar" : "list";
+    } catch {
+      return "list";
+    }
+  }
+
+  function syncDashboardViewControls() {
+    $$("[data-dashboard-view-option]").forEach((button) => {
+      const isActive = button.dataset.dashboardViewOption === dashboardView;
+      button.classList.toggle("is-active", isActive);
+      button.setAttribute("aria-pressed", String(isActive));
+    });
+    const dashboard = $("#view-dashboard");
+    if (dashboard) dashboard.dataset.dashboardView = dashboardView;
+    document.body.dataset.dashboardView = dashboardView;
+  }
+
+  function setDashboardView(value) {
+    const next = value === "calendar" ? "calendar" : "list";
+    if (next === dashboardView) return;
+    dashboardView = next;
+    try {
+      window.localStorage.setItem(DASHBOARD_VIEW_KEY, dashboardView);
+    } catch {
+      // The in-memory preference still applies when storage is unavailable.
+    }
+    syncDashboardViewControls();
+    if (dashboardView === "calendar") renderRestockCalendar();
+  }
+
+  function setDensity(value) {
+    const next = value === "dense" ? "dense" : "spacious";
+    if (next === density) return;
+    density = next;
+    steadyFoldExpanded = false;
+    document.body.dataset.density = density;
+    try {
+      window.localStorage.setItem(DENSITY_KEY, density);
+    } catch {
+      // The in-memory preference still applies when storage is unavailable.
+    }
+    syncDensityControls();
+    renderDashboard();
+  }
+
   function renderStats() {
     const tracked = state.items.filter((item) => !item.isOneTime);
     const oneTime = state.items.filter((item) => item.isOneTime);
@@ -783,14 +901,57 @@ import {
     `;
   }
 
+  function steadyFold(entries) {
+    const count = entries.length;
+    const itemWord = count === 1 ? "item" : "items";
+    const heading = steadyFoldExpanded
+      ? `${count} steady ${itemWord} shown`
+      : `${count} steady ${itemWord} folded away`;
+
+    return `
+      <div class="steady-fold">
+        <div class="steady-fold-summary">
+          <div class="steady-fold-copy">
+            <span class="status-chip status-steady">Steady</span>
+            <strong>${heading}</strong>
+            <span>Not due for at least a week. Still tracked.</span>
+          </div>
+          <button
+            class="steady-fold-button"
+            type="button"
+            data-action="toggle-steady-fold"
+            aria-expanded="${steadyFoldExpanded}"
+            aria-controls="steady-fold-items"
+          >
+            <span>${steadyFoldExpanded ? "Hide steady items" : "Show steady items"}</span>
+            <span class="steady-fold-chevron" aria-hidden="true"></span>
+          </button>
+        </div>
+        <div
+          class="steady-fold-items"
+          id="steady-fold-items"
+          ${steadyFoldExpanded ? "" : "hidden"}
+        >
+          ${
+            steadyFoldExpanded
+              ? entries.map(({ item, prediction }) => itemRow(item, prediction)).join("")
+              : ""
+          }
+        </div>
+      </div>
+    `;
+  }
+
   function renderDashboard() {
     const rawSearchTerm = queueSearch.trim();
     const searchTerm = rawSearchTerm.toLowerCase();
     const tracked = rankedTrackedEntries();
 
     const container = $("#dashboard-list");
+    const queueTools = $("#queue-tools");
     const searchField = $("#queue-search-field");
     const hasTrackedItems = state.items.some((item) => !item.isOneTime);
+    if (queueTools) queueTools.hidden = !hasTrackedItems;
     searchField.hidden = !hasTrackedItems;
 
     if (!hasTrackedItems) {
@@ -809,13 +970,24 @@ import {
     const focusedCard = nextUpCard(nextUp.item, nextUp.prediction);
 
     if (!searchTerm) {
+      const dense = density === "dense";
+      const steadyEntries = dense
+        ? remainingItems.filter(({ prediction }) => prediction.zone === "steady")
+        : [];
+      const queueEntries = dense
+        ? remainingItems.filter(({ prediction }) => prediction.zone !== "steady")
+        : remainingItems;
+      const queueRows = queueEntries
+        .map(({ item, prediction }) => itemRow(item, prediction))
+        .join("");
+
       container.innerHTML = `
         ${focusedCard}
         ${
-          remainingItems.length
-            ? `<div class="item-list">${remainingItems
-                .map(({ item, prediction }) => itemRow(item, prediction))
-                .join("")}</div>`
+          queueEntries.length || steadyEntries.length
+            ? `<div class="item-list">${queueRows}${
+                steadyEntries.length ? steadyFold(steadyEntries) : ""
+              }</div>`
             : ""
         }
       `;
@@ -881,6 +1053,7 @@ import {
   }
 
   function calendarRangeWord(range) {
+    if (range === MONTH_DAYS) return "thirty";
     return range === 7 ? "seven" : "fourteen";
   }
 
@@ -891,6 +1064,284 @@ import {
       button.setAttribute("aria-pressed", String(isSelected));
     });
   }
+
+  function startOfWeek(date) {
+    const copy = startOfDay(date);
+    copy.setDate(copy.getDate() - copy.getDay());
+    return copy;
+  }
+
+  function planForDate(date) {
+    const iso = toISODate(date);
+    return plans.find((plan) => plan.date === iso) ?? null;
+  }
+
+  function monthDayEntries(date) {
+    const iso = toISODate(date);
+    const tracked = state.items
+      .filter((item) => !item.isOneTime)
+      .map((item) => ({ item, prediction: predictionFor(item) }))
+      .filter(({ prediction }) => prediction);
+
+    const due = tracked
+      .filter(({ prediction }) => toISODate(prediction.date) === iso)
+      .sort((left, right) => left.item.name.localeCompare(right.item.name));
+
+    if (iso !== toISODate(today)) return due;
+
+    const overdue = tracked
+      .filter(({ prediction }) => prediction.daysUntil < 0)
+      .sort((left, right) => left.prediction.daysUntil - right.prediction.daysUntil);
+    return [...overdue, ...due.filter(({ prediction }) => prediction.daysUntil >= 0)];
+  }
+
+  function calendarDayZone(entries) {
+    for (const zone of ["overdue", "buy-now", "watch", "steady"]) {
+      if (entries.some(({ prediction }) => prediction.zone === zone)) return zone;
+    }
+    return "";
+  }
+
+  function monthDayCell(date, { namesLimit, isOpen }) {
+    const iso = toISODate(date);
+    const entries = monthDayEntries(date);
+    const plan = planForDate(date);
+    const zone = calendarDayZone(entries);
+    const isToday = iso === toISODate(today);
+    const isPast = date < today;
+    const isInteractive = !isPast && Boolean(entries.length || plan);
+    const visible = entries.slice(0, namesLimit);
+    const more = entries.length - visible.length;
+    const countLabel = entries.length
+      ? `, ${entries.length} item${entries.length === 1 ? "" : "s"}`
+      : "";
+    const label = `${formatFullDate(date)}${countLabel}${plan ? ", planned trip" : ""}`;
+    const classes = [
+      "calendar-day",
+      "calendar-day--month",
+      isToday ? "is-today" : "",
+      isPast ? "is-past" : "",
+      entries.length || plan ? "" : "is-empty",
+      zone ? `horizon-${zone}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const body = `
+      <span class="calendar-day-today">${formatWeekday(date)}</span>
+      <span class="calendar-day-number">${date.getDate()}</span>
+      ${
+        visible.length
+          ? `<span class="calendar-day-names">${visible
+              .map(
+                ({ item, prediction }) =>
+                  `<span class="calendar-day-name horizon-${escapeHtml(prediction.zone)}"><span class="calendar-day-dot" aria-hidden="true"></span><span class="calendar-day-text">${escapeHtml(item.name)}</span></span>`,
+              )
+              .join("")}</span>`
+          : ""
+      }
+      ${more > 0 ? `<span class="calendar-day-more">+${more} more</span>` : ""}
+      ${plan ? `<span class="calendar-plan-chip">Planned</span>` : ""}
+    `;
+
+    const toggle = isInteractive
+      ? `<button class="calendar-day-toggle" type="button" data-action="toggle-calendar-day" data-date="${iso}" aria-expanded="${isOpen ? "true" : "false"}"${isOpen ? ' aria-controls="calendar-day-panel"' : ""} aria-label="${escapeHtml(label)}">${body}</button>`
+      : `<div class="calendar-day-toggle is-static"${isPast ? ' aria-hidden="true"' : ""}>${body}</div>`;
+
+    return `<div class="${classes}">${toggle}</div>`;
+  }
+
+  function calendarDayPanel(date) {
+    const iso = toISODate(date);
+    const entries = monthDayEntries(date);
+    const plan = planForDate(date);
+    const zone = calendarDayZone(entries);
+    const zoneClass = zone ? ` horizon-${zone}` : "";
+    const isPast = date < today;
+    const summary = entries.length
+      ? `${entries.length} ${entries.length === 1 ? "item" : "items"} due`
+      : "Nothing is due";
+    const planNames = plan
+      ? plan.itemIds
+          .map((itemId) => state.items.find((item) => item.id === itemId))
+          .filter(Boolean)
+      : [];
+    const planItemsText = plan
+      ? planNames.length
+        ? `${planNames
+            .slice(0, 4)
+            .map((item) => item.name)
+            .join(", ")}${planNames.length > 4 ? ` and ${planNames.length - 4} more` : ""}`
+        : "No items yet. Resume the plan and add what you need."
+      : "";
+
+    return `
+      <section class="calendar-day-panel${zoneClass}" id="calendar-day-panel" role="region" aria-labelledby="calendar-day-panel-title">
+        <header class="calendar-day-panel-head">
+          <div>
+            <h3 id="calendar-day-panel-title" tabindex="-1">${formatFullDate(date)}</h3>
+            <p>${summary}${plan ? " · planned trip" : ""}</p>
+          </div>
+          <button class="btn btn-ghost btn-sm" type="button" data-action="close-calendar-day">Close day</button>
+        </header>
+        ${
+          entries.length
+            ? `<ul class="calendar-day-panel-list">${entries
+                .map(
+                  ({ item, prediction }) => `
+              <li>
+                <button class="calendar-day-panel-item horizon-${escapeHtml(prediction.zone)}" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">
+                  <strong>${escapeHtml(item.name)}</strong>
+                  <span class="calendar-day-panel-meta">
+                    <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+                    <small>${escapeHtml(formatDue(prediction.daysUntil))}</small>
+                  </span>
+                </button>
+              </li>`,
+                )
+                .join("")}</ul>`
+            : `<p class="calendar-day-panel-empty">No restocks land on this date.</p>`
+        }
+        ${
+          plan
+            ? `<div class="calendar-day-plan">
+                <div class="calendar-day-plan-copy">
+                  <p><strong>Planned trip</strong> · ${planNames.length} ${planNames.length === 1 ? "item" : "items"}</p>
+                  <p class="calendar-day-plan-items">${escapeHtml(planItemsText)}</p>
+                </div>
+                <div class="calendar-day-plan-actions">
+                  <button class="btn btn-secondary btn-sm" type="button" data-action="resume-plan" data-plan-id="${escapeHtml(plan.id)}">Resume plan</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-action="delete-plan" data-plan-id="${escapeHtml(plan.id)}">Delete plan</button>
+                </div>
+              </div>`
+            : ""
+        }
+        ${
+          isPast
+            ? ""
+            : `<div class="calendar-day-panel-actions">
+                <button class="btn btn-primary" type="button" data-action="start-run-date" data-date="${iso}">Start this shopping run</button>
+                <button class="btn btn-secondary" type="button" data-action="save-plan-date" data-date="${iso}">${plan ? "Update plan for this date" : "Save as a plan for this date"}</button>
+              </div>`
+        }
+      </section>
+    `;
+  }
+
+  function hideCalendarBrief() {
+    for (const selector of ["#calendar-brief", "#calendar-plans"]) {
+      const element = $(selector);
+      if (!element) continue;
+      element.hidden = true;
+      element.replaceChildren();
+    }
+  }
+
+  function renderCalendarBrief() {
+    const brief = $("#calendar-brief");
+    const plansBlock = $("#calendar-plans");
+    if (!brief || !plansBlock) return;
+
+    const tracked = state.items
+      .filter((item) => !item.isOneTime)
+      .map((item) => ({ item, prediction: predictionFor(item) }))
+      .filter(({ prediction }) => prediction);
+    const overdue = tracked.filter(({ prediction }) => prediction.daysUntil < 0);
+    const inMonth = tracked.filter(
+      ({ prediction }) => prediction.daysUntil >= 0 && prediction.daysUntil < MONTH_DAYS,
+    );
+    const monthEntries = [...overdue, ...inMonth];
+    const dueDays = new Set(
+      monthEntries.map(({ prediction }) =>
+        prediction.daysUntil < 0 ? toISODate(today) : toISODate(prediction.date),
+      ),
+    );
+    const upcomingPlans = plans
+      .filter((plan) => parseDate(plan.date) >= today)
+      .sort((left, right) => left.date.localeCompare(right.date));
+    const zoneCounts = { overdue: 0, "buy-now": 0, watch: 0, steady: 0 };
+    for (const { prediction } of monthEntries) {
+      if (prediction.zone in zoneCounts) zoneCounts[prediction.zone] += 1;
+    }
+
+    brief.hidden = false;
+    brief.innerHTML = `
+      <p class="calendar-brief-summary">
+        ${
+          monthEntries.length
+            ? `<strong>${monthEntries.length}</strong> ${monthEntries.length === 1 ? "restock" : "restocks"} across <strong>${dueDays.size}</strong> ${dueDays.size === 1 ? "day" : "days"}`
+            : "Nothing is due in the next thirty days"
+        }
+        ${
+          upcomingPlans.length
+            ? `<span aria-hidden="true">·</span> <strong>${upcomingPlans.length}</strong> ${upcomingPlans.length === 1 ? "planned trip" : "planned trips"}`
+            : ""
+        }
+      </p>
+      ${
+        monthEntries.length
+          ? `<ul class="calendar-legend" aria-label="Status counts for these thirty days">${[
+              ["overdue", "Overdue"],
+              ["buy-now", "Buy now"],
+              ["watch", "Watch"],
+              ["steady", "Steady"],
+            ]
+              .map(
+                ([zone, label]) =>
+                  `<li><span class="calendar-legend-dot horizon-${zone}" aria-hidden="true"></span>${label} <strong>${zoneCounts[zone]}</strong></li>`,
+              )
+              .join("")}</ul>`
+          : ""
+      }
+    `;
+
+    plansBlock.hidden = upcomingPlans.length === 0;
+    plansBlock.innerHTML = upcomingPlans.length
+      ? `<span class="calendar-plans-label">Planned trips</span>
+        <ul class="calendar-plans-list">
+          ${upcomingPlans
+            .map((plan) => {
+              const count = plan.itemIds.filter((itemId) =>
+                state.items.some((item) => item.id === itemId),
+              ).length;
+              return `<li><button class="calendar-plan-link" type="button" data-action="open-calendar-day" data-date="${escapeHtml(plan.date)}">
+                <strong>${escapeHtml(formatDate(parseDate(plan.date)))}</strong>
+                <small>${count ? `${count} ${count === 1 ? "item" : "items"}` : "No items yet"}</small>
+              </button></li>`;
+            })
+            .join("")}
+        </ul>`
+      : "";
+  }
+
+  function renderMonthCalendar() {
+    const container = $("#restock-calendar");
+    const weekStart = startOfWeek(today);
+    const lastDate = addDays(today, MONTH_DAYS - 1);
+    const weeks =
+      Math.round((startOfWeek(lastDate) - weekStart) / (DAY_MS * WEEK_DAYS)) + 1;
+    const namesLimit = window.matchMedia("(min-width: 1121px)").matches ? 2 : 1;
+    const rows = [];
+
+    for (let week = 0; week < weeks; week += 1) {
+      const cells = [];
+      let openHere = false;
+
+      for (let day = 0; day < WEEK_DAYS; day += 1) {
+        const date = addDays(weekStart, week * WEEK_DAYS + day);
+        const isOpen = openCalendarDay === toISODate(date);
+        if (isOpen) openHere = true;
+        cells.push(monthDayCell(date, { namesLimit, isOpen }));
+      }
+
+      rows.push(`<div class="calendar-week">${cells.join("")}</div>`);
+      if (openHere) rows.push(calendarDayPanel(parseDate(openCalendarDay)));
+    }
+
+    container.innerHTML = rows.join("");
+  }
+
+  const WEEK_ITEM_LIMIT = 4;
 
   function renderRestockCalendar() {
     const tracked = state.items
@@ -906,9 +1357,22 @@ import {
     syncCalendarRangeControls();
 
     if (!tracked.length) {
+      hideCalendarBrief();
       container.innerHTML = `<p class="calendar-empty">Add a tracked item to build its restock calendar.</p>`;
       return;
     }
+
+    if (calendarRange === MONTH_DAYS) {
+      container.classList.add("is-month");
+      container.removeAttribute("role");
+      renderCalendarBrief();
+      renderMonthCalendar();
+      return;
+    }
+
+    hideCalendarBrief();
+    container.classList.remove("is-month");
+    container.setAttribute("role", "list");
 
     const overdue = tracked.filter(({ prediction }) => prediction.daysUntil < 0);
     const dayCards = Array.from({ length: calendarRange }, (_, index) => {
@@ -916,8 +1380,10 @@ import {
       const dueItems = tracked.filter(
         ({ prediction }) => toISODate(prediction.date) === toISODate(date),
       );
-      const items = dueItems.length
-        ? dueItems.map(({ item, prediction }) => calendarItemButton(item, prediction)).join("")
+      const visibleItems = dueItems.slice(0, WEEK_ITEM_LIMIT);
+      const hiddenCount = dueItems.length - visibleItems.length;
+      const items = visibleItems.length
+        ? visibleItems.map(({ item, prediction }) => calendarItemButton(item, prediction)).join("")
         : `<li><span class="calendar-clear">Clear</span></li>`;
       const monthLabel = index === 0 || date.getDate() === 1 ? formatMonth(date) : "";
 
@@ -929,6 +1395,7 @@ import {
             <small>${monthLabel}</small>
           </header>
           <ul class="calendar-items">${items}</ul>
+          ${hiddenCount ? `<p class="calendar-more">+${hiddenCount} more due</p>` : ""}
         </li>
       `;
     });
@@ -942,8 +1409,9 @@ import {
             <small>Needs restock</small>
           </header>
           <ul class="calendar-items">
-            ${overdue.map(({ item, prediction }) => calendarItemButton(item, prediction)).join("")}
+            ${overdue.slice(0, WEEK_ITEM_LIMIT).map(({ item, prediction }) => calendarItemButton(item, prediction)).join("")}
           </ul>
+          ${overdue.length > WEEK_ITEM_LIMIT ? `<p class="calendar-more">+${overdue.length - WEEK_ITEM_LIMIT} more due</p>` : ""}
         </li>
       `
       : "";
@@ -1004,9 +1472,13 @@ import {
   function runRosterEntries() {
     const roster = new Map();
 
+    const runReferenceDate = storeRun.runDate ? parseDate(storeRun.runDate) : today;
+    const isFutureRun = runReferenceDate.getTime() > today.getTime();
+
     for (const entry of buildShoppingRun(state.items, {
       includeWatch: storeRun.includeWatch,
-      referenceDate: today,
+      referenceDate: runReferenceDate,
+      includeOneTime: !isFutureRun,
     })) {
       roster.set(entry.item.id, entry);
     }
@@ -1061,7 +1533,7 @@ import {
       .sort((left, right) => left.name.localeCompare(right.name));
   }
 
-  function renderStoreRunRow(entry) {
+  function renderStoreRunRow(entry, { showCategory = false } = {}) {
     const { item } = entry;
     const isLogged = storeRun.selected.has(item.id);
 
@@ -1084,6 +1556,10 @@ import {
     const statusLabel = prediction ? prediction.statusLabel : "Checklist";
     const timing = prediction ? formatDue(prediction.daysUntil) : "One-time need";
     const unitText = item.unit ? `${escapeHtml(item.unit)} · ` : "";
+    const categoryText =
+      showCategory && item.category
+        ? `<span class="store-run-category">${escapeHtml(item.category)} · </span>`
+        : "";
 
     return `
       <article class="store-run-row horizon-${escapeHtml(zone)}" data-item-id="${escapeHtml(item.id)}">
@@ -1093,7 +1569,7 @@ import {
             <span class="status-chip status-${escapeHtml(zone)}">${escapeHtml(statusLabel)}</span>
           </div>
           <div class="store-run-row-meta">
-            <small><span class="store-run-unit">${unitText}</span>${escapeHtml(timing)}</small>
+            <small>${categoryText}<span class="store-run-unit">${unitText}</span>${escapeHtml(timing)}</small>
             <button
               class="btn btn-ghost btn-sm store-run-skip"
               type="button"
@@ -1245,9 +1721,23 @@ import {
     if (!view) return;
 
     updateWatchToggle();
+    syncRunOrderControls();
+
+    const runReferenceDate = storeRun.runDate ? parseDate(storeRun.runDate) : today;
+    const subtitle = $("#store-run-subtitle");
+    if (subtitle) {
+      subtitle.textContent = storeRun.runDate
+        ? `Shopping for ${formatFullDate(parseDate(storeRun.runDate))}. Log each item as you pick it up.`
+        : runOrder === "aisle"
+          ? "Log each item as you pick it up. Aisles first, urgency second."
+          : "Log each item as you pick it up. Sorted by what's due next.";
+    }
 
     const entries = runRosterEntries().filter((entry) => !isRunItemSkipped(entry.item.id));
-    const groups = groupShoppingRun(entries);
+    const groups =
+      runOrder === "aisle"
+        ? groupShoppingRun(entries)
+        : groupShoppingRunByDue(entries, runReferenceDate);
     const summary = shoppingRunSummary(entries, new Set(storeRun.selected.keys()));
 
     $("#store-run-summary").innerHTML = `
@@ -1255,6 +1745,9 @@ import {
       <article><span>Logged</span><strong>${summary.inCart}</strong></article>
       <article><span>Left</span><strong>${summary.remaining}</strong></article>
     `;
+
+    const toolbar = $(".store-run-toolbar");
+    if (toolbar) toolbar.hidden = groups.length === 0;
 
     const skippedItems = renderStoreRunSkipped();
     const emptyPanel = $("#store-run-empty");
@@ -1297,10 +1790,10 @@ import {
     $("#store-run-groups").innerHTML = groups
       .map(
         (group) => `
-        <section class="store-run-group" aria-label="${escapeHtml(group.category)} aisle">
+        <section class="store-run-group" aria-label="${escapeHtml(group.category)} ${runOrder === "aisle" ? "aisle" : "group"}">
           <h2>${escapeHtml(group.category)}</h2>
           <div class="store-run-group-items">
-            ${group.entries.map(renderStoreRunRow).join("")}
+            ${group.entries.map((entry) => renderStoreRunRow(entry, { showCategory: runOrder === "due" })).join("")}
           </div>
         </section>
       `,
@@ -1421,6 +1914,14 @@ import {
     }
   }
 
+  function syncRunOrderControls() {
+    for (const button of $$("[data-run-order]")) {
+      const selected = button.dataset.runOrder === runOrder;
+      button.classList.toggle("is-active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    }
+  }
+
   function announceRun(message) {
     const announcer = $("#store-run-announcer");
     if (announcer) announcer.textContent = message;
@@ -1447,6 +1948,21 @@ import {
         `#store-run-cart [data-action="undo-run-item"][data-id="${CSS.escape(itemId)}"]`,
       )
       ?.focus();
+  }
+
+  function nextRunRowItemId(itemId) {
+    const rows = [...document.querySelectorAll("#store-run-groups .store-run-row")];
+    const currentIndex = rows.findIndex((row) => row.dataset.itemId === itemId);
+    if (currentIndex < 0) return null;
+
+    const orderedRows = [
+      ...rows.slice(currentIndex + 1),
+      ...rows.slice(0, currentIndex),
+    ];
+    const nextRow = orderedRows.find((row) =>
+      row.querySelector('[data-action="toggle-run-item"]'),
+    );
+    return nextRow?.dataset.itemId ?? null;
   }
 
   async function toggleShoppingRunItem(itemId, trigger) {
@@ -1482,12 +1998,15 @@ import {
         });
       }
 
+      const nextItemId = nextRunRowItemId(itemId);
       saveStoreRun();
       render();
       announceRun(
         `${item.name} logged. ${storeRun.selected.size} logged this trip.`,
       );
-      focusNextRunRow(itemId);
+      if (!focusRunRowItem(nextItemId)) {
+        focusNextRunRow(itemId);
+      }
     } catch {
       toast(`Could not log ${item.name}. Try again.`, "error");
     }
@@ -1546,6 +2065,7 @@ import {
 
     storeRun.extraIds.add(itemId);
     storeRun.skippedIds = storeRun.skippedIds.filter((id) => id !== itemId);
+    addItemToPlannedRun(itemId);
     saveStoreRun();
 
     lastDialogTrigger = null;
@@ -1810,12 +2330,89 @@ import {
     showDialog($("#finish-run-dialog"), trigger);
   }
 
+  function startRunFromDate(date) {
+    const iso = toISODate(date);
+    const plan = planForDate(date);
+    storeRun.runDate = iso;
+    storeRun.selected = new Map();
+    storeRun.extraIds = new Set(plan ? plan.itemIds : []);
+    storeRun.skippedIds = [];
+    storeRun.includeWatch = true;
+    saveStoreRun();
+    openCalendarDay = null;
+    renderRestockCalendar();
+    setView("store-run");
+    toast(`Shopping run for ${formatFullDate(date)}.`);
+  }
+
+  function savePlanForDate(date) {
+    const iso = toISODate(date);
+    const itemIds = monthDayEntries(date).map(({ item }) => item.id);
+    const existing = plans.find((plan) => plan.date === iso);
+    plans = [
+      ...plans.filter((plan) => plan.date !== iso),
+      {
+        id: existing?.id ?? makeId("plan"),
+        date: iso,
+        itemIds,
+        includeWatch: existing?.includeWatch ?? true,
+        createdAt: existing?.createdAt ?? toISODate(today),
+      },
+    ];
+    savePlans();
+    renderRestockCalendar();
+    toast(
+      itemIds.length
+        ? `${existing ? "Plan updated" : "Plan saved"} for ${formatFullDate(date)} · ${itemIds.length} ${itemIds.length === 1 ? "item" : "items"}.`
+        : `${existing ? "Plan updated" : "Plan saved"} for ${formatFullDate(date)}. Nothing is due yet; add items during the run.`,
+    );
+    $(
+      `[data-action="save-plan-date"][data-date="${CSS.escape(iso)}"]`,
+    )?.focus({ preventScroll: true });
+  }
+
+  function addItemToPlannedRun(itemId) {
+    if (!storeRun.runDate) return;
+    const plan = plans.find((entry) => entry.date === storeRun.runDate);
+    if (!plan || plan.itemIds.includes(itemId)) return;
+    plan.itemIds.push(itemId);
+    savePlans();
+  }
+
+  function resumePlan(planId) {
+    const plan = plans.find((entry) => entry.id === planId);
+    if (!plan) return;
+    storeRun.runDate = plan.date;
+    storeRun.selected = new Map();
+    storeRun.extraIds = new Set(plan.itemIds);
+    storeRun.skippedIds = [];
+    storeRun.includeWatch = plan.includeWatch;
+    saveStoreRun();
+    openCalendarDay = null;
+    renderRestockCalendar();
+    setView("store-run");
+    toast(`Resumed the plan for ${formatFullDate(parseDate(plan.date))}.`);
+  }
+
+  function deletePlan(planId) {
+    plans = plans.filter((plan) => plan.id !== planId);
+    savePlans();
+    renderRestockCalendar();
+    toast("Plan deleted.");
+  }
+
   function completeShoppingRun({ openHistory = false } = {}) {
     const receipt = pendingRunReceipt;
+    const completedRunDate = storeRun.runDate;
     pendingRunReceipt = null;
     lastDialogTrigger = null;
     closeDialog($("#finish-run-dialog"));
+    if (completedRunDate && plans.some((plan) => plan.date === completedRunDate)) {
+      plans = plans.filter((plan) => plan.date !== completedRunDate);
+      savePlans();
+    }
     storeRun = {
+      runDate: null,
       includeWatch: false,
       selected: new Map(),
       extraIds: new Set(),
@@ -2430,6 +3027,9 @@ import {
 
   function render() {
     document.body.dataset.sample = normalizeSampleId(state.sample);
+    document.body.dataset.density = density;
+    syncDensityControls();
+    syncDashboardViewControls();
     const sampleSelect = $("#sample-select");
     if (sampleSelect) sampleSelect.value = document.body.dataset.sample;
     renderStats();
@@ -3073,11 +3673,13 @@ import {
       // Ignore storage failures; the in-memory session still resets.
     }
     storeRun = {
+      runDate: null,
       includeWatch: false,
       selected: new Map(),
       extraIds: new Set(),
       skippedIds: [],
     };
+    clearPlans();
   }
 
   function requestSampleSwitch(sampleId, trigger) {
@@ -3118,7 +3720,7 @@ import {
     const sample = sampleFor(state.sample);
     openConfirm({
       title: "Reset the demo?",
-      message: `This restores the ${sample.label.toLowerCase()} sample items and clears local changes.`,
+      message: `This restores the ${sample.label.toLowerCase()} sample and clears local changes.`,
       confirmLabel: "Reset demo",
       onConfirm: async () => {
         await hootApi.resetDemo();
@@ -3224,6 +3826,20 @@ import {
         return;
       }
 
+      const orderButton = target.closest("[data-run-order]");
+      if (orderButton) {
+        const nextOrder = orderButton.dataset.runOrder === "aisle" ? "aisle" : "due";
+        if (nextOrder !== runOrder) {
+          runOrder = nextOrder;
+          renderStoreRun();
+          announceRun(nextOrder === "aisle" ? "Ordered by aisle." : "Ordered by due date.");
+          document
+            .querySelector(`[data-run-order="${nextOrder}"]`)
+            ?.focus({ preventScroll: true });
+        }
+        return;
+      }
+
       const actionButton = target.closest("[data-action]");
       if (!actionButton) return;
       const action = actionButton.dataset.action;
@@ -3235,6 +3851,43 @@ import {
         searchInput.value = "";
         renderDashboard();
         searchInput.focus();
+      } else if (action === "open-calendar-day") {
+        openCalendarDay = actionButton.dataset.date;
+        renderRestockCalendar();
+        $("#calendar-day-panel-title")?.focus({ preventScroll: true });
+      } else if (action === "toggle-calendar-day") {
+        const iso = actionButton.dataset.date;
+        const wasOpen = openCalendarDay === iso;
+        openCalendarDay = wasOpen ? null : iso;
+        renderRestockCalendar();
+        if (wasOpen) {
+          $(`[data-action="toggle-calendar-day"][data-date="${iso}"]`)?.focus({
+            preventScroll: true,
+          });
+        } else {
+          $("#calendar-day-panel-title")?.focus({ preventScroll: true });
+        }
+      } else if (action === "close-calendar-day") {
+        const iso = openCalendarDay;
+        openCalendarDay = null;
+        renderRestockCalendar();
+        if (iso) {
+          $(`[data-action="toggle-calendar-day"][data-date="${iso}"]`)?.focus({
+            preventScroll: true,
+          });
+        }
+      } else if (action === "start-run-date") {
+        startRunFromDate(parseDate(actionButton.dataset.date));
+      } else if (action === "save-plan-date") {
+        savePlanForDate(parseDate(actionButton.dataset.date));
+      } else if (action === "resume-plan") {
+        resumePlan(actionButton.dataset.planId);
+      } else if (action === "delete-plan") {
+        deletePlan(actionButton.dataset.planId);
+      } else if (action === "toggle-steady-fold") {
+        steadyFoldExpanded = !steadyFoldExpanded;
+        renderDashboard();
+        $("#dashboard-list [data-action=\"toggle-steady-fold\"]")?.focus({ preventScroll: true });
       } else if (action === "add-item") {
         prepareAddItemDialog(false);
         showDialog($("#add-item-dialog"), actionButton);
@@ -3335,8 +3988,30 @@ import {
         const range = Number(button.dataset.calendarRange);
         if (range === calendarRange) return;
         calendarRange = range;
+        openCalendarDay = null;
         renderRestockCalendar();
       });
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !openCalendarDay) return;
+      if (document.querySelector("dialog[open]")) return;
+      const iso = openCalendarDay;
+      openCalendarDay = null;
+      renderRestockCalendar();
+      $(`[data-action="toggle-calendar-day"][data-date="${iso}"]`)?.focus({
+        preventScroll: true,
+      });
+    });
+
+    $$(".density-toggle [data-density]").forEach((button) => {
+      button.addEventListener("click", () => setDensity(button.dataset.density));
+    });
+
+    $$("[data-dashboard-view-option]").forEach((button) => {
+      button.addEventListener("click", () =>
+        setDashboardView(button.dataset.dashboardViewOption),
+      );
     });
 
     $("#add-item-form").addEventListener("submit", submitAddItem);

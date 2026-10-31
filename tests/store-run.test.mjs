@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   buildShoppingRun,
   groupShoppingRun,
+  groupShoppingRunByDue,
   isShoppingRunEligible,
   shoppingRunSummary,
 } from "../frontend/store-run.js";
@@ -123,4 +124,33 @@ test("summarizes total, in-cart, and remaining counts", () => {
     inCart: 2,
     remaining: 1,
   });
+});
+
+test("groups the run by due date with overdue first", () => {
+  const items = [
+    trackedItem("overdue", "Pantry", ["2026-10-03", "2026-10-10", "2026-10-17"]),
+    trackedItem("today", "Dairy", ["2026-10-06", "2026-10-13", "2026-10-20"]),
+    trackedItem("soon", "Pantry", ["2026-10-10", "2026-10-17", "2026-10-24"]),
+    {
+      id: "one-time",
+      name: "Candles",
+      category: "Household",
+      isOneTime: true,
+      completed: false,
+      createdAt: "2026-10-25",
+      purchases: [],
+    },
+  ];
+
+  const run = buildShoppingRun(items, { referenceDate, includeWatch: true });
+  const groups = groupShoppingRunByDue(run, referenceDate);
+
+  assert.deepEqual(
+    groups.map((group) => group.category),
+    ["Overdue", "Today", "Next 7 days", "One-time"],
+  );
+  assert.deepEqual(
+    groups.map((group) => group.entries.map((entry) => entry.item.id)),
+    [["overdue"], ["today"], ["soon"], ["one-time"]],
+  );
 });
