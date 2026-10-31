@@ -3,9 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="description" content="Hoot is a predictive household inventory tracker that learns your restock rhythm." />
-    <title>Hoot — Predictive Household Inventory Tracker</title>
+    <meta name="description" content="Hoot keeps track of the household staples you buy and when you’ll need them again." />
+    <title>Hoot — restock tracker</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" href="favicon.ico" sizes="32x32" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <meta name="theme-color" content="#f5efe3" />
+    <meta name="apple-mobile-web-app-title" content="Hoot" />
     <link rel="stylesheet" href="style.css" />
   </head>
 
@@ -15,26 +20,15 @@
         <a class="brand" href="#view-dashboard" data-view="dashboard" aria-label="Hoot home">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
-              <defs>
-                <mask id="brand-crescent">
-                  <rect width="48" height="48" fill="#fff" />
-                  <circle cx="35.5" cy="12.5" r="8.5" fill="#000" />
-                </mask>
-              </defs>
-              <rect class="brand-tile" width="48" height="48" rx="14" />
-              <g class="moon-body">
-                <circle class="moon-disc" cx="24" cy="25" r="15" mask="url(#brand-crescent)" />
-                <ellipse class="owl-eye" cx="18.6" cy="27" rx="3.6" ry="2.7" />
-                <ellipse class="owl-eye" cx="28.4" cy="27" rx="3.6" ry="2.7" />
-                <circle class="owl-iris" cx="19.4" cy="26.6" r="1.25" />
-                <circle class="owl-iris" cx="29.2" cy="26.6" r="1.25" />
+              <g transform="translate(24 24) scale(1.48) translate(-22.63 -23.15)">
+                <path transform="translate(-0.87 -1.35)" fill="currentColor" fill-rule="evenodd" d="M16.55 35.5C18.12 35.82 19.98 35.75 21.53 35.33C22.84 34.98 24.1 34.43 25.25 33.71C30.81 30.23 32.31 24.24 33.8 18.29C34.36 16.05 35.04 13.06 36 11C34.69 12.5 33.21 13.86 31.76 15.22C28.95 17.86 26.06 20.45 23.63 23.46C21.51 26.07 19.79 28.96 17.87 31.7C17.34 32.45 16.89 33.25 16.34 33.99C16.19 34.2 16.04 34.41 15.87 34.59C15.61 34.85 15.31 35.08 15.03 35.31C13.77 36.34 12.42 37.2 11 38C12.46 37.64 13.86 37.01 15.17 36.29C15.64 36.04 16.08 35.74 16.55 35.5ZM18.03 32.73L18.03 32.73C24.24 27.4 29.15 20 34.14 13.6C33.06 15.27 31.93 16.91 30.82 18.55C30.58 18.89 30.35 19.23 30.12 19.57C29.94 19.83 29.7 20.1 29.56 20.38C29.38 20.75 29.72 20.97 30.05 20.96C30.75 20.93 31.36 20.72 32.02 20.49C31.47 21.19 30.51 21.63 29.66 21.81C29.58 21.83 29.47 21.87 29.39 21.86C29.11 21.85 28.84 21.58 28.58 21.81C28.39 21.96 27.78 22.91 27.59 23.18C27.29 23.6 26.99 24.02 26.68 24.43C26.55 24.61 26.32 24.82 26.3 25.06C26.27 25.61 27.05 25.51 27.39 25.5C28.62 25.46 29.6 25.12 30.72 24.65C29.76 25.57 28.38 26.13 27.07 26.33C26.79 26.37 26.52 26.42 26.24 26.36C25.99 26.29 25.59 26.09 25.34 26.27C25.16 26.39 24.53 27.29 24.34 27.52C24.07 27.87 23.79 28.22 23.51 28.56C23.37 28.73 23.12 28.94 23.12 29.19C23.11 29.59 23.55 29.6 23.84 29.63C24.04 29.65 24.23 29.67 24.42 29.67C25.98 29.71 27.21 29.38 28.66 28.82C27.31 29.89 25.52 30.41 23.83 30.5C23.41 30.53 23.23 30.5 22.83 30.38C22.63 30.32 22.38 30.18 22.16 30.26C21.95 30.33 21.35 31.1 21.16 31.3C20.61 31.9 20.04 32.49 19.46 33.07C19.25 33.28 19.04 33.52 18.8 33.7C18.17 34.18 17.42 33.26 18.03 32.73L18.03 32.73L18.03 32.73Z" />
               </g>
             </svg>
           </span>
-          <span class="brand-text">
-            <strong>Hoot</strong>
-            <small>Predictive household inventory</small>
-          </span>
+          <svg class="brand-word" viewBox="0 0 2.112 0.811" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M0.252 0.061V0.642Q0.252 0.668 0.254 0.678Q0.256 0.688 0.262 0.694L0.268 0.699Q0.284 0.714 0.284 0.735Q0.284 0.775 0.247 0.775H0.067Q0.048 0.775 0.036 0.764Q0.025 0.754 0.025 0.735Q0.025 0.720 0.031 0.711Q0.036 0.702 0.046 0.693L0.051 0.689Q0.057 0.684 0.060 0.675Q0.062 0.666 0.062 0.642V0.200Q0.062 0.180 0.059 0.172Q0.055 0.164 0.046 0.158L0.042 0.155Q0.030 0.147 0.025 0.140Q0.020 0.132 0.020 0.119Q0.020 0.105 0.028 0.094Q0.037 0.084 0.059 0.075L0.148 0.038Q0.174 0.027 0.188 0.024Q0.203 0.020 0.215 0.020Q0.234 0.020 0.243 0.032Q0.252 0.043 0.252 0.061ZM0.236 0.490 0.203 0.450 0.223 0.429Q0.282 0.367 0.326 0.342Q0.369 0.317 0.411 0.317Q0.466 0.317 0.491 0.349Q0.517 0.382 0.522 0.440L0.543 0.642Q0.545 0.666 0.547 0.675Q0.549 0.683 0.554 0.689L0.559 0.693Q0.569 0.702 0.575 0.711Q0.581 0.720 0.581 0.735Q0.581 0.754 0.570 0.764Q0.558 0.775 0.539 0.775H0.358Q0.321 0.775 0.321 0.735Q0.321 0.713 0.337 0.699L0.343 0.694Q0.349 0.688 0.352 0.679Q0.356 0.670 0.353 0.647L0.338 0.514Q0.335 0.484 0.326 0.470Q0.317 0.456 0.296 0.456Q0.285 0.456 0.274 0.461Q0.263 0.466 0.251 0.477Z M0.858 0.317Q0.932 0.317 0.986 0.347Q1.041 0.377 1.071 0.430Q1.101 0.483 1.101 0.552Q1.101 0.616 1.070 0.668Q1.038 0.721 0.982 0.752Q0.926 0.783 0.851 0.783Q0.777 0.783 0.723 0.754Q0.668 0.724 0.638 0.671Q0.608 0.618 0.608 0.548Q0.608 0.484 0.639 0.432Q0.670 0.380 0.727 0.348Q0.783 0.317 0.858 0.317ZM0.890 0.690Q0.903 0.686 0.910 0.669Q0.916 0.653 0.914 0.621Q0.912 0.589 0.899 0.538Q0.887 0.487 0.873 0.459Q0.859 0.429 0.845 0.418Q0.832 0.408 0.819 0.411Q0.805 0.415 0.799 0.431Q0.792 0.448 0.795 0.480Q0.797 0.512 0.809 0.562Q0.823 0.613 0.836 0.642Q0.849 0.671 0.863 0.682Q0.877 0.693 0.890 0.690Z M1.334 0.332Q1.406 0.332 1.458 0.361Q1.511 0.390 1.540 0.441Q1.569 0.492 1.569 0.560Q1.569 0.621 1.539 0.672Q1.509 0.723 1.454 0.753Q1.400 0.783 1.327 0.783Q1.256 0.783 1.203 0.754Q1.150 0.725 1.121 0.674Q1.092 0.623 1.092 0.555Q1.092 0.493 1.122 0.443Q1.153 0.392 1.207 0.362Q1.261 0.332 1.334 0.332ZM1.366 0.692Q1.378 0.689 1.384 0.673Q1.391 0.657 1.389 0.626Q1.387 0.595 1.374 0.546Q1.362 0.497 1.349 0.469Q1.335 0.441 1.322 0.430Q1.308 0.419 1.296 0.423Q1.283 0.426 1.277 0.442Q1.271 0.458 1.273 0.489Q1.275 0.520 1.287 0.569Q1.300 0.618 1.313 0.646Q1.326 0.674 1.339 0.685Q1.353 0.696 1.366 0.692Z M1.591 0.420 1.582 0.415Q1.569 0.408 1.565 0.397Q1.562 0.386 1.562 0.371Q1.563 0.352 1.577 0.340Q1.591 0.328 1.611 0.328L1.620 0.329Q1.628 0.329 1.636 0.323Q1.644 0.316 1.659 0.298L1.699 0.249Q1.716 0.229 1.732 0.218Q1.748 0.208 1.765 0.209Q1.783 0.209 1.794 0.221Q1.804 0.233 1.804 0.257L1.794 0.594Q1.793 0.625 1.802 0.639Q1.811 0.654 1.833 0.654Q1.845 0.655 1.855 0.649Q1.865 0.643 1.873 0.636Q1.881 0.628 1.888 0.622Q1.896 0.616 1.904 0.617Q1.913 0.617 1.918 0.625Q1.922 0.633 1.922 0.652Q1.921 0.689 1.898 0.721Q1.875 0.753 1.838 0.773Q1.800 0.792 1.754 0.790Q1.675 0.788 1.638 0.748Q1.601 0.708 1.604 0.623L1.608 0.462Q1.609 0.445 1.606 0.436Q1.604 0.427 1.591 0.420ZM1.735 0.426 1.738 0.332 1.893 0.336Q1.913 0.337 1.923 0.346Q1.934 0.355 1.933 0.372Q1.933 0.397 1.911 0.414Q1.890 0.431 1.841 0.429Z" />
+            <circle cx="2.040" cy="0.713" r="0.0525" fill="var(--amber-mark)" />
+          </svg>
         </a>
 
         <nav class="app-nav" aria-label="Primary">
@@ -44,13 +38,8 @@
         </nav>
 
         <div class="header-actions">
-          <button class="btn btn-primary" type="button" data-view="store-run">Start shopping run</button>
           <button class="btn btn-secondary" type="button" data-dialog="log-purchase">Log purchase</button>
           <button class="btn btn-secondary" type="button" data-dialog="add-item">Add item</button>
-        </div>
-
-        <div class="header-utility">
-          <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
         </div>
       </div>
     </header>
@@ -62,7 +51,7 @@
           <div class="section-heading">
             <div>
               <h1 id="dashboard-title">Upcoming restocks</h1>
-              <p class="section-copy">Hoot leads with the next item to decide, then ranks the rest of your staples.</p>
+              <p class="section-copy">The next item to decide, then the rest of your staples.</p>
             </div>
             <div class="queue-search" id="queue-search-field">
               <input
@@ -81,7 +70,7 @@
             <article class="stat-card">
               <span>Tracked items</span>
               <strong id="stat-tracked">0</strong>
-              <p>Ranked by expected runout</p>
+              <p>Soonest restock first</p>
             </article>
             <article class="stat-card">
               <span>Needs attention</span>
@@ -96,7 +85,7 @@
             <article class="stat-card">
               <span>One-time</span>
               <strong id="stat-one-time">0</strong>
-              <p>Excluded from prediction</p>
+              <p>No restock dates</p>
             </article>
           </div>
 
@@ -135,7 +124,7 @@
           <div class="section-heading">
             <div>
               <h1 id="one-time-title">One-time items</h1>
-              <p class="section-copy">A checklist for irregular household needs, kept strictly separate from your restock rhythm predictions.</p>
+              <p class="section-copy">Things you buy once in a while. They don’t affect restock dates.</p>
             </div>
             <button class="btn btn-secondary one-time-heading-action" type="button" data-action="add-one-time">
               Add one-time item
@@ -148,7 +137,7 @@
           <header class="store-run-header">
             <div>
               <h1 id="store-run-title" tabindex="-1">Shopping run</h1>
-              <p>Tap items into the cart. Aisles first, urgency second.</p>
+              <p>Add items to the cart. Aisles first, then what’s due soonest.</p>
             </div>
             <div class="store-run-actions">
               <button
@@ -175,7 +164,8 @@
       </main>
 
       <footer class="app-footer">
-        <p>Hoot demo data is synthetic. Predictions update locally. Use Reset demo to restore the built-in sample.</p>
+        <p>This is sample data. Changes stay in this browser.</p>
+        <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
       </footer>
     </div>
 
@@ -184,7 +174,7 @@
         <header class="dialog-header">
           <div>
             <h2 id="add-item-title">Add an item</h2>
-            <p>Choose whether Hoot should learn this item’s restock rhythm or keep it on a one-time checklist.</p>
+            <p>Staples get restock dates; one-time items stay on a checklist.</p>
           </div>
           <button class="icon-button" type="button" data-close aria-label="Close add item">
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -199,7 +189,7 @@
             <label class="choice-option">
               <input type="radio" name="itemType" value="tracked" checked />
               <span>Tracked staple</span>
-              <small>Hoot learns rhythm</small>
+              <small>Gets restock dates</small>
             </label>
             <label class="choice-option">
               <input type="radio" name="itemType" value="one-time" />
@@ -255,7 +245,7 @@
             autocomplete="off"
             aria-describedby="add-threshold-hint add-threshold-error"
           />
-          <small id="add-threshold-hint" class="field-hint">Initial estimate in days until Hoot learns your rhythm from logged purchases.</small>
+          <small id="add-threshold-hint" class="field-hint">Starting interval in days. It adjusts as you log purchases.</small>
           <small id="add-threshold-error" class="field-error" data-error-for="reorderThresholdDays"></small>
         </label>
 
@@ -272,7 +262,7 @@
         <header class="dialog-header">
           <div>
             <h2 id="log-purchase-title">Log a purchase</h2>
-            <p>Record what you bought so Hoot can keep learning.</p>
+            <p>Record what you bought to keep the item’s restock date current.</p>
           </div>
           <button class="icon-button" type="button" data-close aria-label="Close log purchase">
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -345,7 +335,7 @@
 
         <div class="dialog-empty-state" id="purchase-empty-state" hidden>
           <strong>No tracked items yet</strong>
-          <p>Add a tracked item first. One-time items are not eligible for purchase history.</p>
+          <p>Add a tracked item first. One-time items don’t keep purchase history.</p>
         </div>
 
         <p class="dialog-status" role="status" aria-live="polite" data-form-status></p>
@@ -431,7 +421,7 @@
         <header class="dialog-header">
           <div>
             <h2 id="edit-purchase-title">Edit purchase</h2>
-            <p>Correct date, quantity, or price to update rhythm calculations.</p>
+            <p>Correct the date, quantity, or price.</p>
           </div>
           <button class="icon-button" type="button" data-close aria-label="Close edit purchase">
             <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">

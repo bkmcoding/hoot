@@ -44,8 +44,6 @@ export function predictionFor(item, referenceDate = startOfDay()) {
 
   let predictedDate;
   let method;
-  let technicalMethod;
-  let modelVersion;
   let slope = null;
   let intercept = null;
   let rSquared = null;
@@ -55,8 +53,6 @@ export function predictionFor(item, referenceDate = startOfDay()) {
   if (purchaseCount < 3) {
     predictedDate = addDays(latest, item.reorderThresholdDays);
     method = `Manual ${item.reorderThresholdDays}-day estimate`;
-    technicalMethod = "Manual estimate";
-    modelVersion = "demo-manual-v1";
   } else {
     const yValues = purchaseDates.map((date) => Math.round((date - origin) / DAY_MS));
     const xValues = yValues.map((_, index) => index);
@@ -91,18 +87,15 @@ export function predictionFor(item, referenceDate = startOfDay()) {
       );
       predictedDate = addDays(latest, averageGap);
       method = `Average interval from ${purchaseCount} purchases`;
-      technicalMethod = "Average interval fallback";
     } else {
       predictedDate = addDays(origin, Math.round(nextY));
       method = `Learned from ${purchaseCount} purchases`;
-      technicalMethod = "Linear regression";
       slope = fittedSlope;
       intercept = fittedIntercept;
       rSquared = Number.isFinite(fittedR) ? fittedR : null;
       fittedDates = fittedYValues.map((value) => addDays(origin, Math.round(value)));
       projectionMode = "regression";
     }
-    modelVersion = "demo-ols-v1";
   }
 
   const daysUntil = Math.ceil((predictedDate - today) / DAY_MS);
@@ -149,8 +142,6 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     statusLabel,
     maturity,
     confidence,
-    technicalMethod,
-    modelVersion,
     method,
     purchaseCount,
     origin,

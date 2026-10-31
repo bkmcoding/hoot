@@ -611,7 +611,7 @@ import {
       container.innerHTML = `
           <div class="empty-state">
             <h2>No tracked items yet</h2>
-            <p>Add a household staple and Hoot will start learning its restock rhythm.</p>
+            <p>Add a household staple and its restock date will appear here.</p>
             <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
           </div>
         `;
@@ -777,7 +777,7 @@ import {
       container.innerHTML = `
         <div class="empty-state">
           <h2>No one-time items</h2>
-          <p>Use this list for birthday candles, packing tape, or anything that should not enter the prediction model.</p>
+          <p>Birthday candles, packing tape, anything you buy once. Nothing here affects restock dates.</p>
           <button class="btn btn-primary" type="button" data-action="add-one-time">Add a one-time item</button>
         </div>
       `;
@@ -890,7 +890,7 @@ import {
         </header>
         <div class="store-run-cart-empty">
           <strong>Cart is empty</strong>
-          <p>Tap Add beside an item. It saves the change now; Undo in the cart reverses it.</p>
+          <p>Add an item and it’s saved now; Undo in the cart reverses it.</p>
         </div>
       `;
       return;
@@ -1157,10 +1157,8 @@ import {
     $("#finish-run-title").textContent = "Shopping run finished";
     $("#finish-run-message").textContent = `${count} ${itemWord} checked off.${
       trackedCount
-        ? ` ${trackedCount} ${
-            trackedCount === 1 ? "prediction" : "predictions"
-          } updated.`
-        : " No predictions changed."
+        ? ` ${trackedCount} restock date${trackedCount === 1 ? "" : "s"} updated.`
+        : " No restock dates changed."
     }`;
     $("#finish-run-summary").innerHTML = `
       <strong>${count} ${itemWord}</strong>
@@ -1218,16 +1216,16 @@ import {
     if (!prediction) {
       return `
         <div class="chart-empty">
-          <strong>Prediction is intentionally off</strong>
-          <p>One-time items stay on a simple checklist so they cannot distort recurring-item estimates.</p>
+          <strong>No restock date</strong>
+          <p>Restock dates come from purchases logged on tracked staples.</p>
         </div>
       `;
     }
     if (!prediction.purchaseDates.length) {
       return `
         <div class="chart-empty">
-          <strong>Waiting for the first purchase</strong>
-          <p>Log a purchase and Hoot will begin placing this item on its restock timeline.</p>
+          <strong>No purchases yet</strong>
+          <p>Log a purchase to start this item’s timeline.</p>
         </div>
       `;
     }
@@ -1325,7 +1323,7 @@ import {
           </circle>
         </svg>
         <figcaption>
-          Purchase dates shape Hoot’s rhythm; the dashed segment projects that rhythm to the next likely restock.
+          Purchase dates set the pattern; the dashed line projects the next restock.
         </figcaption>
       </figure>
     `;
@@ -1333,27 +1331,29 @@ import {
 
   function modelExplanation(item, prediction) {
     if (!prediction) {
-      return "One-time items stay on a simple checklist, so Hoot never tries to learn a rhythm from them.";
+      return "One-time items stay on a checklist, so they don’t get a restock date.";
     }
     if (!prediction.purchaseDates.length) {
-      return `No purchase has been logged yet. Hoot starts from your ${item.reorderThresholdDays}-day typical interval, and a logged purchase gives it a real date to work from.`;
+      return `No purchases yet, so the date comes from the ${item.reorderThresholdDays}-day interval you set.`;
     }
     if (prediction.maturity === "learning") {
-      return `Hoot is using your ${item.reorderThresholdDays}-day typical interval until this item has three purchases. Each logged purchase gives Hoot another date to learn from.`;
+      return `The date comes from the ${item.reorderThresholdDays}-day interval you set. Once you’ve logged three purchases, it switches to the gaps between them.`;
     }
-    if (prediction.slope !== null) {
-      return `Hoot has learned from ${prediction.purchaseCount} purchases and estimates the next restock for ${formatFullDate(prediction.date)}. The current rhythm moves about ${prediction.slope.toFixed(1)} days between purchases, and a new purchase can change that date.`;
-    }
-    return `Hoot averaged the gaps between ${prediction.purchaseCount} purchases and estimates the next restock for ${formatFullDate(prediction.date)}. A new purchase can change that date.`;
+    const gapDays = prediction.slope ?? prediction.averageInterval;
+    return `Your purchases have been about ${gapDays.toFixed(1)} days apart. Carried forward from the last one, that points to ${formatFullDate(prediction.date)}.`;
   }
 
-  function fitQualityLabel(prediction) {
+  function consistencyLabel(prediction) {
     if (!prediction || prediction.rSquared === null || prediction.rSquared === undefined) {
-      return "Not available";
+      return "No steady pattern";
     }
-
-    const strength = prediction.rSquared >= 0.7 ? "Strong" : prediction.rSquared >= 0.4 ? "Moderate" : "Loose";
-    return `${strength} fit · ${Math.round(prediction.rSquared * 100)}% R²`;
+    if (prediction.rSquared >= 0.7) {
+      return "Gaps are close to even";
+    }
+    if (prediction.rSquared >= 0.4) {
+      return "Gaps vary a little";
+    }
+    return "Gaps vary a lot";
   }
 
   function renderItemPage(item) {
@@ -1449,16 +1449,16 @@ import {
         <article class="analysis-card">
           ${
             item.isOneTime
-              ? `<span>One-time item</span><strong>Excluded from prediction</strong><p>Hoot keeps this on a simple checklist so it never distorts recurring-item estimates.</p>`
+              ? `<span>One-time item</span><strong>No restock date</strong><p>This item stays on the checklist and doesn’t affect restock dates.</p>`
               : `<span>Next predicted restock</span><strong>${formatFullDate(prediction.date)} · ${formatDue(prediction.daysUntil)}</strong>
                 <p>${escapeHtml(prediction.confidence)}</p>
                 <details class="estimate-disclosure">
                   <summary>How this estimate works</summary>
                   <p>${escapeHtml(modelExplanation(item, prediction))}</p>
                   <dl class="analysis-facts">
-                    <div><dt>Method</dt><dd>${escapeHtml(prediction.technicalMethod)}</dd></div>
-                    <div><dt>Model</dt><dd>${escapeHtml(prediction.modelVersion)}</dd></div>
-                    <div><dt>Fit quality</dt><dd>${escapeHtml(fitQualityLabel(prediction))}</dd></div>
+                    <div><dt>Purchases used</dt><dd>${prediction.purchaseCount}</dd></div>
+                    <div><dt>Consistency</dt><dd>${escapeHtml(consistencyLabel(prediction))}</dd></div>
+                    <div><dt>What changes it</dt><dd>Your next purchase</dd></div>
                   </dl>
                 </details>`
           }
@@ -1468,11 +1468,11 @@ import {
           item.isOneTime
             ? `<article class="analysis-card">
           <span>Checklist</span>
-          <strong>Kept off the rhythm model</strong>
+          <strong>Not tracked by date</strong>
           <dl class="analysis-facts">
             <div><dt>Tracking mode</dt><dd>Checklist only</dd></div>
-            <div><dt>Prediction</dt><dd>Off</dd></div>
-            <div><dt>Restock rhythm</dt><dd>Not tracked</dd></div>
+            <div><dt>Restock date</dt><dd>Not tracked</dd></div>
+            <div><dt>Purchase history</dt><dd>Not used</dd></div>
           </dl>
         </article>`
             : `<article class="analysis-card">
@@ -1490,7 +1490,7 @@ import {
         <section class="chart-panel">
           <div class="section-heading">
             <div>
-              <h2>${item.isOneTime ? "How Hoot handles one-time items" : "How Hoot reads this rhythm"}</h2>
+              <h2>${item.isOneTime ? "How this item is tracked" : "How this date is estimated"}</h2>
             </div>
           </div>
           ${predictionChart(item, prediction)}
@@ -1803,7 +1803,7 @@ import {
       window.setTimeout(() => closeDialog($("#log-purchase-dialog")), 240);
       toast(
         `${updatedItem.name} logged — ${formatQuantity(quantity, updatedItem.unit)} for ${purchasePricePhrase(price)}. ` +
-          `Next estimate ${formatFullDate(prediction.date)}.`,
+          `Next restock ${formatFullDate(prediction.date)}.`,
       );
     } catch {
       setFormBusy(form, false);
@@ -1958,7 +1958,7 @@ import {
       window.setTimeout(() => closeDialog($("#edit-purchase-dialog")), 240);
       toast(
         prediction
-          ? `Purchase updated. Next restock estimate ${formatFullDate(prediction.date)}.`
+          ? `Purchase updated. Next restock ${formatFullDate(prediction.date)}.`
           : "Purchase updated.",
       );
     } catch {
@@ -2076,14 +2076,14 @@ import {
 
     openConfirm({
       title: "Delete this purchase?",
-      message: `Remove the purchase of ${targetPurchase.quantity} ${escapeHtml(item.unit || "unit")} on ${purchaseDateLabel}? Rhythm calculations and prediction dates will update immediately.`,
+      message: `Remove the purchase of ${targetPurchase.quantity} ${escapeHtml(item.unit || "unit")} on ${purchaseDateLabel}? The next restock date updates immediately.`,
       confirmLabel: "Delete purchase",
       onConfirm: async () => {
         const { item: updatedItem, deletedPurchase, index } = await hootApi.deletePurchase(item.id, targetPurchase.id);
         render();
         const prediction = predictionFor(updatedItem);
         const nextRestockMsg = prediction
-          ? ` Next restock recalculated to ${formatFullDate(prediction.date)}.`
+          ? ` Next restock ${formatFullDate(prediction.date)}.`
           : "";
         toast(`Purchase on ${purchaseDateLabel} removed.${nextRestockMsg}`, "success", {
           label: "Undo",
@@ -2092,7 +2092,7 @@ import {
             render();
             const restoredPrediction = predictionFor(restoredItem);
             const restoredMsg = restoredPrediction
-              ? ` Restock estimate ${formatFullDate(restoredPrediction.date)}.`
+              ? ` Next restock ${formatFullDate(restoredPrediction.date)}.`
               : "";
             toast(`Purchase restored.${restoredMsg}`);
           },

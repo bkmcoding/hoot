@@ -243,8 +243,8 @@ input[type="date"] {
 
 .header-frame {
   display: grid;
-  grid-template-columns: auto 1fr auto auto;
-  grid-template-areas: "brand nav actions utility";
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "brand nav actions";
   align-items: center;
   gap: var(--space-5);
   width: min(1248px, 100%);
@@ -255,9 +255,11 @@ input[type="date"] {
 
 .brand {
   grid-area: brand;
+  justify-self: start;
+  width: fit-content;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   text-decoration: none;
   border-radius: var(--radius-control);
 }
@@ -266,101 +268,81 @@ input[type="date"] {
   flex: none;
   width: 42px;
   height: 42px;
-  border-radius: var(--radius-inner);
-  overflow: hidden;
-  box-shadow: 0 1px 2px var(--tone-tab-shadow), 0 4px 10px var(--tone-tab-shadow-soft);
+  color: var(--night);
 }
 
 .brand-mark svg {
+  display: block;
   width: 100%;
   height: 100%;
 }
 
-.brand-tile {
-  fill: var(--night);
-}
-
-.moon-disc {
-  fill: var(--cream);
-}
-
-.owl-eye {
-  fill: var(--night);
-}
-
-.owl-iris {
-  fill: var(--amber-mark);
-}
-
-.moon-body {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: moon-breathe 7s ease-in-out infinite;
-}
-
-.brand-text {
-  display: grid;
-  line-height: 1.15;
-}
-
-.brand-text strong {
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-
-.brand-text small {
-  font-size: 12px;
-  color: var(--ink-faint);
+.brand-word {
+  flex: none;
+  display: block;
+  width: auto;
+  height: 18px;
+  color: var(--night);
 }
 
 .app-nav {
   grid-area: nav;
   justify-self: center;
   display: inline-flex;
-  gap: 2px;
-  padding: 4px;
-  background: var(--surface-tint);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-pill);
+  gap: var(--space-5);
+  padding: 0;
+  background: none;
+  border: 0;
 }
 
 .nav-button {
-  min-height: 36px;
-  padding: 0 var(--space-4);
+  position: relative;
+  display: block;
+  padding: 10px 1px 16px;
   border: 0;
-  border-radius: var(--radius-pill);
+  border-radius: 4px;
   background: transparent;
-  color: var(--ink-soft);
-  font-size: 14px;
-  font-weight: 650;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
   white-space: nowrap;
-  transition: background-color var(--duration-fast) var(--ease-standard), color var(--duration-fast) var(--ease-standard),
-    box-shadow var(--duration-fast) var(--ease-standard);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.nav-button::after {
+  content: "";
+  position: absolute;
+  right: 1px;
+  bottom: 6px;
+  left: 1px;
+  height: 2px;
+  background: transparent;
+  transition: background-color var(--duration-fast) var(--ease-standard);
 }
 
 .nav-button:hover {
   color: var(--ink);
-  background: var(--tone-surface-translucent);
 }
 
 .nav-button.is-active,
 .nav-button[aria-current="page"] {
-  background: var(--surface);
+  background: none;
   color: var(--ink);
-  box-shadow: 0 1px 2px var(--tone-control-shadow), inset 0 0 0 1px var(--border);
+  box-shadow: none;
+}
+
+.nav-button.is-active::after,
+.nav-button[aria-current="page"]::after {
+  background: var(--night);
 }
 
 .header-actions {
   grid-area: actions;
   display: flex;
   gap: var(--space-2);
-}
-
-.header-utility {
-  grid-area: utility;
-  padding-left: var(--space-3);
-  border-left: 1px solid var(--border);
 }
 
 .app-frame {
@@ -438,10 +420,19 @@ input[type="date"] {
 }
 
 .app-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   padding: var(--space-6) 0 var(--space-8);
   border-top: 1px solid var(--border);
   color: var(--ink-faint);
   font-size: 13px;
+}
+
+.app-footer p {
+  margin: 0;
 }
 
 /* Buttons */
@@ -2505,18 +2496,6 @@ body.is-store-run .toast-region {
   }
 }
 
-@keyframes moon-breathe {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.92;
-    transform: scale(0.975);
-  }
-}
-
 /* Responsive */
 
 @media (max-width: 1120px) {
@@ -2537,11 +2516,11 @@ body.is-store-run .toast-region {
 
 @media (max-width: 980px) {
   .header-frame {
-    grid-template-columns: 1fr auto auto;
+    grid-template-columns: 1fr auto;
     grid-template-areas:
-      "brand actions utility"
-      "nav nav nav";
-    row-gap: var(--space-3);
+      "brand actions"
+      "nav nav";
+    row-gap: var(--space-2);
   }
 
   .app-nav {
@@ -2565,7 +2544,7 @@ body.is-store-run .toast-region {
 
 @media (max-width: 660px) {
   :root {
-    --dock-height: calc(72px + env(safe-area-inset-bottom));
+    --dock-height: calc(69px + env(safe-area-inset-bottom));
   }
 
   .hoot-shell.mobile-dock-hidden {
@@ -2596,45 +2575,28 @@ body.is-store-run .toast-region {
   }
 
   .header-frame {
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
     grid-template-areas:
-      "brand utility"
-      "nav nav";
-    gap: var(--space-3);
+      "brand"
+      "nav";
+    gap: var(--space-2);
     min-height: 0;
     padding: var(--space-3) var(--space-4);
   }
 
-  .brand-text small {
-    display: none;
-  }
-
-  .header-utility {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .header-utility .btn {
-    min-height: 44px;
-    padding: 0 var(--space-3);
-  }
-
-  .calendar-range-button {
+  .calendar-range-button,
+  .app-footer .btn {
     min-height: 44px;
   }
 
   .app-nav {
     justify-self: stretch;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .app-nav::-webkit-scrollbar {
-    display: none;
+    gap: var(--space-2);
   }
 
   .nav-button {
-    flex: 1 0 auto;
+    flex: 1 1 0;
+    min-width: 0;
     min-height: 46px;
   }
 
@@ -2645,7 +2607,7 @@ body.is-store-run .toast-region {
     left: 0;
     z-index: 40;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     padding: 10px var(--space-3) calc(10px + env(safe-area-inset-bottom));
     border-top: 1px solid var(--border);
@@ -3035,20 +2997,6 @@ body.is-store-run .toast-region {
   }
 }
 
-@media (max-width: 440px) {
-  :root {
-    --dock-height: calc(125px + env(safe-area-inset-bottom));
-  }
-
-  .header-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .header-actions [data-view="store-run"] {
-    grid-column: 1 / -1;
-  }
-}
-
 @media (pointer: coarse) {
   .btn,
   .btn-sm {
@@ -3083,7 +3031,6 @@ body.is-store-run .toast-region {
   .hoot-dialog[open],
   .hoot-dialog::backdrop,
   .toast,
-  .moon-body,
   .horizon-pointer::after {
     animation: none !important;
   }

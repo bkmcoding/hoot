@@ -83,7 +83,7 @@ test("opens Shopping Run from the header", async ({ page }) => {
   await expect(page.locator(".app-header")).toBeHidden();
   await expect(page.locator(".app-footer")).toBeHidden();
   await expect(page.locator(".store-run-cart-empty")).toContainText(
-    "It saves the change now; Undo in the cart reverses it."
+    "Add an item and it’s saved now; Undo in the cart reverses it."
   );
 });
 
@@ -316,7 +316,7 @@ test("finishes the run, clears the cart, and returns to Dashboard", async ({ pag
   await page.getByRole("button", { name: "Finish shopping run" }).click();
   await expect(page.getByRole("heading", { name: "Shopping run finished" })).toBeVisible();
   await expect(page.locator("#finish-run-message")).toHaveText(
-    "2 items checked off. 1 prediction updated."
+    "2 items checked off. 1 restock date updated."
   );
   await expect(page.locator("#finish-run-summary")).toContainText("2 items");
   await expect(page.locator("#finish-run-summary")).toContainText("$4.50 known spend");
