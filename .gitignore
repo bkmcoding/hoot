@@ -16,3 +16,12 @@ docs/hoot_breakdown.nav
 docs/hoot_breakdown.snm
 docs/hoot_breakdown.toc
 docs/hoot_breakdown.synctex.gz
+
+# Local generated artifacts (QA, screenshots, test output)
+.quality/
+test-results/
+.playwright-cli/
+
+# Design review snapshots and logo exploration scratch
+.impeccable/
+.logo-explore/
