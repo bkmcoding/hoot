@@ -37,8 +37,8 @@ A shopper wants to know which household staples need attention now and which one
 - **Typical:** the highest-urgency item becomes the focused **Next up** decision; remaining items sort by predicted restock date as compact rows.
 - **Search:** the global **Next up** card stays in place. Matching rows render as compact results, the count names the query, and a sole focused-item match is called out instead of duplicated. No matches keep the focused card and offer **Clear search**.
 - **Empty:** no tracked items; the state explains prediction cannot start and offers Add item.
-- **Learning:** item detail names the learning progress and typical-interval source.
-- **Learned:** item detail names confidence and keeps the estimate’s reasoning behind a disclosure.
+- **Learning:** item detail names the user's typical interval and how many purchases remain before Hoot uses real gaps.
+- **Learned:** item detail names the average gap between purchases.
 - **Overdue:** status, due text, and predicted date make the risk explicit.
 
 ## Restock schedule
@@ -60,8 +60,8 @@ A shopper wants a near-term view of when items are expected to run out, with the
 
 ### States
 
-- **Typical:** a seven-day horizontally scrollable schedule strip.
-- **Fourteen-day:** the **All 14 days** control expands the strip; the caption and calendar label follow the selection.
+- **Typical:** a seven-day schedule in a responsive grid: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px. No day requires horizontal scrolling.
+- **Fourteen-day:** the **All 14 days** control expands the grid; fourteen days wrap to two rows on wide desktop, four rows at tablet widths, and eight rows at phone widths. The caption and calendar label follow the selection.
 - **Today:** green border and calm steady tint.
 - **Past due:** a dedicated first cell names the number of overdue items.
 - **Clear day:** the cell says “Clear”.
@@ -82,7 +82,7 @@ A household shopper wants to start tracking a staple or record a one-time need w
 
 ### Sequence
 
-1. Choose **Tracked staple** or **One-time need**.
+1. Choose **Tracked staple** or **One-time need**. The checked path owns initial focus, so a one-time entry starts on **One-time need**.
 2. Name the item.
 3. Choose a category.
 4. Optionally describe the unit.
@@ -182,30 +182,37 @@ A shopper wants a simple checklist for irregular purchases that should not affec
 
 ### Job
 
-A shopper wants to inspect one item’s prediction, rhythm, history, and maintenance actions.
+A shopper wants to know when one item is needed again, see why Hoot thinks so, and correct its history.
 
 ### Entry points
 
 - Dashboard item name or Details
 - Restock schedule item
 - One-time item Details
+- Direct URL `#/item/<id>`
 
 ### Sequence
 
-1. Return context is preserved; the page opens at the top with focus on the item heading.
-2. Read status, predicted restock, and the zone-aware horizon lane.
-3. Inspect rhythm, confidence, and the estimate explanation.
-4. Compare purchase history.
-5. Log a purchase, edit, or delete the item.
+1. Hoot writes `#/item/<id>` and opens the page at the top with focus on the item heading.
+2. Read the **Next restock** answer: date, due phrase, status, likely window when available, and one plain sentence explaining the estimate.
+3. Follow the **Buying rhythm** ledger: each purchase is a node with quantity, price, and unit price; the line between nodes carries the measured gap and, once learned, how it compares with the typical gap.
+4. Check **Pattern**, **Confidence**, and **Spending** — including the compact unit-price history when two or more prices are known — or expand **How Hoot got this date** for the estimate’s basis.
+5. Edit or delete a purchase directly in its ledger node.
+6. **Log purchase** is the page’s single primary action; **Edit item** and **Delete** close the page.
 
 ### States
 
-- **Typical:** the horizon lane, prediction, rhythm, chart, and history are separate work areas.
-- **Learning:** the typical interval, learning progress, and confidence are visible.
-- **Learned:** confidence, estimate source, interval range, and the estimate explanation are visible.
-- **No history:** the table says no purchase history exists.
-- **One-time:** prediction is intentionally off and the item remains checklist-only.
+- **Typical:** the answer card, rhythm ledger, and reference rail are separate work areas; the answer card carries the only primary action.
+- **Learning:** the answer says how many purchases remain before Hoot uses real gaps; **Pattern** separates **Gap so far** from the **Estimate uses** interval; **Confidence** names the sample and basis.
+- **Learned:** the answer states the likely window; **Pattern** labels the average as **Typical gap**, and each ledger gap says whether it was shorter or longer than typical.
+- **Checked:** **Your checks** counts right and still-had-some answers; a **Still had some** correction adds three days, and the estimate node says the extra days.
+- **No history:** the ledger explains there is nothing to chart yet and offers the first purchase as the next step.
+- **One purchase:** the ledger shows the purchase and the estimate with no measured gap line; **Pattern** shows **Gap so far** as **Not yet**.
+- **Unknown price:** the ledger and **Spending** say the price is unknown; known spend and averages count only purchases with a price.
+- **Price history:** two or more known prices draw a compact unit-price sparkline on the purchase dates. Each point is a labeled button; the chart is one Tab stop, tapping the plot selects the nearest price, and the arrow keys (or Home and End) move between points while the readout names the focused date and unit price. One known price keeps the numbers only; unknown prices are skipped rather than interpolated.
+- **One-time:** prediction is intentionally off; the page shows **On your checklist** instead of an answer, ledger, rail, and spending.
 - **Delete:** requires confirmation, names the consequence, and offers Undo for a few seconds afterward.
+- **Back:** the in-page back control replaces the item entry with its parent view. Browser Back returns to the previous Hoot surface; a direct link falls back to Dashboard or One-time.
 
 ## Edit item
 
@@ -233,45 +240,47 @@ A shopper standing in an aisle wants one grouped list of everything to buy, a on
 ### Entry points
 
 - Primary navigation: **Shopping** is the only entry point. There is no separate header or dock button, so the run has one door. The run view itself is titled **Shopping run**.
-- **Exit run** returns to Dashboard without clearing the cart; **Finish shopping run** opens the receipt.
+- **Exit run** returns to Dashboard without clearing this trip; **Finish shopping run** opens the receipt.
 
 ### Sequence
 
-1. Start the run. Hoot hides the global header and footer so the aisle list owns the screen, and moves focus to the **Shopping run** heading so keyboard and screen-reader users land in the new context.
-2. Scan aisle groups; each group is sorted by urgency: Overdue, Buy now, Watch when included, then One-time.
-3. Tap **Add** once on an item. The item joins the cart and its row collapses to **In cart**.
+1. Start the run. Hoot hides the global header and footer so the aisle list owns the screen, resets the page to the top, and moves focus to the **Shopping run** heading without scrolling so keyboard and screen-reader users land in the new context.
+2. Scan aisle groups in the aisle column; each group is sorted by urgency: Overdue, Buy now, Watch when included, then One-time.
+3. Tap **Log** once on an item. Hoot records the purchase or checks off the one-time need immediately, and the row collapses to **Logged**.
 4. Use **Show Watch** when planned purchases should be included. Hoot includes Watch automatically when the dashboard's **Next up** item is in Watch.
-5. Review quantity, price, and the next restock estimate in the cart; use **Adjust** or **Undo** to correct a checkoff.
-6. Tap **Finish shopping run** to review the receipt, then **Done** to return to Dashboard or **View purchase history** to inspect the first tracked item.
-7. **Exit run** leaves the cart intact for later.
+5. Review quantity, price, and the next restock estimate in **This trip**; on desktop the trip panel stays in view beside the aisles, and at 980px and below it follows them. Use **Adjust** or **Undo** to correct a log.
+6. Tap **Finish shopping run** to review the receipt. On each logged tracked staple, answer the optional **Was Hoot right?** check, then choose **Done** to return to Dashboard or **View purchase history** to inspect the first tracked item.
+7. **Exit run** leaves **This trip** intact for later.
 
 ### Content contract
 
 - The run drafts tracked staples in **Overdue** or **Buy now**, plus every uncompleted one-time need. If the dashboard's **Next up** item is in **Watch**, a fresh run includes Watch so the two surfaces agree.
 - **Watch** staples otherwise appear after **Show Watch** is pressed; the toggle reports its state with `aria-pressed` and is named **Hide Watch items** when active.
 - Groups are categories, sorted alphabetically; items inside a group sort by urgency, then name. Items without a category fall under **Uncategorized**.
-- Each unchecked row shows name, category, unit, status, and due text, with one primary **Add** action.
-- A checked row collapses to a compact **In cart** line: a check mark, the item name, and no status chip or action. Quantity, price, and prediction details live in the cart.
-- Checkoff feedback is in place, not in a toast: the row collapses, the summary changes, and a polite live region names the item and cart count so the finish action stays clear.
-- The empty cart says Add saves immediately and Undo reverses it; it does not imply that the run defers the purchase until Finish.
-- The summary is one compact strip: **Items**, **In cart**, and **Left** for the current run, including checked items that no longer match the default draft.
-- The cart lists each checked item with its quantity, total price (or **Price unknown**), and **Next restock** date. **Adjust** opens the purchase editor for a tracked staple and the item editor for a one-time need.
-- **Finish shopping run** is disabled while the cart is empty. The receipt names the item count, total known spend, and every checked-off item. **Done** clears the run and returns to Dashboard; **View purchase history** clears the run and opens the first tracked item; closing the receipt with Escape or the close button leaves the run intact.
-- The run session — Watch toggle and checked items — persists separately from inventory and survives a reload. A finished run clears it.
+- Each unchecked row shows name, category, unit, status, and due text, with one primary **Log** action.
+- A logged row collapses to a compact **Logged** line: a check mark, the item name, and no status chip or action. Quantity, price, and prediction details live in **This trip**.
+- Logging feedback is in place, not in a toast: the row collapses, the summary changes, and a polite live region names the item and logged count so the finish action stays clear.
+- The empty **This trip** panel says Log saves immediately and Undo reverses it; it does not imply that the run defers the purchase until Finish.
+- The summary is one compact strip: **Items**, **Logged**, and **Left** for the current run, including logged items that no longer match the default draft.
+- At 981px and wider, the summary and aisle list share the left column while a sticky **This trip** panel holds the right column; the panel stays in view as the aisles scroll, its list scrolls internally when the trip is long, and **Finish shopping run** stays at its foot.
+- **This trip** lists each logged item with its quantity, total price (or **Price unknown**), and **Next restock** date. **Adjust** opens the purchase editor for a tracked staple and the item editor for a one-time need.
+- **Finish shopping run** is disabled while **This trip** is empty. The receipt names the item count, total known spend, and every logged item. **Done** clears the run and returns to Dashboard; **View purchase history** clears the run and opens the first tracked item; closing the receipt with Escape or the close button leaves the run intact.
+- The receipt asks one optional prediction check per logged tracked staple: **Due <date> · was Hoot right?**, answered with **Yes, I was out** or **Still had some**. One-time entries never ask. **Still had some** records the miss on that purchase and moves the next estimate three days later, naming the new date in place; **Yes, I was out** records agreement and leaves the estimate unchanged. The selected answer stays pressed and can be changed until **Done**. A polite live region names the answer and the new estimate.
+- The run session — Watch toggle and logged items — persists separately from inventory and survives a reload. A finished run clears it.
 - Completed one-time items and steady tracked staples do not appear.
 - Hoot has one trip flow: the legacy **Restock trip** modal is retired.
 
 ### States
 
-- **Immersive:** the global header and footer are hidden, the run title and **Exit run** stay at the top, and **Finish shopping run** closes the list at the bottom.
-- **Typical:** eligible items grouped by aisle, an empty-cart explanation, and a compact summary.
-- **In cart:** the row collapses to a sage **In cart** line, and the cart gains quantity, price, next-restock detail, **Adjust**, and **Undo**.
+- **Immersive:** the global header and footer are hidden, the run title and **Exit run** stay at the top, and **Finish shopping run** closes the list at the foot of **This trip**. At 981px and wider the trip panel is sticky beside the aisle list; at 980px and below the summary, aisles, and trip stack in one column.
+- **Typical:** eligible items grouped by aisle, an empty-trip explanation, and a compact summary.
+- **Logged:** the row collapses to a sage **Logged** line, and **This trip** gains quantity, price, next-restock detail, **Adjust**, and **Undo**.
 - **Watch included:** Watch staples join their aisles in urgency order; hiding them removes only those that are still unchecked.
-- **One-time checked:** the item is completed in the checklist and appears in the cart as a one-time entry.
-- **Empty run:** when nothing is eligible, the summary reads zero, the cart explains what will appear, and Finish is disabled.
-- **Receipt:** a native dialog summarizes the trip without blocking another checkoff until Done is chosen.
+- **One-time checked:** the item is completed in the checklist and appears in **This trip** as a one-time entry.
+- **Empty run:** when nothing is eligible, the summary reads zero, **This trip** explains what will appear, and Finish is disabled.
+- **Receipt:** a native dialog summarizes the trip without blocking another log until Done is chosen. Each logged tracked staple carries an optional **Was Hoot right?** check; answering **Still had some** updates the next estimate in place, and the answer is stored on the purchase whether or not history is opened.
 - **Storage unavailable:** the in-memory run still works; only reload persistence is lost.
-- **Failure:** a failed checkoff or undo leaves the run unchanged and shows an error toast naming the item.
+- **Failure:** a failed log or undo leaves the run unchanged and shows an error toast naming the item.
 
 ## Reset demo and destructive actions
 
@@ -303,26 +312,32 @@ A user wants a safe way to restore sample data or remove an item.
 - Every validation message is associated with its field.
 - Every empty state explains the blocker and the next step.
 - One-time behavior and total-price meaning are visibly explained.
-- Add Item progressively discloses only the fields required by the selected path.
+- Add Item progressively discloses only the fields required by the selected path and opens with focus on the checked item-type path, including **One-time need** when launched from the one-time ledger.
 - Global **Add item** follows the active view: tracked staple on Dashboard, one-time need on One-time.
 - Global **Log purchase** opens with the highest-urgency tracked item.
 - Queue search filters tracked items by name, category, or unit, keeps the global **Next up** decision visible, labels matches as results, names the query in the count, and offers a clear no-match recovery.
 - **Log last** prefills the focused item’s latest quantity and a known, non-zero total price while keeping the date at today.
 - Total price is optional; blank or `0` stores an unknown price, and history and success feedback say so plainly.
 - Item titles show a persistent interactive underline, provide an expanded pointer target, and remain backed by explicit **Details** buttons.
-- Item detail renders the same zone-aware horizon lane as **Next up**; its active segment matches the item’s status, while Today remains fixed at the Overdue/Buy-now boundary.
-- Item detail opens at the top with focus on the item heading; on phones, the purchase-history Edit and Delete actions remain fully visible.
+- Item detail leads with one **Next restock** card (date, due, likely window when available, plain reason, one primary **Log purchase**), then a **Buying rhythm** ledger with one node per purchase, a labeled gap between nodes, and a distinct estimate node, plus a reference rail with **Pattern**, **Confidence**, **Spending**, and **Your checks**; it does not repeat the dashboard horizon lane or a separate purchase-history table.
+- **Spending** draws a unit-price sparkline when at least two known prices exist and omits it for a single price; each point is a labeled button, the chart is a single Tab stop, and its arrow keys reach every point with its date and unit price in the visible readout.
+- At 661–980px the item reference rail uses two columns so the unit-price sparkline stays compact; below 661px it returns to one column.
+- Item detail writes `#/item/<id>`; browser Back and Forward move between Hoot surfaces instead of leaving the app, and the in-page back control replaces the item entry with its parent view.
+- Item detail opens at the top with focus on the item heading; the in-page back control moves focus to the destination primary navigation. On phones, the ledger’s Edit and Delete actions remain fully visible and the fixed dock stays hidden.
+- Entering the Shopping run resets the page to the top before focus moves to its heading.
+- At 981px and wider the desktop Shopping run puts the progress strip and aisle list beside a sticky **This trip** panel with the finish action at its foot; at 980px and below the run stacks the summary, aisles, and trip without horizontal overflow.
 - The **Next up** decision appears before the compact ranked queue, and the queue appears before the seven-day schedule.
-- The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync. Day cards show the weekday and date once, adding a month label only on the first card and at month boundaries.
+- Until an item has three purchases, the **Next up** card names **Learning**, its purchase progress, and the manual interval source; its date heading reads **Estimated restock**.
+- The restock calendar defaults to seven days, expands to fourteen on request, and keeps its caption and accessible label in sync. Day cards show the weekday and date once, adding a month label only on the first card and at month boundaries. It is a responsive grid at every width, with no horizontal scrolling: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px.
 - The Dashboard content has exactly one primary action: **Log purchase** on the **Next up** item. The header and dock carry no primary action; the **Shopping** tab is the only way into the run.
 - The Today marker sits at the Overdue/Buy-now boundary, 33.333% of the lane.
 - Exact duplicate names are rejected with a field-level recovery message.
 - On phones, the action dock holds **Log purchase** and **Add item** in one row. The dock hides while **Next up** is visible and returns once the card leaves the viewport, so it never covers the card or its actions.
-- Dynamic headings are sequential: dashboard and one-time empty states use `<h2>` beneath an `<h1>`; queue rows use `<h3>` beneath the focused `<h2>`; item detail uses `<h1>`, then `<h2>`, then `<h3>`; Shopping run uses `<h1>`, then `<h2>`.
+- Dynamic headings are sequential: dashboard and one-time empty states use `<h2>` beneath an `<h1>`; queue rows use `<h3>` beneath the focused `<h2>`; item detail uses `<h1>` then `<h2>` section headings; Shopping run uses `<h1>`, then `<h2>`.
 - Rendered text meets AA contrast in the checked dashboard, item-detail, one-time, Shopping run, and receipt states (4.5:1 normal text, 3:1 large text).
 - The calendar caption fits without a one-word orphan at 390px.
 - Delete can be undone from the confirmation toast before it disappears.
 - Reset demo is visible in the footer, restores the built-in sample, and remains at least 44px tall on phones.
 - All three navigation tabs render in full at 320px without a scroll container or a clipped label, and the brand link's hit area matches the lockup rather than the header row.
-- The interface remains usable at 1440, 980, and 390px.
-- No page-level horizontal overflow occurs; only the schedule viewport may scroll horizontally.
+- The interface remains usable at 1440, 980, 390, and 320px.
+- No page-level horizontal overflow occurs, and the schedule never scrolls horizontally.

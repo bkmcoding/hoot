@@ -33,8 +33,9 @@ Unlike manual shopping list apps that require active memory and maintenance befo
   - Interval-based prediction engine: initial fallback to manual restock threshold until 3 purchase logs exist, switching to interval learning / regression once sufficient history is accumulated.
   - Urgency-ranked restock dashboard with a focused Next Up horizon lane.
   - Horizon schedule calendar with default 7-day view and expandable 14-day view.
-  - Item detail view featuring rhythm analysis, prediction chart, confidence indicators, and purchase history.
+  - Item detail view featuring a next-restock answer with a likely window, a buying-rhythm ledger of purchases and gaps, plain-language confidence and spending detail, and inline purchase editing.
   - Dedicated one-time checklist for irregular items explicitly excluded from prediction algorithms.
+  - Post-trip prediction check: an optional one-tap **Was Hoot right?** review on the finish receipt that records whether a predicted staple was actually needed and gently shifts the next estimate when it was early.
 - **Technical constraints & scope:**
   - Current implementation: Standalone client-side web application (vanilla JavaScript, HTML5, CSS3) backed by localStorage and local sample seed data.
   - Planned backend: ASP.NET Core Web API with PostgreSQL database via Entity Framework Core, transitioning prediction logic server-side.
@@ -48,17 +49,8 @@ Unlike manual shopping list apps that require active memory and maintenance befo
 - **Visual identity commitments (from DESIGN.md):** "Warm Ledger" aesthetic — warm cream paper canvas, understated earth inks (sage, terracotta, amber, night), crisp hairline borders, tabular numerals, and deliberate restraint.
 - **Strict identity bans:** No cartoon or mascot owl illustrations, no dark mode / night theme, no glowing gradients or decorative novelty charts, and no ungrounded cosmetic badges.
 
-## Evidence on Hand
-
-- `frontend/` — runnable client prototype (`index.html`, `app.js`, `style.css`) with interactive dashboard, purchase logging, item charts, and one-time checklist.
-- `docs/` — comprehensive architectural specifications:
-  - `project_plan.typ` & `project_plan.pdf` (core concept, DB architecture, time-series projection model).
-  - `hoot_breakdown.tex` & `hoot_breakdown.pdf` (task breakdown, schema roadmap, and milestone deck).
-  - `progress_report_1.tex` & `progress_report_1.pdf` (status check on frontend implementation and upcoming backend plan).
-  - `ux-flows.md` (contractual interaction flows for every surface).
-  - `DESIGN.md` (Warm Ledger tokens, components, responsive rules, and accessibility floor).
-  - `tooling-roadmap.md` (product direction, prioritized additions, and open questions).
-  - `.impeccable/critique/` (latest scored snapshot; older entries are trend history only).
+## Evidence on Hand  - `frontend/` — runnable client prototype (`index.html`, `app.js`, `style.css`) with interactive dashboard, purchase logging, item timelines, and one-time checklist.
+- `PRODUCT.md`, `DESIGN.md`, `docs/ux-flows.md`, and `docs/tooling-roadmap.md` — product, visual, interaction, and roadmap contracts.
 - `AGENTS.md` — the short context map future agents should read first.
 - `backend/` — ASP.NET Core API scaffold (`HootApi.csproj`, `Program.cs`, controller stubs).
 

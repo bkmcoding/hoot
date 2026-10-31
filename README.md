@@ -15,11 +15,12 @@ Open `http://127.0.0.1:8000` in a browser.
 ### Current demo
 
 - Ranked dashboard with a focused Restock Horizon Lane
-- Seven-day restock calendar with an optional fourteen-day view
+- Seven-day restock calendar with a two-column phone layout and an optional fourteen-day view
 - Add item and log purchase flows
-- Item analysis page with an SVG prediction chart, model explanation, and purchase history
+- Item detail page with a next-restock answer and likely window, a buying-rhythm ledger, confidence and spending detail, and inline purchase editing
 - One-time checklist for irregular purchases
-- Immersive Shopping run with aisle grouping, one-tap checkoff, compact cart detail, and a finish receipt
+- Immersive Shopping run with aisle grouping, one-tap logging, compact trip detail, and a finish receipt
+- Optional post-trip **Was Hoot right?** check that moves the next estimate when you still had some
 - Local demo data with reset
 
 ### Quality and tooling
@@ -37,9 +38,9 @@ See `docs/tooling-roadmap.md` for the prioritized tooling and product direction 
 ### Future features
 
 - Barcode scanning and product lookup
-- Prediction accuracy tracking
+- Prediction drift reporting across the full history
 - Household sharing
 - Price trends
 - Smart reminders
 
-See `docs/hoot_breakdown.tex` and `docs/project_plan.typ` for the full project context.
+See `PRODUCT.md` and `DESIGN.md` for the product and design context.

@@ -1,6 +1,7 @@
 import {
   DAY_MS,
   addDays,
+  likelyWindowFor,
   parseDate,
   predictionFor,
   startOfDay,
@@ -16,6 +17,7 @@ import {
   "use strict";
 
   const STORAGE_KEY = "hoot-demo-state-v1";
+  const DEFAULT_TITLE = "Hoot — Predictive Household Inventory Tracker";
 
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
@@ -57,6 +59,15 @@ import {
     }).format(value);
   }
 
+  function formatMoneyExact(value) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  }
+
   function isUnknownPurchasePrice(value) {
     return value === null || value === undefined || value === "" || Number(value) === 0;
   }
@@ -72,6 +83,212 @@ import {
   function formatQuantity(value, unit) {
     const amount = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 }).format(value);
     return unit ? `${amount} ${unit}` : amount;
+  }
+
+  function purchaseUnitPrice(purchase) {
+    if (isUnknownPurchasePrice(purchase.price)) return null;
+    const quantity = Number(purchase.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) return null;
+    return Number(purchase.price) / quantity;
+  }
+
+  function formatUnitPrice(purchase, item) {
+    const unitPrice = purchaseUnitPrice(purchase);
+    if (unitPrice === null) return "Price unknown";
+    return `${formatMoney(unitPrice)} / ${item.unit || "unit"}`;
+  }
+
+  function spendingFor(item) {
+    const purchases = [...item.purchases].sort(
+      (left, right) => parseDate(left.date) - parseDate(right.date),
+    );
+    const priced = purchases.filter((purchase) => purchaseUnitPrice(purchase) !== null);
+    const total = priced.reduce((sum, purchase) => sum + Number(purchase.price), 0);
+    const latest = priced[priced.length - 1] ?? null;
+    const previous = priced[priced.length - 2] ?? null;
+    const latestUnit = latest ? purchaseUnitPrice(latest) : null;
+    const previousUnit = previous ? purchaseUnitPrice(previous) : null;
+    const history = priced.map((purchase) => ({
+      date: parseDate(purchase.date),
+      unitPrice: purchaseUnitPrice(purchase),
+    }));
+
+    return {
+      purchases: purchases.length,
+      pricedCount: priced.length,
+      total,
+      average: priced.length ? total / priced.length : null,
+      latest,
+      previous,
+      latestUnit,
+      previousUnit,
+      history,
+      change:
+        latestUnit !== null && previousUnit !== null ? latestUnit - previousUnit : null,
+    };
+  }
+
+  function priceSparkline(item, history) {
+    const width = 240;
+    const height = 44;
+    const padX = 4;
+    const padY = 6;
+    const prices = history.map((entry) => entry.unitPrice);
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    const range = max - min;
+    const start = history[0].date.getTime();
+    const end = history[history.length - 1].date.getTime();
+    const span = end - start;
+    const unit = item.unit || "unit";
+    const points = history.map((entry, index) => {
+      const x =
+        span > 0
+          ? padX + ((entry.date.getTime() - start) / span) * (width - padX * 2)
+          : padX + (index / Math.max(1, history.length - 1)) * (width - padX * 2);
+      const y =
+        range === 0
+          ? height / 2
+          : padY + (1 - (entry.unitPrice - min) / range) * (height - padY * 2);
+      return {
+        x: Number(x.toFixed(1)),
+        y: Number(y.toFixed(1)),
+        date: entry.date,
+        unitPrice: entry.unitPrice,
+      };
+    });
+    const line = points.map((point) => `${point.x},${point.y}`).join(" ");
+    const buttons = points
+      .map((point, index) => {
+        const dateLabel = formatFullDate(point.date);
+        const priceLabel = `${formatMoney(point.unitPrice)} / ${unit}`;
+        const ariaLabel = `${dateLabel}: ${formatMoney(point.unitPrice)} per ${unit}`;
+        return `
+          <button
+            class="price-spark-point${index === points.length - 1 ? " is-latest" : ""}"
+            type="button"
+            data-price-spark-point
+            data-date="${escapeHtml(dateLabel)}"
+            data-price="${escapeHtml(priceLabel)}"
+            tabindex="${index === points.length - 1 ? "0" : "-1"}"
+            aria-label="${escapeHtml(ariaLabel)}"
+            style="left: ${((point.x / width) * 100).toFixed(2)}%; top: ${(
+              (point.y / height) *
+              100
+            ).toFixed(2)}%"
+          ><span class="price-spark-dot" aria-hidden="true"></span></button>`;
+      })
+      .join("");
+    const rangeLabel =
+      min === max ? formatMoney(min) : `${formatMoney(min)}–${formatMoney(max)}`;
+
+    return `
+      <div class="price-spark" data-price-spark>
+        <div class="price-spark-head">
+          <span class="price-spark-title">Unit price history</span>
+          <span class="price-spark-range">${rangeLabel}</span>
+        </div>
+        <div class="price-spark-plot" data-price-spark-plot>
+          <svg class="price-spark-svg" viewBox="0 0 ${width} ${height}" aria-hidden="true" focusable="false">
+            <polyline class="price-spark-line" points="${line}"></polyline>
+          </svg>
+          <div
+            class="price-spark-points"
+            role="group"
+            aria-label="Unit price history for ${escapeHtml(item.name)}"
+          >
+            ${buttons}
+          </div>
+        </div>
+        <p class="price-spark-readout" data-price-spark-readout>Select a point for its date and price.</p>
+        <div class="price-spark-foot">
+          <span>${formatDate(history[0].date)}</span>
+          <span>${formatDate(history[history.length - 1].date)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function selectPricePoint(point) {
+    const spark = point.closest("[data-price-spark]");
+    if (!spark) return;
+
+    $$("[data-price-spark-point]", spark).forEach((candidate) => {
+      const selected = candidate === point;
+      candidate.classList.toggle("is-active", selected);
+      candidate.tabIndex = selected ? 0 : -1;
+    });
+
+    const readout = $("[data-price-spark-readout]", spark);
+    if (!readout) return;
+    readout.textContent = `${point.dataset.date} · ${point.dataset.price}`;
+    readout.classList.add("is-active");
+  }
+
+  function selectNearestPricePoint(plot, event) {
+    const points = $$("[data-price-spark-point]", plot);
+    if (!points.length) return;
+
+    const plotRect = plot.getBoundingClientRect();
+    const pointerX = event.clientX - plotRect.left;
+    const pointerY = event.clientY - plotRect.top;
+    let nearest = null;
+    let nearestDistance = Infinity;
+
+    points.forEach((point) => {
+      const pointRect = point.getBoundingClientRect();
+      const pointX = pointRect.left + pointRect.width / 2 - plotRect.left;
+      const pointY = pointRect.top + pointRect.height / 2 - plotRect.top;
+      const distance = Math.hypot(pointX - pointerX, pointY - pointerY);
+      if (distance < nearestDistance) {
+        nearest = point;
+        nearestDistance = distance;
+      }
+    });
+
+    if (!nearest) return;
+    selectPricePoint(nearest);
+    nearest.focus({ preventScroll: true });
+  }
+
+  function gapComparison(gap, prediction) {
+    if (prediction.maturity === "learning") return "Only gap so far";
+    const typical = prediction.averageInterval;
+    if (!typical) return "Measured gap";
+    const difference = Math.round(gap - typical);
+    if (difference === 0) return "Matches your typical gap";
+    const days = Math.abs(difference);
+    return `${days} ${days === 1 ? "day" : "days"} ${
+      difference > 0 ? "longer" : "shorter"
+    } than typical`;
+  }
+
+  function gapSpace(days) {
+    return Math.max(24, Math.min(72, Math.round(days * 3)));
+  }
+
+  function purchaseActionButtons(item, purchase) {
+    const labelDate = formatFullDate(parseDate(purchase.date));
+    return `
+      <div class="rhythm-actions">
+        <button
+          class="btn btn-secondary btn-sm"
+          type="button"
+          data-action="edit-purchase"
+          data-id="${escapeHtml(item.id)}"
+          data-purchase-id="${escapeHtml(purchase.id)}"
+          aria-label="Edit purchase on ${escapeHtml(labelDate)}"
+        >Edit</button>
+        <button
+          class="btn btn-ghost btn-sm rhythm-delete-btn"
+          type="button"
+          data-action="delete-purchase"
+          data-id="${escapeHtml(item.id)}"
+          data-purchase-id="${escapeHtml(purchase.id)}"
+          aria-label="Delete purchase on ${escapeHtml(labelDate)}"
+        >Delete</button>
+      </div>
+    `;
   }
 
   function createDemoState() {
@@ -431,7 +648,8 @@ import {
   }
 
   function updateMobileDock() {
-    const shouldHide = currentView === "dashboard" && nextUpCardVisible;
+    const shouldHide =
+      currentView === "item" || (currentView === "dashboard" && nextUpCardVisible);
     $(".header-actions")?.classList.toggle("is-hidden", shouldHide);
     document.body.classList.toggle("mobile-dock-hidden", shouldHide);
   }
@@ -498,20 +716,38 @@ import {
     return `In ${daysUntil}d`;
   }
 
+  function restockHeading(prediction) {
+    return prediction.maturity === "learning" ? "Estimated restock" : "Next predicted restock";
+  }
+
+  function learningCue(prediction) {
+    if (!prediction || prediction.maturity !== "learning") return "";
+    const progress =
+      prediction.purchaseCount === 0
+        ? "No purchases yet"
+        : `${prediction.purchaseCount} of 3 purchases`;
+    return `<p class="next-up-estimate"><span class="status-chip status-learning">Learning</span><span>${escapeHtml(progress)} · ${escapeHtml(prediction.method)}</span></p>`;
+  }
+
   function restockHorizonLane(item, prediction) {
     const position = horizonPositionFor(prediction.daysUntil);
     const label = formatHorizonPointerLabel(prediction.daysUntil);
     const align = position < 12 ? "left" : position > 88 ? "right" : "center";
+    const heading = restockHeading(prediction);
+    const confidence =
+      prediction.maturity === "learning"
+        ? `${prediction.confidence}. ${prediction.method}.`
+        : prediction.confidence;
 
     return `
       <div
         class="restock-horizon horizon-${escapeHtml(prediction.zone)}"
         role="group"
-        aria-label="${escapeHtml(item.name)} is in the ${escapeHtml(prediction.statusLabel)} zone. Predicted restock ${formatFullDate(prediction.date)}, ${formatDue(prediction.daysUntil)}."
+        aria-label="${escapeHtml(item.name)} is in the ${escapeHtml(prediction.statusLabel)} zone. ${escapeHtml(heading)} ${formatFullDate(prediction.date)}, ${formatDue(prediction.daysUntil)}. ${escapeHtml(confidence)}"
       >
         <div class="horizon-summary">
           <div>
-            <span>Next predicted restock</span>
+            <span>${escapeHtml(heading)}</span>
             <strong>${formatFullDate(prediction.date)}</strong>
           </div>
           <span class="horizon-due">${formatDue(prediction.daysUntil)}</span>
@@ -559,6 +795,7 @@ import {
               >${escapeHtml(item.name)}</button>
             </h2>
             <p>${escapeHtml(item.category)}${unitText}</p>
+            ${learningCue(prediction)}
           </div>
         </div>
         ${restockHorizonLane(item, prediction)}
@@ -611,7 +848,7 @@ import {
       container.innerHTML = `
           <div class="empty-state">
             <h2>No tracked items yet</h2>
-            <p>Add a household staple and its restock date will appear here.</p>
+            <p>Add a household staple and Hoot will start learning its restock rhythm.</p>
             <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
           </div>
         `;
@@ -716,6 +953,7 @@ import {
 
     $("#calendar-caption").textContent = `${rangeLabel}.`;
     container.setAttribute("aria-label", rangeLabel);
+    container.removeAttribute("data-card-count");
     syncCalendarRangeControls();
 
     if (!tracked.length) {
@@ -761,6 +999,7 @@ import {
       `
       : "";
 
+    container.dataset.cardCount = String(dayCards.length + (overdue.length ? 1 : 0));
     container.innerHTML = `${overdueCard}${dayCards.join("")}`;
   }
 
@@ -777,7 +1016,7 @@ import {
       container.innerHTML = `
         <div class="empty-state">
           <h2>No one-time items</h2>
-          <p>Birthday candles, packing tape, anything you buy once. Nothing here affects restock dates.</p>
+          <p>Use this list for birthday candles, packing tape, or anything that should not enter the prediction model.</p>
           <button class="btn btn-primary" type="button" data-action="add-one-time">Add a one-time item</button>
         </div>
       `;
@@ -811,17 +1050,17 @@ import {
 
   function renderStoreRunRow(entry) {
     const { item } = entry;
-    const isInCart = storeRun.selected.has(item.id);
+    const isLogged = storeRun.selected.has(item.id);
 
-    if (isInCart) {
+    if (isLogged) {
       return `
-        <article class="store-run-row is-in-cart" data-item-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)} in cart">
+        <article class="store-run-row is-in-cart" data-item-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)} logged this trip">
           <span class="run-check" aria-hidden="true">
             <svg viewBox="0 0 16 16" focusable="false"><path d="M3.5 8.4l2.9 2.9 6.1-6.6" /></svg>
           </span>
           <div class="store-run-row-main">
             <strong>${escapeHtml(item.name)}</strong>
-            <small>In cart</small>
+            <small>Logged</small>
           </div>
         </article>
       `;
@@ -843,9 +1082,8 @@ import {
           type="button"
           data-action="toggle-run-item"
           data-id="${escapeHtml(item.id)}"
-          aria-label="Add ${escapeHtml(item.name)} to cart"
-          aria-pressed="false"
-        >Add</button>
+          aria-label="Log ${escapeHtml(item.name)}"
+        >Log</button>
       </article>
     `;
   }
@@ -866,7 +1104,7 @@ import {
 
     if (!item.isOneTime) {
       const prediction = predictionFor(item, today);
-      if (prediction) details.push(`Next restock ${formatDate(prediction.date)}`);
+      if (prediction) details.push(`${prediction.maturity === "learning" ? "Estimated restock" : "Next restock"} ${formatDate(prediction.date)}`);
     }
 
     return details.join(" · ");
@@ -885,12 +1123,12 @@ import {
     if (!selectedEntries.length) {
       cart.innerHTML = `
         <header class="store-run-cart-header">
-          <h2>In cart</h2>
+          <h2>This trip</h2>
           <span>0 items</span>
         </header>
         <div class="store-run-cart-empty">
-          <strong>Cart is empty</strong>
-          <p>Add an item and it’s saved now; Undo in the cart reverses it.</p>
+          <strong>Nothing logged yet</strong>
+          <p>Tap Log on an item. Hoot saves the change now; Undo here reverses it.</p>
         </div>
       `;
       return;
@@ -898,7 +1136,7 @@ import {
 
     cart.innerHTML = `
       <header class="store-run-cart-header">
-        <h2>In cart</h2>
+        <h2>This trip</h2>
         <span>${countLabel}</span>
       </header>
       <ul class="store-run-cart-list">
@@ -965,7 +1203,7 @@ import {
 
     $("#store-run-summary").innerHTML = `
       <article><span>Items</span><strong>${summary.total}</strong></article>
-      <article><span>In cart</span><strong>${summary.inCart}</strong></article>
+      <article><span>Logged</span><strong>${summary.inCart}</strong></article>
       <article><span>Left</span><strong>${summary.remaining}</strong></article>
     `;
 
@@ -1029,19 +1267,20 @@ import {
   }
 
   async function toggleShoppingRunItem(itemId, trigger) {
-  const item = state.items.find((entry) => entry.id === itemId);
-  if (!item || storeRun.selected.has(itemId)) return;
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || storeRun.selected.has(itemId)) return;
 
-  const currentEntry = buildShoppingRun(state.items, {
-    includeWatch: storeRun.includeWatch,
-    referenceDate: today,
-  }).find((candidate) => candidate.item.id === itemId);
-  const priority = currentEntry?.priority ?? 4;
+    const currentEntry = buildShoppingRun(state.items, {
+      includeWatch: storeRun.includeWatch,
+      referenceDate: today,
+    }).find((candidate) => candidate.item.id === itemId);
+    const priority = currentEntry?.priority ?? 4;
+    const prediction = item.isOneTime ? null : predictionFor(item, today);
 
-  try {
-    if (item.isOneTime) {
-      await hootApi.toggleOneTime(itemId, true);
-      storeRun.selected.set(itemId, { type: "one-time", priority });
+    try {
+      if (item.isOneTime) {
+        await hootApi.toggleOneTime(itemId, true);
+        storeRun.selected.set(itemId, { type: "one-time", priority });
       } else {
         const latest = latestPurchaseFor(item);
         const updatedItem = await hootApi.logPurchase(itemId, {
@@ -1056,17 +1295,18 @@ import {
           type: "tracked",
           purchaseId: createdPurchase.id,
           priority,
+          predictedDate: prediction ? toISODate(prediction.date) : null,
         });
       }
 
       saveStoreRun();
       render();
       announceRun(
-        `${item.name} added to cart. ${storeRun.selected.size} in cart.`,
+        `${item.name} logged. ${storeRun.selected.size} logged this trip.`,
       );
       focusNextRunRow(itemId);
     } catch {
-      toast(`Could not add ${item.name}. Try again.`, "error");
+      toast(`Could not log ${item.name}. Try again.`, "error");
     }
   }
 
@@ -1108,9 +1348,9 @@ import {
         )
         ?.focus();
       announceRun(
-        `${item.name} ${selection.type === "one-time" ? "restored" : "removed from cart"}. ${
+        `${item.name} ${selection.type === "one-time" ? "restored" : "removed from this trip"}. ${
           storeRun.selected.size
-        } in cart.`,
+        } logged this trip.`,
       );
     } catch {
       toast(`Could not undo ${item.name}. Try again.`, "error");
@@ -1145,6 +1385,53 @@ import {
     };
   }
 
+  function predictionCheckSummary(item) {
+    const checks = item.purchases
+      .map((purchase) => purchase.feedback)
+      .filter((feedback) => feedback?.verdict === "right" || feedback?.verdict === "early");
+    if (!checks.length) return "None yet";
+
+    const right = checks.filter((feedback) => feedback.verdict === "right").length;
+    const early = checks.length - right;
+    return early ? `${right} right · ${early} still had some` : `${right} right`;
+  }
+
+  function predictionCheckMarkup(item, purchase, predictedDate) {
+    const verdict = purchase?.feedback?.verdict;
+    const next = predictionFor(item, today);
+    const result =
+      verdict === "early"
+        ? `Still had some · next estimate moved to ${formatDate(next.date)}`
+        : verdict === "right"
+          ? `Right · next estimate ${formatDate(next.date)}`
+          : "";
+
+    return `
+      <div class="prediction-check" data-check-item="${escapeHtml(item.id)}">
+        <p class="prediction-check-prompt">Due ${formatDate(parseDate(predictedDate))} · was Hoot right?</p>
+        <div class="prediction-check-actions" role="group" aria-label="Was Hoot right about ${escapeHtml(item.name)}?">
+          <button
+            class="btn btn-secondary btn-sm"
+            type="button"
+            data-action="run-feedback"
+            data-id="${escapeHtml(item.id)}"
+            data-verdict="right"
+            aria-pressed="${verdict === "right"}"
+          >Yes, I was out</button>
+          <button
+            class="btn btn-secondary btn-sm"
+            type="button"
+            data-action="run-feedback"
+            data-id="${escapeHtml(item.id)}"
+            data-verdict="early"
+            aria-pressed="${verdict === "early"}"
+          >Still had some</button>
+        </div>
+        <p class="prediction-check-result" data-check-result${result ? "" : " hidden"}>${escapeHtml(result)}</p>
+      </div>
+    `;
+  }
+
   function finishShoppingRun(trigger) {
     const receipt = buildRunReceipt();
     if (!receipt.entries.length) return;
@@ -1155,10 +1442,12 @@ import {
     pendingRunReceipt = receipt;
 
     $("#finish-run-title").textContent = "Shopping run finished";
-    $("#finish-run-message").textContent = `${count} ${itemWord} checked off.${
+    $("#finish-run-message").textContent = `${count} ${itemWord} logged.${
       trackedCount
-        ? ` ${trackedCount} restock date${trackedCount === 1 ? "" : "s"} updated.`
-        : " No restock dates changed."
+        ? ` ${trackedCount} ${
+            trackedCount === 1 ? "prediction" : "predictions"
+          } updated.`
+        : " No predictions changed."
     }`;
     $("#finish-run-summary").innerHTML = `
       <strong>${count} ${itemWord}</strong>
@@ -1168,12 +1457,29 @@ import {
           : `<span>Spending not recorded</span>`
       }
     `;
+    const hasPredictionChecks = receipt.entries.some(
+      ({ selection }) => selection?.type === "tracked" && selection.predictedDate,
+    );
+    $("#finish-run-hint").hidden = !hasPredictionChecks;
+    $("#prediction-check-status").textContent = "";
     $("#finish-run-list").innerHTML = receipt.entries
-      .map(({ item, purchase }) => {
+      .map(({ item, purchase, selection }) => {
         const detail = purchase
           ? `${formatQuantity(purchase.quantity, item.unit)} · ${formatPurchasePrice(purchase.price)}`
           : "One-time checklist";
-        return `<li><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(detail)}</span></li>`;
+        const check =
+          selection?.type === "tracked" && selection.predictedDate
+            ? predictionCheckMarkup(item, purchase, selection.predictedDate)
+            : "";
+        return `
+          <li class="finish-run-entry">
+            <div class="finish-run-entry-line">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span>${escapeHtml(detail)}</span>
+            </div>
+            ${check}
+          </li>
+        `;
       })
       .join("");
     $("#finish-run-history").hidden = !receipt.historyItemId;
@@ -1192,7 +1498,7 @@ import {
     };
     saveStoreRun();
 
-    setView("dashboard");
+    setView("dashboard", { replace: true });
 
     if (openHistory && receipt?.historyItemId) {
       openDetail(receipt.historyItemId);
@@ -1201,6 +1507,43 @@ import {
     }
 
     $('.nav-button[data-view="dashboard"]')?.focus({ preventScroll: true });
+  }
+
+  function recordRunPredictionFeedback(itemId, verdict, trigger) {
+    const entry = pendingRunReceipt?.entries.find(({ item }) => item.id === itemId);
+    if (!entry?.purchase || !entry.selection?.predictedDate) return;
+
+    entry.purchase.feedback = {
+      verdict,
+      predictedDate: entry.selection.predictedDate,
+      recordedAt: toISODate(today),
+    };
+    saveState();
+
+    const next = predictionFor(entry.item, today);
+    const check = trigger.closest(".prediction-check");
+    $$('[data-action="run-feedback"]', check).forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.verdict === verdict));
+    });
+
+    const result = check?.querySelector("[data-check-result]");
+    if (result) {
+      result.hidden = false;
+      result.textContent =
+        verdict === "early"
+          ? `Still had some · next estimate moved to ${formatDate(next.date)}`
+          : `Right · next estimate ${formatDate(next.date)}`;
+    }
+
+    render();
+
+    const status = $("#prediction-check-status");
+    if (status) {
+      status.textContent =
+        verdict === "early"
+          ? `${entry.item.name} marked still had some. Next estimate moved to ${formatFullDate(next.date)}.`
+          : `${entry.item.name} marked right. Next estimate ${formatFullDate(next.date)}.`;
+    }
   }
 
   function toggleWatchItems(trigger) {
@@ -1212,148 +1555,317 @@ import {
     );
   }
 
-  function predictionChart(item, prediction) {
-    if (!prediction) {
-      return `
-        <div class="chart-empty">
-          <strong>No restock date</strong>
-          <p>Restock dates come from purchases logged on tracked staples.</p>
-        </div>
-      `;
-    }
-    if (!prediction.purchaseDates.length) {
-      return `
-        <div class="chart-empty">
-          <strong>No purchases yet</strong>
-          <p>Log a purchase to start this item’s timeline.</p>
-        </div>
-      `;
-    }
+  function purchaseCountLabel(count) {
+    if (!count) return "No purchases yet";
+    if (count === 1) return "Bought once";
+    return `Bought ${count} times`;
+  }
 
-    const width = 760;
-    const height = 330;
-    const margin = { top: 28, right: 34, bottom: 56, left: 76 };
-    const plotWidth = width - margin.left - margin.right;
-    const plotHeight = height - margin.top - margin.bottom;
-    const xMin = prediction.origin;
-    const xMaxCandidate = new Date(Math.max(prediction.latest, prediction.date));
-    const xMax = xMaxCandidate > xMin ? xMaxCandidate : addDays(xMin, 1);
-    const yMax = Math.max(prediction.purchaseCount + 1, 2);
-    const x = (date) => margin.left + ((date - xMin) / (xMax - xMin)) * plotWidth;
-    const y = (sequence) =>
-      height - margin.bottom - ((sequence - 1) / (yMax - 1)) * plotHeight;
-
-    const observedPoints = prediction.purchaseDates.map((date, index) => ({
-      x: x(date),
-      y: y(index + 1),
-      date,
-      sequence: index + 1,
-    }));
-    const fittedPoints = prediction.fittedDates
-      ? prediction.fittedDates.map((date, index) => ({
-          x: x(date),
-          y: y(index + 1),
-        }))
-      : null;
-    const projectionStart = fittedPoints
-      ? fittedPoints[fittedPoints.length - 1]
-      : observedPoints[observedPoints.length - 1];
-    const projectionEnd = {
-      x: x(prediction.date),
-      y: y(prediction.purchaseCount + 1),
-    };
-    const xTicks = [prediction.origin, prediction.latest, prediction.date]
-      .filter((date, index, dates) => dates.findIndex((entry) => toISODate(entry) === toISODate(date)) === index)
-      .sort((left, right) => left - right);
-    const yTicks = Array.from({ length: yMax }, (_, index) => index + 1);
-    const observedCircles = observedPoints
-      .map(
-        (point) => `
-          <circle class="chart-point" cx="${point.x.toFixed(1)}" cy="${point.y.toFixed(1)}" r="6">
-            <title>Observed purchase ${formatFullDate(point.date)}</title>
-          </circle>
-        `,
-      )
-      .join("");
-    const fittedPath = fittedPoints
-      ? `M${fittedPoints.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" L")}`
+  function rhythmSentence(item, prediction) {
+    const correction = prediction.feedbackShiftDays
+      ? " Your last check said you still had some, so Hoot added three days."
       : "";
-    const xTickElements = xTicks
-      .map(
-        (date) => `
-          <g class="chart-grid">
-            <line x1="${x(date).toFixed(1)}" y1="${margin.top}" x2="${x(date).toFixed(1)}" y2="${height - margin.bottom}" />
-            <text x="${x(date).toFixed(1)}" y="${height - 26}" text-anchor="middle">${formatDate(date)}</text>
-          </g>
-        `,
-      )
-      .join("");
-    const yTickElements = yTicks
-      .map(
-        (sequence) => `
-          <g class="chart-grid">
-            <line x1="${margin.left}" y1="${y(sequence).toFixed(1)}" x2="${width - margin.right}" y2="${y(sequence).toFixed(1)}" />
-            <text x="${margin.left - 12}" y="${(y(sequence) + 4).toFixed(1)}" text-anchor="end">${sequence === prediction.purchaseCount + 1 ? "Next" : `#${sequence}`}</text>
-          </g>
-        `,
-      )
-      .join("");
 
+    if (prediction.maturity === "learning") {
+      if (!prediction.purchaseCount) {
+        return `Hoot has no purchases to learn from yet, so this date is your ${item.reorderThresholdDays}-day interval after the day you added the item. Log the first purchase to start a real rhythm.${correction}`;
+      }
+      const remaining = Math.max(0, 3 - prediction.purchaseCount);
+      return `Hoot is still learning this item, so this date uses your ${item.reorderThresholdDays}-day interval. ${remaining} more ${remaining === 1 ? "purchase" : "purchases"} will let it use your real gaps.${correction}`;
+    }
+
+    const average = Math.round(prediction.averageInterval ?? item.reorderThresholdDays);
+    return `You buy this about every ${average} days. Hoot puts the next restock at the end of that rhythm.${correction}`;
+  }
+
+  function methodExplanation(item, prediction) {
+    const correction = prediction.feedbackShiftDays
+      ? ` Your last “still had some” answer adds ${prediction.feedbackShiftDays} days to the result.`
+      : "";
+
+    if (prediction.maturity === "learning") {
+      const basis = prediction.purchaseCount
+        ? `It has ${prediction.purchaseCount} purchase${prediction.purchaseCount === 1 ? "" : "s"} so far; after three it stops using your setting and starts using the gaps between purchases.`
+        : "It has no purchases yet; the first one gives it a real date to work from.";
+      return `Hoot adds your ${item.reorderThresholdDays}-day interval to the most recent date. ${basis}${correction}`;
+    }
+
+    return `Hoot measures the days between each logged purchase and places the next restock one typical gap after the last one. Editing or logging a purchase recalculates it.${correction}`;
+  }
+
+  function answerWindowLine(prediction) {
+    const window = likelyWindowFor(prediction);
+    if (!window) return "";
+
+    const sameDay = window.start.getTime() === window.end.getTime();
+    if (window.shortestGap === window.longestGap) {
+      const range = sameDay
+        ? formatDate(window.start)
+        : `${formatDate(window.start)}–${formatDate(window.end)}`;
+      return `<p class="restock-answer-range"><strong>Likely ${range}.</strong> Your gaps have all been ${window.shortestGap} days.</p>`;
+    }
+    if (window.wide) {
+      return `<p class="restock-answer-range"><strong>Could be anywhere from ${formatDate(window.start)} to ${formatDate(window.end)}.</strong> Your gaps have ranged from ${window.shortestGap} to ${window.longestGap} days.</p>`;
+    }
+    return `<p class="restock-answer-range"><strong>Likely between ${formatDate(window.start)} and ${formatDate(window.end)}.</strong> Your gaps have ranged from ${window.shortestGap} to ${window.longestGap} days.</p>`;
+  }
+
+  function restockAnswer(item, prediction) {
     return `
-      <figure class="prediction-figure">
-        <svg
-          viewBox="0 0 ${width} ${height}"
-          role="img"
-          aria-labelledby="prediction-chart-title-${escapeHtml(item.id)} prediction-chart-desc-${escapeHtml(item.id)}"
-        >
-          <title id="prediction-chart-title-${escapeHtml(item.id)}">Purchase rhythm and projected restock for ${escapeHtml(item.name)}</title>
-          <desc id="prediction-chart-desc-${escapeHtml(item.id)}">
-            Observed purchases are plotted by date and purchase sequence. ${escapeHtml(prediction.method)}. The projected next restock is ${formatFullDate(prediction.date)}.
-          </desc>
-          ${xTickElements}
-          ${yTickElements}
-          ${fittedPath ? `<path class="chart-fitted" d="${fittedPath}" />` : ""}
-          <path
-            class="chart-projection"
-            d="M${projectionStart.x.toFixed(1)},${projectionStart.y.toFixed(1)} L${projectionEnd.x.toFixed(1)},${projectionEnd.y.toFixed(1)}"
-          />
-          ${observedCircles}
-          <circle class="chart-point chart-prediction" cx="${projectionEnd.x.toFixed(1)}" cy="${projectionEnd.y.toFixed(1)}" r="7">
-            <title>Projected restock ${formatFullDate(prediction.date)}</title>
-          </circle>
-        </svg>
-        <figcaption>
-          Purchase dates set the pattern; the dashed line projects the next restock.
-        </figcaption>
-      </figure>
+      <section class="restock-answer horizon-${escapeHtml(prediction.zone)}" aria-labelledby="restock-answer-label">
+        <div class="restock-answer-body">
+          <div class="restock-answer-heading">
+            <span class="item-eyebrow" id="restock-answer-label">Next restock</span>
+            <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+          </div>
+          <p class="restock-answer-date">${formatFullDate(prediction.date)}</p>
+          <p class="restock-answer-due">${escapeHtml(formatDue(prediction.daysUntil))}</p>
+          <p class="restock-answer-why">${escapeHtml(rhythmSentence(item, prediction))}</p>
+          ${answerWindowLine(prediction)}
+        </div>
+        <div class="restock-answer-action">
+          <button class="btn btn-primary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
+        </div>
+      </section>
     `;
   }
 
-  function modelExplanation(item, prediction) {
-    if (!prediction) {
-      return "One-time items stay on a checklist, so they don’t get a restock date.";
-    }
+  function rhythmLedger(item, prediction) {
     if (!prediction.purchaseDates.length) {
-      return `No purchases yet, so the date comes from the ${item.reorderThresholdDays}-day interval you set.`;
+      return `
+        <section class="rhythm-ledger" aria-labelledby="rhythm-title">
+          <div class="section-heading">
+            <div>
+              <h2 id="rhythm-title">Buying rhythm</h2>
+              <p class="section-copy">Each purchase sits on one timeline; the space between is the gap Hoot measured.</p>
+            </div>
+          </div>
+          <div class="rhythm-empty">
+            <strong>No purchases yet</strong>
+            <p>Log the first purchase and Hoot will start the ledger.</p>
+          </div>
+        </section>
+      `;
     }
-    if (prediction.maturity === "learning") {
-      return `The date comes from the ${item.reorderThresholdDays}-day interval you set. Once you’ve logged three purchases, it switches to the gaps between them.`;
-    }
-    const gapDays = prediction.slope ?? prediction.averageInterval;
-    return `Your purchases have been about ${gapDays.toFixed(1)} days apart. Carried forward from the last one, that points to ${formatFullDate(prediction.date)}.`;
+
+    const purchases = [...item.purchases].sort(
+      (left, right) => parseDate(left.date) - parseDate(right.date),
+    );
+    const entries = [];
+
+    purchases.forEach((purchase, index) => {
+      const unitPrice =
+        Number(purchase.quantity) > 1 && purchaseUnitPrice(purchase) !== null
+          ? ` · ${formatUnitPrice(purchase, item)}`
+          : "";
+      entries.push(`
+        <li class="rhythm-entry">
+          <span class="rhythm-marker" aria-hidden="true"></span>
+          <div class="rhythm-content">
+            <div class="rhythm-head">
+              <time class="rhythm-date" datetime="${escapeHtml(purchase.date)}">${formatFullDate(parseDate(purchase.date))}</time>
+            </div>
+            <p class="rhythm-purchase">${escapeHtml(formatQuantity(purchase.quantity, item.unit))} · ${formatPurchasePrice(purchase.price)}${escapeHtml(unitPrice)}</p>
+            ${purchaseActionButtons(item, purchase)}
+          </div>
+        </li>
+      `);
+
+      const next = purchases[index + 1];
+      if (!next) return;
+      const days = Math.max(
+        1,
+        Math.round((parseDate(next.date) - parseDate(purchase.date)) / DAY_MS),
+      );
+      entries.push(`
+        <li class="rhythm-gap-row" style="min-height:${gapSpace(days)}px">
+          <div class="rhythm-gap">
+            <span class="rhythm-gap-days">${days} ${days === 1 ? "day" : "days"}</span>
+            <span class="rhythm-gap-note">${escapeHtml(gapComparison(days, prediction))}</span>
+          </div>
+        </li>
+      `);
+    });
+
+    const projectedDays = Math.max(
+      1,
+      Math.round((prediction.date - prediction.latest) / DAY_MS),
+    );
+    const estimateBasis =
+      prediction.maturity === "learning"
+        ? `your ${item.reorderThresholdDays}-day interval`
+        : "one typical gap";
+    const correction = prediction.feedbackShiftDays
+      ? ` · +${prediction.feedbackShiftDays} days from your check`
+      : "";
+    entries.push(`
+      <li class="rhythm-gap-row is-estimate" style="min-height:${gapSpace(projectedDays)}px">
+        <div class="rhythm-gap">
+          <span class="rhythm-gap-days">${projectedDays} ${projectedDays === 1 ? "day" : "days"}</span>
+          <span class="rhythm-gap-note">Estimate · ${escapeHtml(estimateBasis)}${escapeHtml(correction)}</span>
+        </div>
+      </li>
+    `);
+
+    entries.push(`
+      <li class="rhythm-entry is-estimate">
+        <span class="rhythm-marker" aria-hidden="true"></span>
+        <div class="rhythm-content">
+          <div class="rhythm-head">
+            <span class="rhythm-date">${formatFullDate(prediction.date)}</span>
+            <span class="rhythm-badge is-estimate">Estimate</span>
+          </div>
+          <p class="rhythm-purchase">Expected, not yet purchased</p>
+        </div>
+      </li>
+    `);
+
+    return `
+      <section class="rhythm-ledger" aria-labelledby="rhythm-title">
+        <div class="section-heading">
+          <div>
+            <h2 id="rhythm-title">Buying rhythm</h2>
+            <p class="section-copy">Each purchase sits on one timeline; the space between is the gap Hoot measured.</p>
+          </div>
+        </div>
+        <ol class="rhythm-list">${entries.join("")}</ol>
+      </section>
+    `;
   }
 
-  function consistencyLabel(prediction) {
-    if (!prediction || prediction.rSquared === null || prediction.rSquared === undefined) {
-      return "No steady pattern";
+  function confidenceCard(item, prediction) {
+    const gapCount = prediction.intervals.length;
+    const spread =
+      gapCount > 1
+        ? Math.max(...prediction.intervals) - Math.min(...prediction.intervals)
+        : null;
+    let label = "No purchases yet";
+    if (prediction.purchaseCount) {
+      if (prediction.purchaseCount < 3) {
+        label = `Learning · ${prediction.purchaseCount} of 3 purchases`;
+      } else {
+        const ratio = spread / (prediction.averageInterval || 1);
+        label =
+          spread <= 2
+            ? "Very consistent gaps"
+            : ratio <= 0.35
+              ? "Fairly consistent gaps"
+              : ratio <= 0.7
+                ? "Somewhat irregular gaps"
+                : "Gaps vary widely";
+      }
     }
-    if (prediction.rSquared >= 0.7) {
-      return "Gaps are close to even";
+    const basis =
+      prediction.maturity === "learning"
+        ? `Your ${item.reorderThresholdDays}-day interval`
+        : "Your measured gaps";
+    const note =
+      prediction.purchaseCount === 0
+        ? "Log the first purchase to start measuring gaps."
+        : prediction.maturity === "learning"
+          ? gapCount
+            ? "One more purchase switches the estimate to your real gaps."
+            : "Log a second purchase to measure your first gap."
+          : "The likely window spans your shortest and longest gap.";
+
+    return `
+      <article class="rail-card" aria-labelledby="confidence-title">
+        <h2 id="confidence-title">Confidence</h2>
+        <p class="rail-detail">${escapeHtml(label)}</p>
+        <dl class="pattern-list">
+          <div><dt>Based on</dt><dd>${prediction.purchaseCount} purchase${prediction.purchaseCount === 1 ? "" : "s"}</dd></div>
+          <div><dt>Gaps measured</dt><dd>${gapCount}</dd></div>
+          <div><dt>Gap range</dt><dd>${spread === null ? "Not enough gaps" : `${spread} ${spread === 1 ? "day" : "days"}`}</dd></div>
+          <div><dt>Basis</dt><dd>${escapeHtml(basis)}</dd></div>
+        </dl>
+        <p class="rail-note">${note}</p>
+      </article>
+    `;
+  }
+
+  function spendingCard(item) {
+    const stats = spendingFor(item);
+    if (!stats.pricedCount) {
+      return `
+        <article class="rail-card" aria-labelledby="spending-title">
+          <h2 id="spending-title">Spending</h2>
+          <p class="rail-detail">No prices logged</p>
+          <p class="rail-note">Total price is optional. Add one when you log a purchase to see known spend and unit price.</p>
+        </article>
+      `;
     }
-    if (prediction.rSquared >= 0.4) {
-      return "Gaps vary a little";
+
+    let priceChange = "Not enough prices";
+    if (stats.change !== null) {
+      if (Math.abs(stats.change) < 0.005) {
+        priceChange = `Same as ${formatDate(parseDate(stats.previous.date))}`;
+      } else {
+        priceChange = `${stats.change > 0 ? "Up" : "Down"} ${formatMoneyExact(
+          Math.abs(stats.change),
+        )} since ${formatDate(parseDate(stats.previous.date))}`;
+      }
     }
-    return "Gaps vary a lot";
+    const sparkline = stats.history.length >= 2 ? priceSparkline(item, stats.history) : "";
+
+    return `
+      <article class="rail-card" aria-labelledby="spending-title">
+        <h2 id="spending-title">Spending</h2>
+        <dl class="pattern-list">
+          <div><dt>Known spend</dt><dd>${formatMoney(stats.total)}</dd></div>
+          <div><dt>Average purchase</dt><dd>${formatMoney(stats.average)}</dd></div>
+          <div><dt>Latest unit price</dt><dd>${formatMoney(stats.latestUnit)} / ${escapeHtml(item.unit || "unit")}</dd></div>
+          <div><dt>Price change</dt><dd>${escapeHtml(priceChange)}</dd></div>
+        </dl>
+        ${sparkline}
+        <p class="rail-note">Prices on ${stats.pricedCount} of ${stats.purchases} purchase${stats.purchases === 1 ? "" : "s"}. Unit price is total divided by quantity.</p>
+      </article>
+    `;
+  }
+
+  function patternCard(item, prediction) {
+    const hasGaps = prediction.intervals.length > 0;
+    const learning = prediction.maturity === "learning";
+    const averageGap = prediction.averageInterval ?? item.reorderThresholdDays;
+    const shortest = hasGaps ? Math.min(...prediction.intervals) : null;
+    const longest = hasGaps ? Math.max(...prediction.intervals) : null;
+    const lastGap = hasGaps ? prediction.intervals[prediction.intervals.length - 1] : null;
+    const rows = learning
+      ? `<div><dt>Gap so far</dt><dd>${hasGaps ? `${Math.round(averageGap)} days` : "Not yet"}</dd></div>
+        <div><dt>Estimate uses</dt><dd>${item.reorderThresholdDays} days</dd></div>`
+      : `<div><dt>Typical gap</dt><dd>${Math.round(averageGap)} days</dd></div>
+        <div><dt>Shortest gap</dt><dd>${shortest} days</dd></div>
+        <div><dt>Longest gap</dt><dd>${longest} days</dd></div>
+        <div><dt>Last gap</dt><dd>${lastGap} days</dd></div>`;
+
+    return `
+      <article class="rail-card" aria-labelledby="pattern-title">
+        <h2 id="pattern-title">Pattern</h2>
+        <dl class="pattern-list">
+          ${rows}
+        </dl>
+        <details class="explain-disclosure">
+          <summary>How Hoot got this date</summary>
+          <p>${escapeHtml(methodExplanation(item, prediction))}</p>
+        </details>
+      </article>
+    `;
+  }
+
+  function checksCard(item) {
+    const summary = predictionCheckSummary(item);
+    const hasChecks = summary !== "None yet";
+
+    return `
+      <article class="rail-card">
+        <h2>Your checks</h2>
+        <p class="rail-detail">${escapeHtml(summary)}</p>
+        <p class="rail-note">${
+          hasChecks
+            ? "Answers from the finish receipt. “Still had some” moves the next estimate three days later."
+            : "Answer “Was Hoot right?” after a shopping run. “Still had some” moves the next estimate three days later."
+        }</p>
+      </article>
+    `;
   }
 
   function renderItemPage(item) {
@@ -1362,148 +1874,57 @@ import {
     const purchases = [...item.purchases].sort(
       (left, right) => parseDate(left.date) - parseDate(right.date),
     );
-    const historyRows = purchases
-      .map(
-        (purchase) => `
-          <tr>
-            <td data-label="Date">${formatFullDate(parseDate(purchase.date))}</td>
-            <td data-label="Quantity">${purchase.quantity} ${escapeHtml(item.unit || "unit")}</td>
-            <td data-label="Total price" class="history-price-cell">${formatPurchasePrice(purchase.price)}</td>
-            <td data-label="Actions" class="history-actions-cell">
-              <div class="history-actions-group">
-                <button
-                  class="btn btn-secondary btn-sm"
-                  type="button"
-                  data-action="edit-purchase"
-                  data-id="${escapeHtml(item.id)}"
-                  data-purchase-id="${escapeHtml(purchase.id)}"
-                  aria-label="Edit purchase on ${formatFullDate(parseDate(purchase.date))}"
-                >Edit</button>
-                <button
-                  class="btn btn-ghost btn-sm history-delete-btn"
-                  type="button"
-                  data-action="delete-purchase"
-                  data-id="${escapeHtml(item.id)}"
-                  data-purchase-id="${escapeHtml(purchase.id)}"
-                  aria-label="Delete purchase on ${formatFullDate(parseDate(purchase.date))}"
-                >Delete</button>
-              </div>
-            </td>
-          </tr>
-        `,
-      )
-      .join("");
-    const history = `
-      <table class="history-table">
-        <caption>Purchase history for ${escapeHtml(item.name)}</caption>
-        <thead>
-          <tr>
-            <th scope="col">Date</th>
-            <th scope="col">Quantity</th>
-            <th scope="col" class="history-price-col">Total price</th>
-            <th scope="col" class="history-actions-header">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${
-            historyRows ||
-            `<tr><td colspan="4" class="history-empty">No purchase history yet.</td></tr>`
-          }
-        </tbody>
-      </table>
-    `;
-    const averageInterval = prediction?.averageInterval;
-    const learningProgress = prediction
-      ? prediction.purchaseCount === 0
-        ? "No purchases yet"
-        : prediction.purchaseCount < 3
-          ? `${prediction.purchaseCount} of 3 purchases`
-          : "Learned"
-      : "Checklist";
-    const intervalRange = prediction?.intervals.length
-      ? `${Math.min(...prediction.intervals)}–${Math.max(...prediction.intervals)} days`
-      : "Not enough purchases";
     const backLabel =
-      itemReturnView === "one-time"
-        ? "Back to one-time items"
-        : "Back to dashboard";
+      itemReturnView === "one-time" ? "Back to one-time items" : "Back to dashboard";
+    const meta = [
+      item.category,
+      item.unit,
+      item.isOneTime ? null : purchaseCountLabel(purchases.length),
+    ]
+      .filter(Boolean)
+      .map((part) => escapeHtml(part))
+      .join(" · ");
 
+    document.title = `${item.name} · Hoot`;
     content.innerHTML = `
       <div class="item-page">
-        <button class="btn btn-secondary back-button" type="button" data-view="${escapeHtml(itemReturnView)}">
-          ← ${backLabel}
-        </button>
+        <button
+          class="btn btn-ghost back-button"
+          type="button"
+          data-view="${escapeHtml(itemReturnView)}"
+          data-history="replace"
+        >← ${backLabel}</button>
+
         <header class="item-page-header">
           <div>
             <h1 id="item-analysis-title" tabindex="-1">${escapeHtml(item.name)}</h1>
-            <p>${escapeHtml(item.category)} · ${escapeHtml(item.unit || "No unit specified")} · ${purchases.length} logged purchase${purchases.length === 1 ? "" : "s"}</p>
+            <p>${meta}</p>
           </div>
-          <span class="status-chip ${prediction ? `status-${escapeHtml(prediction.zone)}` : "status-learning"}">
-            ${prediction ? escapeHtml(prediction.statusLabel) : "Checklist"}
-          </span>
         </header>
-
-        ${prediction ? restockHorizonLane(item, prediction) : ""}
-
-        <div class="analysis-grid">
-        <article class="analysis-card">
-          ${
-            item.isOneTime
-              ? `<span>One-time item</span><strong>No restock date</strong><p>This item stays on the checklist and doesn’t affect restock dates.</p>`
-              : `<span>Next predicted restock</span><strong>${formatFullDate(prediction.date)} · ${formatDue(prediction.daysUntil)}</strong>
-                <p>${escapeHtml(prediction.confidence)}</p>
-                <details class="estimate-disclosure">
-                  <summary>How this estimate works</summary>
-                  <p>${escapeHtml(modelExplanation(item, prediction))}</p>
-                  <dl class="analysis-facts">
-                    <div><dt>Purchases used</dt><dd>${prediction.purchaseCount}</dd></div>
-                    <div><dt>Consistency</dt><dd>${escapeHtml(consistencyLabel(prediction))}</dd></div>
-                    <div><dt>What changes it</dt><dd>Your next purchase</dd></div>
-                  </dl>
-                </details>`
-          }
-        </article>
 
         ${
           item.isOneTime
-            ? `<article class="analysis-card">
-          <span>Checklist</span>
-          <strong>Not tracked by date</strong>
-          <dl class="analysis-facts">
-            <div><dt>Tracking mode</dt><dd>Checklist only</dd></div>
-            <div><dt>Restock date</dt><dd>Not tracked</dd></div>
-            <div><dt>Purchase history</dt><dd>Not used</dd></div>
-          </dl>
-        </article>`
-            : `<article class="analysis-card">
-          <span>Rhythm</span>
-          <strong>${averageInterval ? `${averageInterval.toFixed(1)} days average` : "Building rhythm"}</strong>
-          <dl class="analysis-facts">
-            <div><dt>Interval range</dt><dd>${intervalRange}</dd></div>
-            <div><dt>Learning progress</dt><dd>${learningProgress}</dd></div>
-            <div><dt>Estimate source</dt><dd>${prediction ? escapeHtml(prediction.method) : "Checklist"}</dd></div>
-          </dl>
-        </article>`
-        }
-        </div>
-
-        <section class="chart-panel">
-          <div class="section-heading">
-            <div>
-              <h2>${item.isOneTime ? "How this item is tracked" : "How this date is estimated"}</h2>
-            </div>
+            ? `<section class="one-time-answer" aria-labelledby="one-time-answer-title">
+          <span class="item-eyebrow">One-time item</span>
+          <h2 id="one-time-answer-title">On your checklist</h2>
+          <p>Hoot does not predict a restock for this item. It stays on the One-time list until you check it off, so it never changes your staples’ dates.</p>
+        </section>`
+            : `<div class="item-layout">
+          <div class="item-main">
+            ${restockAnswer(item, prediction)}
+            ${rhythmLedger(item, prediction)}
           </div>
-          ${predictionChart(item, prediction)}
-        </section>
-
-        <section>
-          <h2>Purchase history</h2>
-          ${history}
-        </section>
+          <aside class="item-rail" aria-label="Pattern, confidence, and spending details">
+            ${patternCard(item, prediction)}
+            ${confidenceCard(item, prediction)}
+            ${prediction.purchaseCount ? spendingCard(item) : ""}
+            ${checksCard(item)}
+          </aside>
+        </div>`
+        }
 
         <footer class="detail-actions">
-          ${!item.isOneTime ? `<button class="btn btn-secondary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>` : ""}
-          <button class="btn btn-secondary" type="button" data-action="edit" data-id="${escapeHtml(item.id)}">Edit</button>
+          <button class="btn btn-secondary" type="button" data-action="edit" data-id="${escapeHtml(item.id)}">Edit item</button>
           <button class="btn btn-danger" type="button" data-action="delete" data-id="${escapeHtml(item.id)}">Delete</button>
         </footer>
       </div>
@@ -1542,12 +1963,65 @@ import {
     }
   }
 
-  function setView(view) {
+  function viewRoute(view, itemId = currentItemId) {
+    if (view === "item" && itemId) return `#/item/${encodeURIComponent(itemId)}`;
+    if (view === "store-run") return "#/shopping";
+    if (view === "one-time") return "#/one-time";
+    return "#/dashboard";
+  }
+
+  function readRoute() {
+    const hash = window.location.hash.replace(/^#\/?/, "");
+    if (!hash) return { view: "dashboard", hasRoute: false };
+
+    const [name, ...rest] = hash.split("/");
+    if (name === "item" && rest.length) {
+      return { view: "item", itemId: decodeURIComponent(rest.join("/")), hasRoute: true };
+    }
+    if (name === "shopping") return { view: "store-run", hasRoute: true };
+    if (name === "one-time") return { view: "one-time", hasRoute: true };
+    if (name === "dashboard") return { view: "dashboard", hasRoute: true };
+    return { view: "dashboard", hasRoute: false };
+  }
+
+  function syncRoute(view, { replace = false } = {}) {
+    const nextHash = viewRoute(view);
+    if (window.location.hash === nextHash) return;
+    const method = replace ? "replaceState" : "pushState";
+    window.history[method]({ hoot: true }, "", nextHash);
+  }
+
+  function applyRoute() {
+    const route = readRoute();
+    const previousView = currentView;
+
+    if (route.view === "item") {
+      const item = state.items.find((entry) => entry.id === route.itemId);
+      if (!item) {
+        currentItemId = null;
+        setView("dashboard", { replace: true });
+        return;
+      }
+
+      if (previousView !== "item") {
+        itemReturnView =
+          previousView === "one-time" || item.isOneTime ? "one-time" : "dashboard";
+      }
+      currentItemId = item.id;
+      setView("item", { updateUrl: false });
+      return;
+    }
+
+    setView(route.view, { updateUrl: false });
+  }
+
+  function setView(view, { replace = false, updateUrl = true } = {}) {
     const previousView = currentView;
     let nextView = view;
+    let activeItem = null;
     if (nextView === "item") {
-      const item = state.items.find((entry) => entry.id === currentItemId);
-      if (item) renderItemPage(item);
+      activeItem = state.items.find((entry) => entry.id === currentItemId) ?? null;
+      if (activeItem) renderItemPage(activeItem);
       else nextView = itemReturnView || "dashboard";
     }
     currentView = nextView;
@@ -1572,11 +2046,14 @@ import {
       }
       renderStoreRun();
       if (previousView !== "store-run") {
-        $("#store-run-title")?.focus();
+        window.scrollTo(0, 0);
+        $("#store-run-title")?.focus({ preventScroll: true });
       }
     } else if (previousView === "store-run" && nextView === "dashboard") {
       $('.nav-button[data-view="dashboard"]')?.focus();
     }
+    if (updateUrl) syncRoute(nextView, { replace });
+    document.title = activeItem ? `${activeItem.name} · Hoot` : DEFAULT_TITLE;
   }
 
   function clearFieldErrors(form) {
@@ -1803,7 +2280,7 @@ import {
       window.setTimeout(() => closeDialog($("#log-purchase-dialog")), 240);
       toast(
         `${updatedItem.name} logged — ${formatQuantity(quantity, updatedItem.unit)} for ${purchasePricePhrase(price)}. ` +
-          `Next restock ${formatFullDate(prediction.date)}.`,
+          `Next estimate ${formatFullDate(prediction.date)}.`,
       );
     } catch {
       setFormBusy(form, false);
@@ -1958,7 +2435,7 @@ import {
       window.setTimeout(() => closeDialog($("#edit-purchase-dialog")), 240);
       toast(
         prediction
-          ? `Purchase updated. Next restock ${formatFullDate(prediction.date)}.`
+          ? `Purchase updated. Next restock estimate ${formatFullDate(prediction.date)}.`
           : "Purchase updated.",
       );
     } catch {
@@ -2009,11 +2486,16 @@ import {
       return;
     }
 
-    const firstControl = Array.from(
+    const isVisible = (control) => control.getClientRects().length > 0;
+    // The checked path in a choice group is the first useful control; an unchecked sibling would misstate it.
+    const checkedChoice = Array.from(
+      dialog.querySelectorAll("input[type='radio']:checked:not(:disabled)"),
+    ).find(isVisible);
+    const firstControl = checkedChoice || Array.from(
       dialog.querySelectorAll(
         "input:not([type='hidden']):not(:disabled), select:not(:disabled), textarea:not(:disabled)",
       ),
-    ).find((control) => control.getClientRects().length > 0);
+    ).find(isVisible);
     const primaryAction = dialog.querySelector("button:not([data-close]):not(:disabled)");
     const fallbackAction = dialog.querySelector(".btn-secondary:not(:disabled)");
     const focusTarget = firstControl || primaryAction || fallbackAction;
@@ -2029,8 +2511,6 @@ import {
     if (!item) return;
     itemReturnView = currentView === "item" ? itemReturnView : currentView || "dashboard";
     currentItemId = item.id;
-    currentView = "item";
-    render();
     setView("item");
     window.scrollTo(0, 0);
     $("#item-analysis-title")?.focus({ preventScroll: true });
@@ -2052,7 +2532,7 @@ import {
         currentItemId = null;
         itemReturnView = "dashboard";
         render();
-        setView(returnView);
+        setView(returnView, { replace: true });
         toast(`${deletedItem.name} deleted.`, "success", {
           label: "Undo",
           onAction: async () => {
@@ -2076,14 +2556,14 @@ import {
 
     openConfirm({
       title: "Delete this purchase?",
-      message: `Remove the purchase of ${targetPurchase.quantity} ${escapeHtml(item.unit || "unit")} on ${purchaseDateLabel}? The next restock date updates immediately.`,
+      message: `Remove the purchase of ${targetPurchase.quantity} ${escapeHtml(item.unit || "unit")} on ${purchaseDateLabel}? Rhythm calculations and prediction dates will update immediately.`,
       confirmLabel: "Delete purchase",
       onConfirm: async () => {
         const { item: updatedItem, deletedPurchase, index } = await hootApi.deletePurchase(item.id, targetPurchase.id);
         render();
         const prediction = predictionFor(updatedItem);
         const nextRestockMsg = prediction
-          ? ` Next restock ${formatFullDate(prediction.date)}.`
+          ? ` Next restock recalculated to ${formatFullDate(prediction.date)}.`
           : "";
         toast(`Purchase on ${purchaseDateLabel} removed.${nextRestockMsg}`, "success", {
           label: "Undo",
@@ -2092,7 +2572,7 @@ import {
             render();
             const restoredPrediction = predictionFor(restoredItem);
             const restoredMsg = restoredPrediction
-              ? ` Next restock ${formatFullDate(restoredPrediction.date)}.`
+              ? ` Restock estimate ${formatFullDate(restoredPrediction.date)}.`
               : "";
             toast(`Purchase restored.${restoredMsg}`);
           },
@@ -2114,7 +2594,7 @@ import {
         queueSearch = "";
         $("#queue-search").value = "";
         render();
-        setView("dashboard");
+        setView("dashboard", { replace: true });
         toast("Demo data restored.");
       },
     });
@@ -2126,11 +2606,68 @@ import {
       button.addEventListener("click", () => setView(button.dataset.view));
     });
 
+    window.addEventListener("popstate", applyRoute);
+    window.addEventListener("hashchange", () => {
+      const route = readRoute();
+      const alreadyHere =
+        route.view === "item"
+          ? currentView === "item" && route.itemId === currentItemId
+          : route.view === currentView;
+      if (!route.hasRoute || !alreadyHere) applyRoute();
+    });
+
+    document.addEventListener("focusin", (event) => {
+      const point = event.target.closest?.("[data-price-spark-point]");
+      if (point) selectPricePoint(point);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      const point = event.target.closest?.("[data-price-spark-point]");
+      if (!point) return;
+
+      const spark = point.closest("[data-price-spark]");
+      if (!spark) return;
+      const points = $$("[data-price-spark-point]", spark);
+      const index = points.indexOf(point);
+      let nextIndex = index;
+
+      if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        nextIndex = Math.max(0, index - 1);
+      } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        nextIndex = Math.min(points.length - 1, index + 1);
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = points.length - 1;
+      } else {
+        return;
+      }
+
+      event.preventDefault();
+      points[nextIndex]?.focus();
+    });
+
     document.addEventListener("click", (event) => {
       const target = event.target;
+      const pricePoint = target.closest("[data-price-spark-point]");
+      if (pricePoint) {
+        selectPricePoint(pricePoint);
+        return;
+      }
+
+      const pricePlot = target.closest("[data-price-spark-plot]");
+      if (pricePlot) {
+        selectNearestPricePoint(pricePlot, event);
+        return;
+      }
+
       const viewButton = target.closest("[data-view]");
       if (viewButton) {
-        setView(viewButton.dataset.view);
+        if (viewButton.tagName === "A") event.preventDefault();
+        const nextView = viewButton.dataset.view;
+        const replace = viewButton.dataset.history === "replace";
+        setView(nextView, { replace });
+        if (replace) $(`.nav-button[data-view="${nextView}"]`)?.focus();
         return;
       }
 
@@ -2206,6 +2743,11 @@ import {
         completeShoppingRun();
       } else if (action === "finish-run-history") {
         completeShoppingRun({ openHistory: true });
+      } else if (action === "run-feedback") {
+        const verdict = actionButton.dataset.verdict;
+        if (verdict === "right" || verdict === "early") {
+          recordRunPredictionFeedback(itemId, verdict, actionButton);
+        }
       } else if (action === "toggle-watch-items") {
         toggleWatchItems(actionButton);
       }
@@ -2252,6 +2794,7 @@ import {
 
     $("#finish-run-dialog").addEventListener("close", () => {
       pendingRunReceipt = null;
+      $("#prediction-check-status").textContent = "";
     });
 
     $("#confirm-action").addEventListener("click", async () => {
@@ -2287,7 +2830,16 @@ import {
     bindEvents();
     initNextUpObserver();
     render();
-    setView(currentView);
+
+    const route = readRoute();
+    if (!route.hasRoute || !window.history.state?.hoot) {
+      window.history.replaceState(
+        { hoot: true },
+        "",
+        route.hasRoute ? window.location.hash : "#/dashboard",
+      );
+    }
+    applyRoute();
   }
 
   init();

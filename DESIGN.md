@@ -305,18 +305,22 @@ The shell has a sticky paper header, ledger-tab navigation, a visible Reset demo
 ### Shell behavior
 
 - **Desktop:** the header is at least 72px tall and holds the brand, ledger-tab navigation, and task actions in one scan line. The header carries no primary action: navigation is the only way into the Shopping run, and the dashboard's **Next up** card owns **Log purchase**.
-- **Tablet (661–980px):** the header becomes two rows: brand and actions on top, navigation below; summary and analysis grids use two columns.
-- **Phone (≤660px):** the brand takes its own row and the three navigation tabs share the next at equal width, without a scroll container; **Log purchase** and **Add item** move to a single-row fixed bottom dock. The dock is hidden while **Next up** is visible and returns once it leaves the viewport. Queue rows compress to two lines, history rows become labeled cards, fields stack, and dialog actions become sticky.
+- **Tablet (661–980px):** the header becomes two rows: brand and actions on top, navigation below; the summary uses two columns; item detail becomes one column with the rhythm ledger before the reference rail, which uses two columns; the calendar uses four columns.
+- **Phone (≤660px):** the brand takes its own row and the three ledger tabs share the next at equal width, without a scroll container; **Log purchase** and **Add item** move to a single-row fixed bottom dock. The dock is hidden while **Next up** is visible and on item detail, then returns once the user leaves that surface. Queue rows compress to two lines, ledger entries stack date above details, fields stack, and dialog actions become sticky. The calendar uses two columns.
 - `.app-frame` reserves `--dock-height` of bottom padding so the dock never covers content. Reset demo sits in the footer and remains at least 44px tall on phones.
+
+### Routes and browser history
+
+Every stable surface has a hash route: `#/dashboard`, `#/one-time`, `#/shopping`, and `#/item/<id>`. A fresh visit replaces the URL with `#/dashboard`; opening a surface pushes a history entry, so browser Back and Forward move through Hoot instead of leaving it. The item's in-page back control replaces the item entry with its parent view. Hash routing is intentional: the demo is static and has no server fallback for deep paths.
 
 ### Breakpoints
 
 | Width | Behavior |
 | --- | --- |
-| Above 1120px | **Next up** uses a three-column decision layout; queue rows stay compact. |
-| 981–1120px | **Next up** uses two columns with actions spanning the bottom; queue rows stay compact. |
-| 661–980px | Header becomes two rows; summary and analysis grids use two columns. |
-| 660px and below | Single-column content, fixed action dock with observer-driven visibility, two-line queue rows, tightened **Next up**, labeled history cards, stacked fields, and sticky 48px dialog actions. |
+| Above 1120px | **Next up** uses a three-column decision layout; queue rows stay compact; the calendar fits seven days plus the past-due card in one row and fourteen days in two. |
+| 981–1120px | **Next up** uses two columns with actions spanning the bottom; queue rows stay compact; the calendar uses four columns. |
+| 661–980px | Header becomes two rows; the summary uses two columns; item detail becomes one column with the rhythm ledger before the reference rail, which uses two columns; the calendar uses four columns. |
+| 660px and below | Single-column content, fixed action dock with observer-driven visibility, two-line queue rows, tightened **Next up**, stacked ledger entries and fields, and sticky 48px dialog actions; the calendar uses two columns. |
 
 ## Elevation & Depth
 
@@ -350,7 +354,7 @@ Motion is calm and communicates state. Interface timing is 160–220ms.
 
 ### Dashboard hierarchy
 
-The populated dashboard has one unmistakable decision at the top: the highest-urgency tracked item. That **Next up** card owns the dashboard's one primary **Log purchase** action and the full Restock Horizon Lane. When history exists, a secondary **Log last** accelerator opens Log Purchase with today’s date and the most recent quantity and a known, non-zero total price. The remaining tracked items render as compact ranked rows with status, date, and secondary actions.
+The populated dashboard has one unmistakable decision at the top: the highest-urgency tracked item. That **Next up** card owns the dashboard's one primary **Log purchase** action and the full Restock Horizon Lane. Until the item has three purchases, the card also carries a **Learning** chip, its purchase progress, and the manual interval source; its date heading reads **Estimated restock** rather than **Next predicted restock**. When history exists, a secondary **Log last** accelerator opens Log Purchase with today’s date and the most recent quantity and a known, non-zero total price. The remaining tracked items render as compact ranked rows with status, date, and secondary actions.
 
 Queue search matches name, category, and unit without displacing the global decision. Matches render beneath a **Search results** heading, and the count names the query. If the only match is the focused item, the section says so instead of repeating it as a row. No matches keep the global **Next up** card and offer **Clear search**. The lane and Today marker do not repeat across the queue.
 
@@ -371,7 +375,7 @@ Inputs and selects are 46px tall, use paper surfaces with a warm control border,
 
 ### Item paths
 
-Add Item starts with a two-path segmented choice: **Tracked staple** or **One-time need**. Name, category, and unit are common. The typical restock interval appears only for tracked staples. One-time needs never see an interval field or a disabled stub.
+Add Item starts with a two-path segmented choice: **Tracked staple** or **One-time need**. The checked path owns initial focus, so opening from the One-time ledger starts on **One-time need**, not the unchecked sibling. Name, category, and unit are common. The typical restock interval appears only for tracked staples. One-time needs never see an interval field or a disabled stub.
 
 Exact duplicate names, ignoring case and surrounding spaces, are rejected with a field-level recovery message. Tracked duplicates suggest logging a purchase instead.
 
@@ -381,7 +385,13 @@ The focused **Next up** card is a decision strip with identity and status, then 
 
 ### Item detail
 
-Item detail leads with the item identity and its zone-aware Restock Horizon Lane, then prediction and rhythm facts, the rhythm chart, and purchase history. It contains no unimplemented product-intelligence or barcode-lookup card.
+Item detail answers one question first: when is this needed again. It leads with the item identity, then a **Next restock** answer card — date, due phrase, likely window when one exists, plain-language reason, and the only primary action, **Log purchase** — followed by the **Buying rhythm** ledger. A reference rail holds **Pattern**, **Confidence**, **Spending**, and **Your checks** with the collapsed **How Hoot got this date** disclosure. **Edit item** and **Delete** close the page; there is no second Log purchase. The page never shows R², fit strength, model versions, or internal method names.
+
+The ledger is one vertical timeline and the purchase history at once. Each purchase is a node with its date, quantity, total price, unit price when quantity is above one, and inline Edit/Delete actions. The line between nodes is the measured gap: its label states the days and, once learned, how far it sits from the typical gap. Purchase nodes are filled sage. The line from the last purchase to the estimate states how many days it adds and which basis it uses — the manual interval while learning, the learned gap after three purchases, or the check correction. The final estimate node is hollow and dashed, labeled **Estimate**, and never claims to be a purchase. A proportional, clamped connector height lets a long gap occupy more space without turning the page into a wall of whitespace. The separate purchase-history table is retired; the ledger owns the table’s dates, prices, and edit/delete actions.
+
+The reference rail adds evidence the ledger cannot. **Pattern** summarizes typical, shortest, longest, and last gaps and carries the model disclosure. **Confidence** names the sample size, measured gaps, gap range, and basis. **Spending** names known spend, average purchase, latest known unit price, and the change since the previous known price. When at least two purchases have a price, it adds a compact unit-price sparkline on the purchases’ date axis; the sparkline uses known prices only and is absent for a single price. Each point is a labeled button: tapping the plot selects the nearest purchase, Tab reaches each point, and a readout names the selected date and unit price. The SVG line is decorative; the point labels carry the accessible values. Prices stay per purchase; totals are labeled **Known spend** because a blank or zero price is unknown. Confidence copy describes the sample rather than asserting false precision.
+
+The answer adds a likely window only when at least two gaps exist: **Likely between <date> and <date>**, framed as a window rather than a guarantee, and widened when the gaps are irregular. While learning, **Pattern** separates the gap measured so far from the interval the estimate uses, so an observed gap and a manual interval cannot be mistaken for each other. One-time items replace the answer, ledger, rail, and spending with a single **On your checklist** card.
 
 ### Restock Horizon Lane
 
@@ -389,13 +399,23 @@ Four segments (Overdue, Buy now, Watch, Steady) are sized to the real day range 
 
 ### Calendar
 
-The schedule defaults to the next seven days and offers compact **Next 7 days** and **All 14 days** controls. The caption and calendar label follow the selected range. Each day is a paper card. Today gets a sage border, a light sage tint, and a night numeral. Past-due items get their own terracotta card at the front. Clear days read “Clear”.
+The schedule defaults to the next seven days and offers compact **Next 7 days** and **All 14 days** controls. The caption and calendar label follow the selected range. Each day is a paper card. Today gets a sage border, a light sage tint, and a night numeral. Past-due items get their own terracotta card at the front. Clear days read “Clear”. The schedule is a responsive grid at every width, never a horizontal strip: four columns at tablet and small-desktop widths, two columns at 660px and below, and seven or eight columns above 1120px so seven days plus the past-due card fit in one row and fourteen days wrap to two. No day is hidden behind horizontal scrolling.
 
 ### One-time ledger
 
 Rows share one paper panel and are separated by hairlines. Checkboxes are circular and turn sage when checked. Completed items stay visible with muted ink and a strike-through.
 
 The One-time heading offers a secondary **Add one-time item** action.
+
+### Shopping run
+
+The run uses the immediate-logging model. **Log** writes the tracked purchase or checks off the one-time need at once, and the aisle row collapses to **Logged**. The collected list is **This trip**; the summary reads **Items**, **Logged**, and **Left**. There is no deferred cart or checkout step. Quantity, price, and the next restock estimate stay in **This trip**, where **Adjust** and **Undo** correct a log.
+
+At 981px and wider, the run opens from its focused column into a 1180px workspace: the progress strip and aisle list hold the left column, while **This trip** becomes a sticky paper panel in the right column. The panel stays in view as the aisles scroll; a long trip scrolls inside the panel while its header and **Finish shopping run** stay in place. At 980px and below, the run remains one column: progress, aisles, then **This trip**, with the finish action after the list.
+
+### Finish receipt and prediction check
+
+The receipt asks one optional, inline question for each logged tracked staple: **Due <date> · was Hoot right?**, answered with **Yes, I was out** or **Still had some**. It is a quiet inset under the item, never a second dialog, and one-time entries never ask it. The answer is a correction to the estimate, not a new purchase. **Still had some** records the miss on that purchase and moves the next estimate three days later; the result line states the new date in place, and item detail counts checks and names the extra days under the estimate. Both answers can be changed until **Done**.
 
 ### Dialogs and toasts
 
@@ -411,9 +431,10 @@ An empty state explains three things in place: why the surface is empty, what th
 - Give every interactive element a visible amber focus ring.
 - Use semantic headings, buttons, labels, tables, and forms.
 - Focus the first useful control when a dialog opens, and restore focus to the trigger when it closes.
-- When item detail opens, reset the page to the top and move focus to the item heading.
-- Announce busy and success states politely.
-- Keep every task keyboard-complete, including entering and leaving the Shopping run.
+- When item detail opens, reset the page to the top and move focus to the item heading. Leaving it with the in-page back control moves focus to the destination primary navigation.
+- When the Shopping run opens, reset the page to the top and focus its heading without moving the scroll position.
+- Announce busy and success states politely, including a recorded prediction check.
+- Keep every task keyboard-complete, including entering and leaving the Shopping run and answering a finish-receipt prediction check.
 - Keep compact phone controls at least 44px tall.
 - Respect `prefers-reduced-motion`.
 
