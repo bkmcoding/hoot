@@ -11,10 +11,13 @@ const MIME_TYPES = {
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".svg": "image/svg+xml",
+  ".ico": "image/x-icon",
+  ".png": "image/png",
 };
 
 const server = http.createServer((request, response) => {
-  const requestPath = request.url === "/" ? "/index.html" : request.url;
+  const { pathname } = new URL(request.url ?? "/", "http://127.0.0.1");
+  const requestPath = pathname === "/" ? "/index.html" : pathname;
   const filePath = path.join(ROOT, path.normalize(requestPath).replace(/^(\.\.[/\\])+/, ""));
 
   fs.readFile(filePath, (error, data) => {
