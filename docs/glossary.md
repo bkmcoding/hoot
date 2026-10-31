@@ -54,10 +54,21 @@ Ubiquitous language for the Hoot household inventory and predictive restock syst
 - **Finish Receipt**
   The end-of-run dialog that names the number of items logged, known spend, and each item. **Done** clears the run; **View purchase history** opens the first tracked item; dismissing the receipt leaves the run active.
 - **Prediction Check**
-  The receipt’s optional **Was Hoot right?** answer stored on a logged purchase: **Yes, I was out** agrees with the estimate, while **Still had some** marks it early and moves the next estimate three days later. It corrects the model only; it never creates or edits a purchase.
+  An answer that tests Hoot’s restock estimate. The receipt offers **Was Hoot right?** on a logged purchase: **Yes, I was out** agrees, while **Still had some** marks it early and moves the next estimate three days later. An overdue **Next up** card offers **Still have some** instead, moving that estimate three days out from today without logging anything. Item detail keeps the active Next up correction visible after the toast with its recorded date and an **Undo correction** action that restores the check it replaced, and lists superseded receipt and Next up answers under **Earlier checks**. A check corrects the model only; it never creates or edits a purchase.
 - **Aisle / Category Bucket**
   Logical grouping of items (e.g., *Produce*, *Dairy & Refrigerated*, *Pantry*, *Household & Paper*, *Personal Care*) arranged to match supermarket layouts and minimize physical backtracking.
 - **Trip Summary**
   The run's compact **Items**, **Logged**, and **Left** strip, backed by **This trip**, which carries each item's quantity, total price, and next restock estimate.
 - **Log Last Accelerator**
   A zero-friction shortcut that prefills a restock with today's date and the most recent quantity and known price.
+
+---
+
+## 4. Demo & Review
+
+- **Demo Sample**
+  One of the two built-in, date-relative datasets in `frontend/demo-data.js`. Exactly one is active; switching replaces local state and is confirmed.
+- **Starter Household**
+  The default six-staple, two-one-time sample used for first-run clarity and exact-value regression tests.
+- **Busy Household**
+  The 44-item scale sample (38 tracked staples, 6 one-time needs, 195 purchases) used for density, scanning, overflow, and critique passes. It spans all four urgency zones and includes learning and zero-history items.

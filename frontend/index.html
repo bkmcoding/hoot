@@ -137,7 +137,7 @@
           <header class="store-run-header">
             <div>
               <h1 id="store-run-title" tabindex="-1">Shopping run</h1>
-              <p>Tap Log as you pick up each item. Aisles first, urgency second.</p>
+              <p>Log each item as you pick it up. Aisles first, urgency second.</p>
 
             </div>
             <div class="store-run-actions">
@@ -147,6 +147,12 @@
                 data-action="toggle-watch-items"
                 aria-pressed="false"
               >Show Watch items</button>
+              <button
+                class="btn btn-secondary"
+                type="button"
+                data-action="open-add-to-trip"
+                aria-label="Add to this trip"
+              >Add</button>
               <button class="btn btn-secondary" type="button" data-view="dashboard">Exit run</button>
             </div>
           </header>
@@ -154,6 +160,8 @@
           <div class="store-run-body">
             <div class="store-run-aisles">
               <div class="store-run-summary" id="store-run-summary"></div>
+              <div class="store-run-skipped" id="store-run-skipped" hidden></div>
+              <div class="empty-state store-run-empty" id="store-run-empty" hidden></div>
               <div class="store-run-groups" id="store-run-groups"></div>
             </div>
 
@@ -161,6 +169,7 @@
               <section class="store-run-cart" id="store-run-cart" aria-label="Items logged this trip"></section>
 
               <footer class="store-run-footer">
+                <button class="btn btn-secondary" type="button" data-action="undo-last-run-item" hidden>Undo last</button>
                 <button class="btn btn-primary" type="button" data-action="finish-run">Finish shopping run</button>
               </footer>
             </aside>
@@ -172,9 +181,48 @@
 
       <footer class="app-footer">
         <p>This is sample data. Changes stay in this browser.</p>
-        <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
+        <div class="footer-controls">
+          <label class="sample-control" for="sample-select">
+            <span>Sample</span>
+            <select id="sample-select"></select>
+          </label>
+          <button class="btn btn-ghost" type="button" id="reset-demo">Reset demo</button>
+        </div>
       </footer>
     </div>
+
+    <dialog class="hoot-dialog add-to-trip-dialog" id="add-to-trip-dialog" aria-labelledby="add-to-trip-title">
+      <header class="dialog-header">
+        <div>
+          <h2 id="add-to-trip-title">Add to this trip</h2>
+          <p>Choose something Hoot did not draft. Adding does not log a purchase.</p>
+        </div>
+        <button class="icon-button" type="button" data-close aria-label="Close add to this trip">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+          </svg>
+        </button>
+      </header>
+
+      <label class="field add-to-trip-search" for="add-to-trip-search">
+        <span>Find an item</span>
+        <input
+          id="add-to-trip-search"
+          type="search"
+          placeholder="Search name, category, or unit"
+          autocomplete="off"
+          data-autofocus
+          aria-describedby="add-to-trip-hint"
+        />
+      </label>
+      <p class="field-hint add-to-trip-hint" id="add-to-trip-hint">Only items not already in this trip are listed. Tap Log on the row when you pick it up.</p>
+
+      <ul class="add-to-trip-list" id="add-to-trip-list" aria-label="Items available to add"></ul>
+
+      <footer class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-close>Cancel</button>
+      </footer>
+    </dialog>
 
     <dialog class="hoot-dialog" id="add-item-dialog" aria-labelledby="add-item-title">
       <form id="add-item-form" novalidate>
@@ -516,7 +564,7 @@
       </header>
       <div class="finish-run-summary" id="finish-run-summary" role="status" aria-live="polite"></div>
       <p class="finish-run-hint" id="finish-run-hint" hidden>
-        Tracked staples below were on this list because Hoot expected them. Tell it if you still had some and it will wait longer next time.
+        These staples were due around now. If you still had some, say so and the next estimate moves three days later.
       </p>
       <ul class="finish-run-list" id="finish-run-list" aria-label="Trip items and prediction checks"></ul>
       <p class="sr-only" id="prediction-check-status" role="status" aria-live="polite"></p>

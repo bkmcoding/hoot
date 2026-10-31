@@ -119,6 +119,39 @@ test("predictionFor moves the next estimate later after a still-had-some check",
   assert.equal(corrected.daysUntil, base.daysUntil + EARLY_RESTOCK_SHIFT_DAYS);
 });
 
+test("predictionFor uses a recorded Next up correction to clear an overdue date", () => {
+  const today = parseDate("2026-10-19");
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-09-09",
+    reorderThresholdDays: 35,
+    purchases: [{ id: "one", date: "2026-09-09" }],
+  };
+  const overdue = predictionFor(item, today);
+  const corrected = predictionFor(
+    {
+      ...item,
+      purchases: [
+        {
+          ...item.purchases[0],
+          feedback: {
+            verdict: "early",
+            predictedDate: "2026-10-14",
+            source: "next-up",
+            shiftDays: 8,
+          },
+        },
+      ],
+    },
+    today,
+  );
+
+  assert.equal(overdue.zone, "overdue");
+  assert.equal(corrected.feedbackShiftDays, 8);
+  assert.equal(toISODate(corrected.date), "2026-10-22");
+  assert.equal(corrected.zone, "buy-now");
+});
+
 test("predictionFor ignores right checks and checks on older purchases", () => {
   const today = parseDate("2026-10-19");
   const purchases = [

@@ -35,7 +35,8 @@ Unlike manual shopping list apps that require active memory and maintenance befo
   - Horizon schedule calendar with default 7-day view and expandable 14-day view.
   - Item detail view featuring a next-restock answer with a likely window, a buying-rhythm ledger of purchases and gaps, plain-language confidence and spending detail, and inline purchase editing.
   - Dedicated one-time checklist for irregular items explicitly excluded from prediction algorithms.
-  - Post-trip prediction check: an optional one-tap **Was Hoot right?** review on the finish receipt that records whether a predicted staple was actually needed and gently shifts the next estimate when it was early.
+  - Prediction checks: an optional one-tap **Was Hoot right?** review on the finish receipt, plus **Still have some** on an overdue **Next up**, both of which correct a false estimate without creating a purchase.
+  - Two switchable built-in demo samples: a six-staple starter household for first-run clarity, and a 38-staple, six-one-time-need busy household with deep purchase histories for judging scale, density, and scanning.
 - **Technical constraints & scope:**
   - Current implementation: Standalone client-side web application (vanilla JavaScript, HTML5, CSS3) backed by localStorage and local sample seed data.
   - Planned backend: ASP.NET Core Web API with PostgreSQL database via Entity Framework Core, transitioning prediction logic server-side.
@@ -50,6 +51,7 @@ Unlike manual shopping list apps that require active memory and maintenance befo
 - **Strict identity bans:** No cartoon or mascot owl illustrations, no dark mode / night theme, no glowing gradients or decorative novelty charts, and no ungrounded cosmetic badges.
 
 ## Evidence on Hand  - `frontend/` — runnable client prototype (`index.html`, `app.js`, `style.css`) with interactive dashboard, purchase logging, item timelines, and one-time checklist.
+- `frontend/demo-data.js` — deterministic starter and busy household samples; the busy sample is the scale reference for layout and critique work.
 - `PRODUCT.md`, `DESIGN.md`, `docs/ux-flows.md`, and `docs/tooling-roadmap.md` — product, visual, interaction, and roadmap contracts.
 - `AGENTS.md` — the short context map future agents should read first.
 - `backend/` — ASP.NET Core API scaffold (`HootApi.csproj`, `Program.cs`, controller stubs).

@@ -3,13 +3,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "npm run lint:design && npm run test:prediction && npm run test:store-run && npm run test:quality",
+    "test": "npm run lint:design && npm run test:demo-data && npm run test:prediction && npm run test:store-run && npm run test:quality",
     "test:quality": "playwright test",
+    "test:demo-data": "node --test tests/demo-data.test.mjs",
     "test:prediction": "node --test tests/prediction.test.mjs",
     "test:store-run": "node --test tests/store-run.test.mjs",
     "lint:design": "node tools/design-token-lint.mjs",
     "audit:lighthouse": "node tools/lighthouse-audit.mjs",
-    "audit:all": "npm run lint:design && npm run test:prediction && npm run test:quality && npm run audit:lighthouse"
+    "audit:all": "npm run lint:design && npm run test:demo-data && npm run test:prediction && npm run test:quality && npm run audit:lighthouse"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",

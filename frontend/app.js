@@ -1,5 +1,6 @@
 import {
   DAY_MS,
+  EARLY_RESTOCK_SHIFT_DAYS,
   addDays,
   likelyWindowFor,
   parseDate,
@@ -7,6 +8,7 @@ import {
   startOfDay,
   toISODate,
 } from "./prediction.js";
+import { DEMO_SAMPLES, createDemoStateFor } from "./demo-data.js";
 import {
   buildShoppingRun,
   groupShoppingRun,
@@ -34,8 +36,12 @@ import {
   const escapeHtml = (value) =>
     String(value ?? "").replace(/[&<>"']/g, (character) => htmlEntities[character]);
 
+  const SAMPLE_IDS = new Set(DEMO_SAMPLES.map((sample) => sample.id));
+  const normalizeSampleId = (value) => (SAMPLE_IDS.has(value) ? value : "starter");
+  const sampleFor = (value) =>
+    DEMO_SAMPLES.find((sample) => sample.id === normalizeSampleId(value)) ?? DEMO_SAMPLES[0];
+
   const today = startOfDay();
-  const daysAgoISO = (days) => toISODate(addDays(today, -days));
 
   const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric" });
   const longDate = new Intl.DateTimeFormat("en-US", {
@@ -291,117 +297,8 @@ import {
     `;
   }
 
-  function createDemoState() {
-    return {
-      items: [
-        {
-          id: "item-milk",
-          name: "Milk",
-          category: "Pantry",
-          unit: "half-gallon",
-          reorderThresholdDays: 10,
-          isOneTime: false,
-          completed: false,
-          createdAt: daysAgoISO(25),
-          purchases: [
-            { id: "purchase-milk-1", date: daysAgoISO(25), quantity: 1, price: 4.29 },
-            { id: "purchase-milk-2", date: daysAgoISO(14), quantity: 1, price: 4.49 },
-            { id: "purchase-milk-3", date: daysAgoISO(5), quantity: 2, price: 8.98 },
-          ],
-        },
-        {
-          id: "item-eggs",
-          name: "Eggs",
-          category: "Pantry",
-          unit: "dozen",
-          reorderThresholdDays: 14,
-          isOneTime: false,
-          completed: false,
-          createdAt: daysAgoISO(32),
-          purchases: [
-            { id: "purchase-eggs-1", date: daysAgoISO(32), quantity: 1, price: 3.99 },
-            { id: "purchase-eggs-2", date: daysAgoISO(18), quantity: 1, price: 4.19 },
-            { id: "purchase-eggs-3", date: daysAgoISO(6), quantity: 1, price: 4.69 },
-          ],
-        },
-        {
-          id: "item-paper-towels",
-          name: "Paper towels",
-          category: "Household",
-          unit: "6-roll pack",
-          reorderThresholdDays: 21,
-          isOneTime: false,
-          completed: false,
-          createdAt: daysAgoISO(45),
-          purchases: [
-            { id: "purchase-towels-1", date: daysAgoISO(45), quantity: 1, price: 9.99 },
-            { id: "purchase-towels-2", date: daysAgoISO(25), quantity: 1, price: 10.49 },
-            { id: "purchase-towels-3", date: daysAgoISO(9), quantity: 1, price: 10.99 },
-          ],
-        },
-        {
-          id: "item-dish-soap",
-          name: "Dish soap",
-          category: "Cleaning",
-          unit: "bottle",
-          reorderThresholdDays: 30,
-          isOneTime: false,
-          completed: false,
-          createdAt: daysAgoISO(30),
-          purchases: [
-            { id: "purchase-dish-1", date: daysAgoISO(30), quantity: 1, price: 3.79 },
-            { id: "purchase-dish-2", date: daysAgoISO(14), quantity: 1, price: 4.09 },
-          ],
-        },
-        {
-          id: "item-toothpaste",
-          name: "Toothpaste",
-          category: "Personal care",
-          unit: "tube",
-          reorderThresholdDays: 60,
-          isOneTime: false,
-          completed: false,
-          createdAt: daysAgoISO(75),
-          purchases: [
-            { id: "purchase-toothpaste-1", date: daysAgoISO(75), quantity: 1, price: 4.99 },
-            { id: "purchase-toothpaste-2", date: daysAgoISO(35), quantity: 1, price: 5.49 },
-          ],
-        },
-        {
-          id: "item-trash-bags",
-          name: "Trash bags",
-          category: "Household",
-          unit: "40-count box",
-          reorderThresholdDays: 35,
-          isOneTime: false,
-          completed: false,
-          createdAt: daysAgoISO(40),
-          purchases: [{ id: "purchase-trash-1", date: daysAgoISO(40), quantity: 1, price: 12.49 }],
-        },
-        {
-          id: "item-birthday-candles",
-          name: "Birthday candles",
-          category: "Household",
-          unit: "pack",
-          reorderThresholdDays: 0,
-          isOneTime: true,
-          completed: false,
-          createdAt: daysAgoISO(2),
-          purchases: [],
-        },
-        {
-          id: "item-packing-tape",
-          name: "Packing tape",
-          category: "Household",
-          unit: "roll",
-          reorderThresholdDays: 0,
-          isOneTime: true,
-          completed: true,
-          createdAt: daysAgoISO(9),
-          purchases: [],
-        },
-      ],
-    };
+  function createDemoState(sampleId = "starter") {
+    return createDemoStateFor(sampleId);
   }
 
   function loadState() {
@@ -409,7 +306,9 @@ import {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (!raw) return null;
       const parsed = JSON.parse(raw);
-      return parsed && Array.isArray(parsed.items) ? parsed : null;
+      if (!parsed || !Array.isArray(parsed.items)) return null;
+      parsed.sample = normalizeSampleId(parsed.sample);
+      return parsed;
     } catch {
       return null;
     }
@@ -433,9 +332,22 @@ import {
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== "object") return null;
 
+      const selected = new Map(Array.isArray(parsed.selected) ? parsed.selected : []);
+      const skippedIds = Array.isArray(parsed.skippedIds)
+        ? [...new Set(parsed.skippedIds.filter((id) => typeof id === "string"))].filter(
+            (id) => !selected.has(id),
+          )
+        : [];
+
       return {
         includeWatch: Boolean(parsed.includeWatch),
-        selected: new Map(parsed.selected ?? []),
+        selected,
+        extraIds: new Set(
+          Array.isArray(parsed.extraIds)
+            ? parsed.extraIds.filter((id) => typeof id === "string")
+            : [],
+        ),
+        skippedIds,
       };
     } catch {
       return null;
@@ -449,6 +361,8 @@ import {
         JSON.stringify({
           includeWatch: storeRun.includeWatch,
           selected: Array.from(storeRun.selected.entries()),
+          extraIds: Array.from(storeRun.extraIds),
+          skippedIds: storeRun.skippedIds,
         }),
       );
     } catch {
@@ -460,6 +374,8 @@ import {
   let storeRun = loadStoreRun() ?? {
     includeWatch: false,
     selected: new Map(),
+    extraIds: new Set(),
+    skippedIds: [],
   };
   let currentView = "dashboard";
   let currentItemId = null;
@@ -467,9 +383,11 @@ import {
   let editingItemId = null;
   let lastDialogTrigger = null;
   let pendingConfirm = null;
+  let pendingConfirmDismiss = null;
   let queueSearch = "";
   let calendarRange = 7;
   let pendingRunReceipt = null;
+  let addToTripSearch = "";
   let nextUpObserver = null;
   let observedNextUpCard = null;
   let nextUpCardVisible = false;
@@ -581,7 +499,7 @@ import {
       return clone(item);
     },
     async resetDemo() {
-      state = createDemoState();
+      state = createDemoState(normalizeSampleId(state.sample));
       saveState();
       return clone(state.items);
     },
@@ -665,6 +583,20 @@ import {
     );
   }
 
+  function syncRunHeaderState() {
+    const view = $("#view-store-run");
+    if (!view) return;
+
+    // A single threshold can fight scroll anchoring: the header collapse shifts the
+    // focused row just enough to cross the threshold again. Separate the directions.
+    const condensed = view.classList.contains("is-header-condensed");
+    if (!condensed && window.scrollY > 48) {
+      view.classList.add("is-header-condensed");
+    } else if (condensed && window.scrollY < 16) {
+      view.classList.remove("is-header-condensed");
+    }
+  }
+
   function syncNextUpDock() {
     const nextCard = $("#dashboard-list .item-card:first-child");
     if (observedNextUpCard && observedNextUpCard !== nextCard && nextUpObserver) {
@@ -689,21 +621,24 @@ import {
     $("#stat-one-time").textContent = String(oneTime.length);
   }
 
-  function horizonPositionFor(daysUntil) {
+  function horizonPositionFor(daysUntil, compact = false) {
+    const buyNowEnd = compact ? 53.571 : 50.0;
+    const watchEnd = compact ? 71.429 : 69.048;
+
     if (daysUntil < 0) {
       const progress = Math.max(0, (daysUntil + 7) / 7);
       return 4 + progress * (33.333 - 4);
     }
     if (daysUntil <= 3) {
       const progress = daysUntil / 3;
-      return 33.333 + progress * (50.0 - 33.333);
+      return 33.333 + progress * (buyNowEnd - 33.333);
     }
     if (daysUntil <= 7) {
       const progress = (daysUntil - 3) / 4;
-      return 50.0 + progress * (69.048 - 50.0);
+      return buyNowEnd + progress * (watchEnd - buyNowEnd);
     }
     const progress = Math.min(1, (daysUntil - 7) / 7);
-    return 69.048 + progress * (96.0 - 69.048);
+    return watchEnd + progress * (96.0 - watchEnd);
   }
 
   function formatHorizonPointerLabel(daysUntil) {
@@ -726,11 +661,16 @@ import {
       prediction.purchaseCount === 0
         ? "No purchases yet"
         : `${prediction.purchaseCount} of 3 purchases`;
-    return `<p class="next-up-estimate"><span class="status-chip status-learning">Learning</span><span>${escapeHtml(progress)} · ${escapeHtml(prediction.method)}</span></p>`;
+    // At 320px the full phrase wraps the chip onto its own row and pushes the primary action below the fold.
+    // Keep the compact form to progress and source; the horizon group already carries the full sentence.
+    const compactProgress = `${prediction.purchaseCount} of 3`;
+    const compactSource = prediction.method.replace(/\s+estimate$/i, "");
+    return `<p class="next-up-estimate"><span class="status-chip status-learning">Learning</span><span class="next-up-cue-full">${escapeHtml(progress)} · ${escapeHtml(prediction.method)}</span><span class="next-up-cue-compact">${escapeHtml(compactProgress)} · ${escapeHtml(compactSource)}</span></p>`;
   }
 
   function restockHorizonLane(item, prediction) {
     const position = horizonPositionFor(prediction.daysUntil);
+    const compactPosition = horizonPositionFor(prediction.daysUntil, true);
     const label = formatHorizonPointerLabel(prediction.daysUntil);
     const align = position < 12 ? "left" : position > 88 ? "right" : "center";
     const heading = restockHeading(prediction);
@@ -758,7 +698,11 @@ import {
           <span class="horizon-segment segment-watch"></span>
           <span class="horizon-segment segment-steady"></span>
           <span class="horizon-today-line" title="Today reference"></span>
-          <span class="horizon-pointer" data-align="${align}" style="left:${position.toFixed(2)}%">
+          <span
+            class="horizon-pointer"
+            data-align="${align}"
+            style="--zone-pointer-position:${position.toFixed(2)}%; --zone-pointer-position-compact:${compactPosition.toFixed(2)}%"
+          >
             <span>${escapeHtml(label)}</span>
           </span>
         </div>
@@ -777,6 +721,10 @@ import {
     const logLastButton = item.purchases.length
       ? `<button class="btn btn-secondary" type="button" data-action="log-last" data-id="${escapeHtml(item.id)}">Log last</button>`
       : "";
+    const stillHaveSomeButton =
+      prediction.zone === "overdue" && item.purchases.length
+        ? `<button class="btn btn-secondary" type="button" data-action="still-have-some" data-id="${escapeHtml(item.id)}">Still have some</button>`
+        : "";
 
     return `
       <article class="item-card horizon-${escapeHtml(prediction.zone)}" data-item-id="${escapeHtml(item.id)}">
@@ -802,8 +750,9 @@ import {
         <div class="item-card-footer">
           <div class="item-actions">
             <button class="btn btn-primary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
+            ${stillHaveSomeButton}
             ${logLastButton}
-            <button class="btn btn-secondary" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
+            <button class="btn btn-secondary" type="button" data-action="detail" data-id="${escapeHtml(item.id)}" aria-label="Details for ${escapeHtml(item.name)}">Details</button>
           </div>
         </div>
       </article>
@@ -828,7 +777,7 @@ import {
         <strong class="item-row-due">${formatFullDate(prediction.date)}</strong>
         <div class="item-row-actions">
           <button class="btn btn-secondary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
-          <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
+          <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}" aria-label="Details for ${escapeHtml(item.name)}">Details</button>
         </div>
       </article>
     `;
@@ -1041,11 +990,75 @@ import {
               <small>${escapeHtml(item.category)}${item.unit ? ` · ${escapeHtml(item.unit)}` : ""}</small>
             </span>
           </label>
-          <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
+          <button class="btn btn-ghost" type="button" data-action="detail" data-id="${escapeHtml(item.id)}" aria-label="Details for ${escapeHtml(item.name)}">Details</button>
         </article>
       `,
       )
       .join("");
+  }
+
+  function isRunItemSkipped(itemId) {
+    return storeRun.skippedIds.includes(itemId);
+  }
+
+  function runRosterEntries() {
+    const roster = new Map();
+
+    for (const entry of buildShoppingRun(state.items, {
+      includeWatch: storeRun.includeWatch,
+      referenceDate: today,
+    })) {
+      roster.set(entry.item.id, entry);
+    }
+
+    for (const extraId of storeRun.extraIds) {
+      if (roster.has(extraId)) continue;
+      const item = state.items.find((candidate) => candidate.id === extraId);
+      if (!item) continue;
+      if (item.isOneTime && item.completed && !storeRun.selected.has(extraId)) continue;
+
+      roster.set(extraId, {
+        item,
+        type: item.isOneTime ? "one-time" : "tracked",
+        priority: 4,
+      });
+    }
+
+    for (const selectedId of storeRun.selected.keys()) {
+      if (roster.has(selectedId)) continue;
+
+      const item = state.items.find((candidate) => candidate.id === selectedId);
+      if (!item) continue;
+
+      roster.set(selectedId, {
+        item,
+        type: item.isOneTime ? "one-time" : "tracked",
+        priority: storeRun.selected.get(selectedId)?.priority ?? 4,
+      });
+    }
+
+    return [...roster.values()];
+  }
+
+  function runItemStatus(item) {
+    if (item.isOneTime) return "Checklist";
+    return predictionFor(item, today)?.statusLabel ?? "Steady";
+  }
+
+  function addToTripCandidates() {
+    const shownIds = new Set(
+      runRosterEntries()
+        .filter((entry) => !isRunItemSkipped(entry.item.id))
+        .map((entry) => entry.item.id),
+    );
+
+    return state.items
+      .filter((item) => {
+        if (item.isOneTime && item.completed) return false;
+        if (storeRun.selected.has(item.id)) return false;
+        return !shownIds.has(item.id);
+      })
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   function renderStoreRunRow(entry) {
@@ -1067,15 +1080,28 @@ import {
     }
 
     const prediction = item.isOneTime ? null : predictionFor(item, today);
-    const urgency = prediction ? prediction.statusLabel : "Checklist";
+    const zone = prediction ? prediction.zone : "learning";
+    const statusLabel = prediction ? prediction.statusLabel : "Checklist";
     const timing = prediction ? formatDue(prediction.daysUntil) : "One-time need";
-    const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
+    const unitText = item.unit ? `${escapeHtml(item.unit)} · ` : "";
 
     return `
-      <article class="store-run-row" data-item-id="${escapeHtml(item.id)}">
+      <article class="store-run-row horizon-${escapeHtml(zone)}" data-item-id="${escapeHtml(item.id)}">
         <div class="store-run-row-main">
-          <strong>${escapeHtml(item.name)}</strong>
-          <small>${escapeHtml(item.category)}${unitText} · ${escapeHtml(urgency)} · ${escapeHtml(timing)}</small>
+          <div class="store-run-row-heading">
+            <strong>${escapeHtml(item.name)}</strong>
+            <span class="status-chip status-${escapeHtml(zone)}">${escapeHtml(statusLabel)}</span>
+          </div>
+          <div class="store-run-row-meta">
+            <small><span class="store-run-unit">${unitText}</span>${escapeHtml(timing)}</small>
+            <button
+              class="btn btn-ghost btn-sm store-run-skip"
+              type="button"
+              data-action="skip-run-item"
+              data-id="${escapeHtml(item.id)}"
+              aria-label="Not this trip for ${escapeHtml(item.name)}"
+            >Not this trip</button>
+          </div>
         </div>
         <button
           class="btn btn-primary"
@@ -1110,6 +1136,45 @@ import {
     return details.join(" · ");
   }
 
+  function renderStoreRunSkipped() {
+    const container = $("#store-run-skipped");
+    if (!container) return [];
+
+    const skipped = storeRun.skippedIds
+      .map((itemId) => state.items.find((item) => item.id === itemId))
+      .filter(Boolean);
+
+    if (!skipped.length) {
+      container.hidden = true;
+      container.replaceChildren();
+      return [];
+    }
+
+    const names = skipped.map((item) => item.name);
+    const visibleNames = names.slice(0, 3);
+    let label = visibleNames.join(", ");
+    if (names.length > 3) {
+      label += ` and ${names.length - 3} more`;
+    } else if (names.length > 1) {
+      label = `${visibleNames.slice(0, -1).join(", ")} and ${visibleNames[visibleNames.length - 1]}`;
+    }
+    const last = skipped[skipped.length - 1];
+
+    container.hidden = false;
+    container.innerHTML = `
+      <p><span>Skipped this trip</span> <strong>${escapeHtml(label)}</strong></p>
+      <button
+        class="btn btn-ghost btn-sm"
+        type="button"
+        data-action="undo-skip-run-item"
+        data-id="${escapeHtml(last.id)}"
+        aria-label="Undo skipping ${escapeHtml(last.name)}"
+      >${skipped.length > 1 ? "Undo last" : "Undo"}</button>
+    `;
+
+    return skipped;
+  }
+
   function renderStoreRunCart(entries) {
     const cart = $("#store-run-cart");
     const selectedEntries = entries
@@ -1121,14 +1186,17 @@ import {
     }`;
 
     if (!selectedEntries.length) {
+      const hasDraft = entries.length > 0;
       cart.innerHTML = `
         <header class="store-run-cart-header">
           <h2>This trip</h2>
           <span>0 items</span>
         </header>
         <div class="store-run-cart-empty">
-          <strong>Nothing logged yet</strong>
-          <p>Tap Log on an item. Hoot saves the change now; Undo here reverses it.</p>
+          <strong>${hasDraft ? "Nothing logged yet" : "Nothing to log yet"}</strong>
+          <p>${hasDraft
+            ? "Log saves the change now; Undo reverses it."
+            : "Logged items will appear here when the run has something to pick."}</p>
         </div>
       `;
       return;
@@ -1178,26 +1246,7 @@ import {
 
     updateWatchToggle();
 
-    const currentEntries = buildShoppingRun(state.items, {
-      includeWatch: storeRun.includeWatch,
-      referenceDate: today,
-    });
-    const roster = new Map(currentEntries.map((entry) => [entry.item.id, entry]));
-
-    for (const selectedId of storeRun.selected.keys()) {
-      if (roster.has(selectedId)) continue;
-
-      const item = state.items.find((candidate) => candidate.id === selectedId);
-      if (!item) continue;
-
-      roster.set(selectedId, {
-        item,
-        type: item.isOneTime ? "one-time" : "tracked",
-        priority: storeRun.selected.get(selectedId)?.priority ?? 4,
-      });
-    }
-
-    const entries = [...roster.values()];
+    const entries = runRosterEntries().filter((entry) => !isRunItemSkipped(entry.item.id));
     const groups = groupShoppingRun(entries);
     const summary = shoppingRunSummary(entries, new Set(storeRun.selected.keys()));
 
@@ -1206,6 +1255,44 @@ import {
       <article><span>Logged</span><strong>${summary.inCart}</strong></article>
       <article><span>Left</span><strong>${summary.remaining}</strong></article>
     `;
+
+    const skippedItems = renderStoreRunSkipped();
+    const emptyPanel = $("#store-run-empty");
+    if (emptyPanel) {
+      const isEmpty = groups.length === 0;
+      emptyPanel.hidden = !isEmpty;
+      if (!isEmpty) {
+        emptyPanel.replaceChildren();
+      }
+      if (isEmpty) {
+        const watchEntries = storeRun.includeWatch
+          ? []
+          : buildShoppingRun(state.items, {
+              includeWatch: true,
+              referenceDate: today,
+            });
+        const hasWatchRecovery = !storeRun.includeWatch && watchEntries.length > 0;
+        const hasSkipped = skippedItems.length > 0;
+        const message = hasSkipped
+          ? "Undo a skip above, add something else, or leave the run for later."
+          : storeRun.includeWatch
+            ? "Nothing is due or on Watch right now."
+            : hasWatchRecovery
+              ? "The run drafts overdue and buy-now staples, plus one-time needs. Watch items stay hidden until you show them."
+              : "The run drafts overdue and buy-now staples, plus one-time needs. Nothing on Watch is due either.";
+        emptyPanel.innerHTML = `
+          <h2>${hasSkipped ? "Everything left is skipped" : "Nothing is due right now"}</h2>
+          <p>${message}</p>
+          <div class="store-run-empty-actions">
+            ${hasWatchRecovery ? `<button class="btn btn-secondary" type="button" data-action="toggle-watch-items" data-watch-style="long">Show Watch items</button>` : ""}
+            <button class="btn btn-secondary" type="button" data-action="open-add-to-trip">Add to this trip</button>
+            <button class="btn btn-ghost" type="button" data-view="dashboard">Back to dashboard</button>
+          </div>
+        `;
+      }
+    }
+
+    view.classList.toggle("is-trip-empty", summary.inCart === 0);
 
     $("#store-run-groups").innerHTML = groups
       .map(
@@ -1222,20 +1309,116 @@ import {
 
     renderStoreRunCart(entries);
 
+    const selectedIds = [...storeRun.selected.keys()];
+    const lastSelectedId = selectedIds[selectedIds.length - 1] ?? "";
+    const lastSelectedItem = state.items.find((item) => item.id === lastSelectedId);
+    const undoLastButton = $(
+      '.store-run-footer [data-action="undo-last-run-item"]',
+    );
+    if (undoLastButton) {
+      undoLastButton.hidden = !lastSelectedId;
+      if (lastSelectedId) {
+        undoLastButton.dataset.id = lastSelectedId;
+        undoLastButton.setAttribute(
+          "aria-label",
+          `Undo ${lastSelectedItem?.name ?? "last log"}`,
+        );
+      } else {
+        delete undoLastButton.dataset.id;
+        undoLastButton.setAttribute("aria-label", "Undo last log");
+      }
+    }
+
     const finishButton = $('.store-run-footer [data-action="finish-run"]');
     if (finishButton) finishButton.disabled = summary.inCart === 0;
   }
 
-  function updateWatchToggle() {
-    const button = $('[data-action="toggle-watch-items"]');
-    if (!button) return;
+  function renderAddToTripOptions() {
+    const list = $("#add-to-trip-list");
+    if (!list) return;
 
-    button.textContent = storeRun.includeWatch ? "Hide Watch" : "Show Watch";
-    button.setAttribute(
-      "aria-label",
-      storeRun.includeWatch ? "Hide Watch items" : "Show Watch items",
+    const term = addToTripSearch.trim().toLowerCase();
+    const candidates = addToTripCandidates();
+    const matches = term
+      ? candidates.filter((item) => matchesQueueSearch(item, term))
+      : candidates;
+
+    if (!matches.length) {
+      const message = candidates.length
+        ? `No items match \u201C${addToTripSearch.trim()}\u201D.`
+        : "Every item is already in this trip.";
+      list.innerHTML = `
+        <li class="add-to-trip-empty">
+          <strong>${escapeHtml(message)}</strong>
+          <span>${candidates.length ? "Try another name, category, or unit." : "Nothing else is available to add."}</span>
+        </li>
+      `;
+      return;
+    }
+
+    list.innerHTML = matches
+      .map((item) => {
+        const meta = [item.category, item.unit, runItemStatus(item)]
+          .filter(Boolean)
+          .join(" · ");
+        const accessibleLabel = `Add ${item.name} to this trip${meta ? `. ${meta}` : ""}`;
+        return `
+          <li>
+            <button
+              class="add-to-trip-option"
+              type="button"
+              data-action="add-run-extra"
+              data-id="${escapeHtml(item.id)}"
+              aria-label="${escapeHtml(accessibleLabel)}"
+            >
+              <span class="add-to-trip-option-text">
+                <strong>${escapeHtml(item.name)}</strong>
+                <small>${escapeHtml(meta)}</small>
+              </span>
+              <span class="add-to-trip-option-action" aria-hidden="true">Add</span>
+            </button>
+          </li>
+        `;
+      })
+      .join("");
+  }
+
+  function openAddToTripDialog(trigger) {
+    addToTripSearch = "";
+    const search = $("#add-to-trip-search");
+    if (search) search.value = "";
+    renderAddToTripOptions();
+    const list = $("#add-to-trip-list");
+    if (list) list.scrollTop = 0;
+    showDialog($("#add-to-trip-dialog"), trigger);
+  }
+
+  function focusRunRowItem(itemId) {
+    if (!itemId) return false;
+    const button = document.querySelector(
+      `#store-run-groups .store-run-row[data-item-id="${CSS.escape(itemId)}"] [data-action="toggle-run-item"]`,
     );
-    button.setAttribute("aria-pressed", String(storeRun.includeWatch));
+    if (!button) return false;
+    button.focus();
+    return true;
+  }
+
+  function updateWatchToggle() {
+    for (const button of $$('[data-action="toggle-watch-items"]')) {
+      const longLabel = button.dataset.watchStyle === "long";
+      button.textContent = storeRun.includeWatch
+        ? longLabel
+          ? "Hide Watch items"
+          : "Hide Watch"
+        : longLabel
+          ? "Show Watch items"
+          : "Show Watch";
+      button.setAttribute(
+        "aria-label",
+        storeRun.includeWatch ? "Hide Watch items" : "Show Watch items",
+      );
+      button.setAttribute("aria-pressed", String(storeRun.includeWatch));
+    }
   }
 
   function announceRun(message) {
@@ -1307,6 +1490,71 @@ import {
       focusNextRunRow(itemId);
     } catch {
       toast(`Could not log ${item.name}. Try again.`, "error");
+    }
+  }
+
+  function skipShoppingRunItem(itemId) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || storeRun.selected.has(itemId) || isRunItemSkipped(itemId)) return;
+
+    const rowIds = [
+      ...document.querySelectorAll("#store-run-groups .store-run-row:not(.is-in-cart)"),
+    ].map((row) => row.dataset.itemId);
+    const currentIndex = rowIds.indexOf(itemId);
+    const nextId = currentIndex < 0 ? null : (rowIds[currentIndex + 1] ?? rowIds[currentIndex - 1]);
+
+    storeRun.skippedIds.push(itemId);
+    saveStoreRun();
+    render();
+    announceRun(
+      `${item.name} skipped this trip. ${storeRun.skippedIds.length} skipped.`,
+    );
+
+    if (!focusRunRowItem(nextId)) {
+      $('.store-run-skipped [data-action="undo-skip-run-item"]')?.focus();
+    }
+  }
+
+  function undoSkipRunItem(itemId) {
+    const skipIndex = storeRun.skippedIds.indexOf(itemId);
+    if (skipIndex === -1) return;
+    const item = state.items.find((entry) => entry.id === itemId);
+
+    storeRun.skippedIds.splice(skipIndex, 1);
+    saveStoreRun();
+    render();
+    announceRun(
+      `${item?.name ?? "Item"} restored to this trip. ${storeRun.skippedIds.length} skipped.`,
+    );
+
+    if (!focusRunRowItem(itemId)) {
+      (
+        $('.store-run-skipped [data-action="undo-skip-run-item"]') ??
+        $('.store-run-actions [data-action="open-add-to-trip"]')
+      )?.focus();
+    }
+  }
+
+  function addRunExtra(itemId) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || storeRun.selected.has(itemId) || (item.isOneTime && item.completed)) return;
+
+    const alreadyShown = runRosterEntries().some(
+      (entry) => entry.item.id === itemId && !isRunItemSkipped(itemId),
+    );
+    if (alreadyShown) return;
+
+    storeRun.extraIds.add(itemId);
+    storeRun.skippedIds = storeRun.skippedIds.filter((id) => id !== itemId);
+    saveStoreRun();
+
+    lastDialogTrigger = null;
+    closeDialog($("#add-to-trip-dialog"));
+    render();
+    announceRun(`${item.name} added to this trip. Not logged.`);
+
+    if (!focusRunRowItem(itemId)) {
+      $('.store-run-actions [data-action="open-add-to-trip"]')?.focus();
     }
   }
 
@@ -1382,18 +1630,80 @@ import {
       totalSpent,
       hasKnownPrice: knownPrices.length > 0,
       historyItemId: historyEntry?.item.id ?? null,
+      skippedCount: storeRun.skippedIds.length,
     };
   }
 
+  function purchaseCheckEntries(item) {
+    const purchases = [...item.purchases].sort(
+      (left, right) => parseDate(left.date) - parseDate(right.date),
+    );
+    const latestPurchaseId = purchases[purchases.length - 1]?.id ?? null;
+    const current = [];
+    const superseded = [];
+
+    for (const purchase of purchases) {
+      let feedback = purchase.feedback;
+      if (!feedback) continue;
+
+      if (purchase.id === latestPurchaseId) current.push({ purchase, feedback });
+      else superseded.push({ purchase, feedback });
+
+      while (feedback.previousFeedback) {
+        feedback = feedback.previousFeedback;
+        superseded.push({ purchase, feedback });
+      }
+    }
+
+    return { current, superseded };
+  }
+
+  function checkRecordedDate(entry) {
+    const value = entry.feedback.recordedAt || entry.purchase.date;
+    if (!value) return null;
+    const date = parseDate(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
   function predictionCheckSummary(item) {
-    const checks = item.purchases
-      .map((purchase) => purchase.feedback)
+    const { current, superseded } = purchaseCheckEntries(item);
+    const checks = [...current, ...superseded]
+      .map((entry) => entry.feedback)
       .filter((feedback) => feedback?.verdict === "right" || feedback?.verdict === "early");
     if (!checks.length) return "None yet";
 
     const right = checks.filter((feedback) => feedback.verdict === "right").length;
     const early = checks.length - right;
     return early ? `${right} right · ${early} still had some` : `${right} right`;
+  }
+
+  function activeNextUpCorrection(item) {
+    const purchase = latestPurchaseFor(item);
+    const feedback = purchase?.feedback;
+    if (
+      !purchase ||
+      feedback?.source !== "next-up" ||
+      feedback?.verdict !== "early"
+    ) {
+      return null;
+    }
+    return { purchase, feedback };
+  }
+
+  function restoreNextUpCorrection(itemId, purchaseId) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    const latestPurchase = item ? latestPurchaseFor(item) : null;
+    const purchase = item?.purchases.find((entry) => entry.id === purchaseId);
+    if (!item || !purchase || latestPurchase?.id !== purchase.id) return null;
+    if (purchase.feedback?.source !== "next-up") return null;
+
+    if (purchase.feedback.previousFeedback) {
+      purchase.feedback = clone(purchase.feedback.previousFeedback);
+    } else {
+      delete purchase.feedback;
+    }
+    saveState();
+    return item;
   }
 
   function predictionCheckMarkup(item, purchase, predictedDate) {
@@ -1408,25 +1718,35 @@ import {
 
     return `
       <div class="prediction-check" data-check-item="${escapeHtml(item.id)}">
-        <p class="prediction-check-prompt">Due ${formatDate(parseDate(predictedDate))} · was Hoot right?</p>
-        <div class="prediction-check-actions" role="group" aria-label="Was Hoot right about ${escapeHtml(item.name)}?">
-          <button
-            class="btn btn-secondary btn-sm"
-            type="button"
-            data-action="run-feedback"
-            data-id="${escapeHtml(item.id)}"
-            data-verdict="right"
-            aria-pressed="${verdict === "right"}"
-          >Yes, I was out</button>
-          <button
-            class="btn btn-secondary btn-sm"
-            type="button"
-            data-action="run-feedback"
-            data-id="${escapeHtml(item.id)}"
-            data-verdict="early"
-            aria-pressed="${verdict === "early"}"
-          >Still had some</button>
-        </div>
+        <fieldset class="prediction-check-group">
+          <legend class="prediction-check-prompt"><span class="sr-only">${escapeHtml(item.name)}: </span>Due ${formatDate(parseDate(predictedDate))} · was Hoot right?</legend>
+          <div class="prediction-check-actions">
+            <label class="btn btn-secondary btn-sm prediction-check-option">
+              <input
+                class="prediction-check-input"
+                type="radio"
+                name="run-feedback-${escapeHtml(item.id)}"
+                value="right"
+                data-action="run-feedback"
+                data-id="${escapeHtml(item.id)}"
+                ${verdict === "right" ? "checked" : ""}
+              />
+              <span>Yes, I was out</span>
+            </label>
+            <label class="btn btn-secondary btn-sm prediction-check-option">
+              <input
+                class="prediction-check-input"
+                type="radio"
+                name="run-feedback-${escapeHtml(item.id)}"
+                value="early"
+                data-action="run-feedback"
+                data-id="${escapeHtml(item.id)}"
+                ${verdict === "early" ? "checked" : ""}
+              />
+              <span>Still had some</span>
+            </label>
+          </div>
+        </fieldset>
         <p class="prediction-check-result" data-check-result${result ? "" : " hidden"}>${escapeHtml(result)}</p>
       </div>
     `;
@@ -1437,17 +1757,23 @@ import {
     if (!receipt.entries.length) return;
 
     const count = receipt.entries.length;
-    const trackedCount = receipt.trackedEntries.length;
+    const checkCount = receipt.entries.filter(
+      ({ selection }) => selection?.type === "tracked" && selection.predictedDate,
+    ).length;
     const itemWord = count === 1 ? "item" : "items";
     pendingRunReceipt = receipt;
 
+    const skippedText = receipt.skippedCount
+      ? ` ${receipt.skippedCount} skipped.`
+      : "";
+
     $("#finish-run-title").textContent = "Shopping run finished";
-    $("#finish-run-message").textContent = `${count} ${itemWord} logged.${
-      trackedCount
-        ? ` ${trackedCount} ${
-            trackedCount === 1 ? "prediction" : "predictions"
-          } updated.`
-        : " No predictions changed."
+    $("#finish-run-message").textContent = `${count} ${itemWord} logged.${skippedText}${
+      checkCount
+        ? ` ${checkCount} ${
+            checkCount === 1 ? "restock check" : "restock checks"
+          } ready.`
+        : " No restock checks for this trip."
     }`;
     $("#finish-run-summary").innerHTML = `
       <strong>${count} ${itemWord}</strong>
@@ -1457,10 +1783,7 @@ import {
           : `<span>Spending not recorded</span>`
       }
     `;
-    const hasPredictionChecks = receipt.entries.some(
-      ({ selection }) => selection?.type === "tracked" && selection.predictedDate,
-    );
-    $("#finish-run-hint").hidden = !hasPredictionChecks;
+    $("#finish-run-hint").hidden = checkCount === 0;
     $("#prediction-check-status").textContent = "";
     $("#finish-run-list").innerHTML = receipt.entries
       .map(({ item, purchase, selection }) => {
@@ -1495,6 +1818,8 @@ import {
     storeRun = {
       includeWatch: false,
       selected: new Map(),
+      extraIds: new Set(),
+      skippedIds: [],
     };
     saveStoreRun();
 
@@ -1517,13 +1842,14 @@ import {
       verdict,
       predictedDate: entry.selection.predictedDate,
       recordedAt: toISODate(today),
+      source: "receipt",
     };
     saveState();
 
     const next = predictionFor(entry.item, today);
     const check = trigger.closest(".prediction-check");
-    $$('[data-action="run-feedback"]', check).forEach((button) => {
-      button.setAttribute("aria-pressed", String(button.dataset.verdict === verdict));
+    $$('[data-action="run-feedback"]', check).forEach((input) => {
+      input.checked = input.value === verdict;
     });
 
     const result = check?.querySelector("[data-check-result]");
@@ -1546,6 +1872,76 @@ import {
     }
   }
 
+  function applyNextUpStillHasSome(itemId) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || item.isOneTime) return;
+
+    const latestPurchase = latestPurchaseFor(item);
+    if (!latestPurchase) return;
+
+    const prediction = predictionFor(item, today);
+    if (prediction.zone !== "overdue") return;
+
+    const previousFeedback = latestPurchase.feedback
+      ? clone(latestPurchase.feedback)
+      : null;
+    const purchaseId = latestPurchase.id;
+    const shiftDays = EARLY_RESTOCK_SHIFT_DAYS - prediction.daysUntil;
+
+    latestPurchase.feedback = {
+      verdict: "early",
+      predictedDate: toISODate(prediction.date),
+      recordedAt: toISODate(today),
+      source: "next-up",
+      shiftDays,
+      ...(previousFeedback ? { previousFeedback } : {}),
+    };
+    saveState();
+    render();
+
+    const next = predictionFor(item);
+    $("#dashboard-list .item-card [data-action=\"log\"]")?.focus({ preventScroll: true });
+    toast(
+      `${item.name} marked still have some. Next estimate ${formatFullDate(next.date)}.`,
+      "success",
+      {
+        label: "Undo",
+        onAction: () => {
+          const currentItem = restoreNextUpCorrection(item.id, purchaseId);
+          if (!currentItem) {
+            toast(`${item.name} correction is no longer active.`, "error");
+            return;
+          }
+
+          render();
+          $(
+            `#dashboard-list [data-item-id="${CSS.escape(item.id)}"] .item-title-button`,
+          )?.focus({ preventScroll: true });
+          toast(`${item.name} check removed.`);
+        },
+      },
+    );
+  }
+
+  function undoNextUpCorrection(itemId, purchaseId) {
+    const item = restoreNextUpCorrection(itemId, purchaseId);
+    if (!item) {
+      toast("That correction is no longer active.", "error");
+      return;
+    }
+
+    render();
+    const next = predictionFor(item);
+    $("#item-analysis-content .restock-answer [data-action=\"log\"]")?.focus({
+      preventScroll: true,
+    });
+    toast(
+      `${item.name} correction undone.${
+        next ? ` Next estimate ${formatFullDate(next.date)}.` : ""
+      }`,
+    );
+  }
+
   function toggleWatchItems(trigger) {
     storeRun.includeWatch = !storeRun.includeWatch;
     saveStoreRun();
@@ -1553,6 +1949,18 @@ import {
     announceRun(
       storeRun.includeWatch ? "Watch items included." : "Watch items hidden.",
     );
+
+    const triggerIsUsable =
+      trigger instanceof HTMLElement &&
+      document.contains(trigger) &&
+      trigger.getClientRects().length > 0;
+
+    if (!triggerIsUsable) {
+      const nextFocus =
+        document.querySelector('#store-run-groups [data-action="toggle-run-item"]') ??
+        document.querySelector('.store-run-actions [data-action="toggle-watch-items"]');
+      nextFocus?.focus({ preventScroll: true });
+    }
   }
 
   function purchaseCountLabel(count) {
@@ -1563,7 +1971,7 @@ import {
 
   function rhythmSentence(item, prediction) {
     const correction = prediction.feedbackShiftDays
-      ? " Your last check said you still had some, so Hoot added three days."
+      ? ` Your last check said you still had some, so Hoot added ${prediction.feedbackShiftDays} days.`
       : "";
 
     if (prediction.maturity === "learning") {
@@ -1854,15 +2262,86 @@ import {
   function checksCard(item) {
     const summary = predictionCheckSummary(item);
     const hasChecks = summary !== "None yet";
+    const correction = activeNextUpCorrection(item);
+    const next = correction ? predictionFor(item) : null;
+    const { superseded } = purchaseCheckEntries(item);
+    const history = [...superseded].sort((left, right) => {
+      const leftDate = checkRecordedDate(left);
+      const rightDate = checkRecordedDate(right);
+      return (rightDate?.getTime() ?? 0) - (leftDate?.getTime() ?? 0);
+    });
+    const recordedDate = correction?.feedback.recordedAt
+      ? parseDate(correction.feedback.recordedAt)
+      : null;
+    const previousDate = correction?.feedback.predictedDate
+      ? parseDate(correction.feedback.predictedDate)
+      : null;
+    const recordedCopy =
+      recordedDate && !Number.isNaN(recordedDate.getTime())
+        ? ` · recorded ${formatDate(recordedDate)}`
+        : "";
+    const moveCopy =
+      previousDate &&
+      !Number.isNaN(previousDate.getTime()) &&
+      next
+        ? `Estimate moved from ${formatDate(previousDate)} to ${formatDate(next.date)}.`
+        : next
+          ? `Current estimate ${formatDate(next.date)}.`
+          : "";
+    const historyRows = history
+      .map((entry) => {
+        const verdict =
+          entry.feedback.verdict === "early" ? "Still had some" : "Right";
+        const source = entry.feedback.source === "next-up" ? "Next up" : "Receipt";
+        const date = checkRecordedDate(entry);
+        return `
+          <li class="rail-check-history-item">
+            <span class="rail-check-history-verdict">${escapeHtml(verdict)}</span>
+            <span class="rail-check-history-meta">${escapeHtml(source)}${
+              date
+                ? ` · <time datetime="${toISODate(date)}">${formatDate(date)}</time>`
+                : ""
+            }</span>
+          </li>
+        `;
+      })
+      .join("");
 
     return `
       <article class="rail-card">
         <h2>Your checks</h2>
         <p class="rail-detail">${escapeHtml(summary)}</p>
+        ${
+          correction
+            ? `<div class="rail-correction" data-next-up-correction>
+          <span class="rail-correction-label">Next up correction</span>
+          <p class="rail-correction-summary"><strong>Still have some</strong>${escapeHtml(recordedCopy)}</p>
+          <p class="rail-note">${escapeHtml(moveCopy)}</p>
+          <button
+            class="btn btn-secondary btn-sm rail-correction-undo"
+            type="button"
+            data-action="undo-next-up-correction"
+            data-id="${escapeHtml(item.id)}"
+            data-purchase-id="${escapeHtml(correction.purchase.id)}"
+            aria-label="Undo Still have some correction for ${escapeHtml(item.name)}"
+          >Undo correction</button>
+        </div>`
+            : ""
+        }
+        ${
+          historyRows
+            ? `<div class="rail-check-history">
+          <h3 class="rail-check-history-title">Earlier checks</h3>
+          <ul class="rail-check-history-list">${historyRows}</ul>
+        </div>`
+            : ""
+        }
         <p class="rail-note">${
-          hasChecks
-            ? "Answers from the finish receipt. “Still had some” moves the next estimate three days later."
-            : "Answer “Was Hoot right?” after a shopping run. “Still had some” moves the next estimate three days later."
+          correction
+            ? "Recorded without a purchase. This stays here after the toast so you can undo it later."
+            : hasChecks
+              ? "Answers from the finish receipt or an overdue Next up card. “Still have some” moves an overdue estimate three days out."
+              : "Answer “Was Hoot right?” after a shopping run, or “Still have some” on an overdue Next up card. The correction moves the estimate out without logging a purchase."
         }</p>
       </article>
     `;
@@ -1950,6 +2429,9 @@ import {
   }
 
   function render() {
+    document.body.dataset.sample = normalizeSampleId(state.sample);
+    const sampleSelect = $("#sample-select");
+    if (sampleSelect) sampleSelect.value = document.body.dataset.sample;
     renderStats();
     renderDashboard();
     renderRestockCalendar();
@@ -2047,6 +2529,7 @@ import {
       renderStoreRun();
       if (previousView !== "store-run") {
         window.scrollTo(0, 0);
+        syncRunHeaderState();
         $("#store-run-title")?.focus({ preventScroll: true });
       }
     } else if (previousView === "store-run" && nextView === "dashboard") {
@@ -2444,11 +2927,12 @@ import {
     }
   }
 
-  function openConfirm({ title, message, confirmLabel, onConfirm }) {
+  function openConfirm({ title, message, confirmLabel, onConfirm, onDismiss = null }) {
     $("#confirm-title").textContent = title;
     $("#confirm-message").textContent = message;
     $("#confirm-action").textContent = confirmLabel;
     pendingConfirm = onConfirm;
+    pendingConfirmDismiss = onDismiss;
     showDialog($("#confirm-dialog"));
   }
 
@@ -2582,10 +3066,59 @@ import {
     if (trigger instanceof HTMLElement) lastDialogTrigger = trigger;
   }
 
+  function clearStoreRunSession() {
+    try {
+      window.localStorage.removeItem(STORE_RUN_KEY);
+    } catch {
+      // Ignore storage failures; the in-memory session still resets.
+    }
+    storeRun = {
+      includeWatch: false,
+      selected: new Map(),
+      extraIds: new Set(),
+      skippedIds: [],
+    };
+  }
+
+  function requestSampleSwitch(sampleId, trigger) {
+    const nextSampleId = normalizeSampleId(sampleId);
+    const activeSampleId = normalizeSampleId(state.sample);
+    const select = $("#sample-select");
+
+    if (nextSampleId === activeSampleId) {
+      if (select) select.value = activeSampleId;
+      return;
+    }
+
+    const sample = sampleFor(nextSampleId);
+    openConfirm({
+      title: `Load the ${sample.label.toLowerCase()}?`,
+      message: `This replaces the current demo items with ${sample.itemCount} sample items and clears local changes.`,
+      confirmLabel: "Switch sample",
+      onConfirm: async () => {
+        state = createDemoState(nextSampleId);
+        saveState();
+        clearStoreRunSession();
+        currentItemId = null;
+        itemReturnView = "dashboard";
+        queueSearch = "";
+        $("#queue-search").value = "";
+        render();
+        setView("dashboard", { replace: true });
+        toast(`${sample.label} loaded.`);
+      },
+      onDismiss: () => {
+        if (select) select.value = normalizeSampleId(state.sample);
+      },
+    });
+    if (trigger instanceof HTMLElement) lastDialogTrigger = trigger;
+  }
+
   function requestReset(trigger) {
+    const sample = sampleFor(state.sample);
     openConfirm({
       title: "Reset the demo?",
-      message: "This restores the built-in sample items and clears local changes.",
+      message: `This restores the ${sample.label.toLowerCase()} sample items and clears local changes.`,
       confirmLabel: "Reset demo",
       onConfirm: async () => {
         await hootApi.resetDemo();
@@ -2718,6 +3251,10 @@ import {
         if (prepareLogPurchaseDialog(itemId, { repeatLast: true })) {
           showDialog($("#log-purchase-dialog"), actionButton);
         }
+      } else if (action === "still-have-some") {
+        applyNextUpStillHasSome(itemId);
+      } else if (action === "undo-next-up-correction") {
+        undoNextUpCorrection(itemId, actionButton.dataset.purchaseId);
       } else if (action === "edit") {
         prepareEditItemDialog(itemId);
         showDialog($("#edit-item-dialog"), actionButton);
@@ -2737,23 +3274,34 @@ import {
         adjustShoppingRunItem(itemId, actionButton);
       } else if (action === "undo-run-item") {
         undoShoppingRunItem(itemId, actionButton);
+      } else if (action === "undo-last-run-item") {
+        undoShoppingRunItem(itemId, actionButton);
       } else if (action === "finish-run") {
         finishShoppingRun(actionButton);
       } else if (action === "finish-run-done") {
         completeShoppingRun();
       } else if (action === "finish-run-history") {
         completeShoppingRun({ openHistory: true });
-      } else if (action === "run-feedback") {
-        const verdict = actionButton.dataset.verdict;
-        if (verdict === "right" || verdict === "early") {
-          recordRunPredictionFeedback(itemId, verdict, actionButton);
-        }
       } else if (action === "toggle-watch-items") {
         toggleWatchItems(actionButton);
+      } else if (action === "open-add-to-trip") {
+        openAddToTripDialog(actionButton);
+      } else if (action === "add-run-extra") {
+        addRunExtra(itemId);
+      } else if (action === "skip-run-item") {
+        skipShoppingRunItem(itemId);
+      } else if (action === "undo-skip-run-item") {
+        undoSkipRunItem(itemId);
       }
     });
 
     document.addEventListener("change", async (event) => {
+      const feedback = event.target.closest('[data-action="run-feedback"]');
+      if (feedback) {
+        recordRunPredictionFeedback(feedback.dataset.id, feedback.value, feedback);
+        return;
+      }
+
       const input = event.target.closest('[data-action="toggle-one-time"]');
       if (!input) return;
       const item = await hootApi.toggleOneTime(input.dataset.id, input.checked);
@@ -2777,6 +3325,11 @@ import {
       renderDashboard();
     });
 
+    $("#add-to-trip-search").addEventListener("input", (event) => {
+      addToTripSearch = event.currentTarget.value;
+      renderAddToTripOptions();
+    });
+
     $$("[data-calendar-range]").forEach((button) => {
       button.addEventListener("click", () => {
         const range = Number(button.dataset.calendarRange);
@@ -2792,6 +3345,18 @@ import {
     $("#edit-purchase-form").addEventListener("submit", submitEditPurchase);
     $("#reset-demo").addEventListener("click", (event) => requestReset(event.currentTarget));
 
+    const sampleSelect = $("#sample-select");
+    if (sampleSelect) {
+      sampleSelect.innerHTML = DEMO_SAMPLES.map(
+        (sample) =>
+          `<option value="${escapeHtml(sample.id)}">${escapeHtml(sample.label)} (${sample.itemCount} items)</option>`,
+      ).join("");
+      sampleSelect.value = normalizeSampleId(state.sample);
+      sampleSelect.addEventListener("change", (event) => {
+        requestSampleSwitch(event.currentTarget.value, event.currentTarget);
+      });
+    }
+
     $("#finish-run-dialog").addEventListener("close", () => {
       pendingRunReceipt = null;
       $("#prediction-check-status").textContent = "";
@@ -2800,6 +3365,7 @@ import {
     $("#confirm-action").addEventListener("click", async () => {
       const action = pendingConfirm;
       pendingConfirm = null;
+      pendingConfirmDismiss = null;
       closeDialog($("#confirm-dialog"));
       if (action) await action();
     });
@@ -2817,6 +3383,13 @@ import {
           setFormStatus(form, "");
         }
 
+        if (dialog.id === "confirm-dialog") {
+          const dismiss = pendingConfirmDismiss;
+          pendingConfirm = null;
+          pendingConfirmDismiss = null;
+          if (dismiss) dismiss();
+        }
+
         if (lastDialogTrigger instanceof HTMLElement) {
           lastDialogTrigger.focus({ preventScroll: true });
         }
@@ -2826,9 +3399,11 @@ import {
   }
 
   function init() {
-    if (!state.items.length) state = createDemoState();
+    if (!state.items.length) state = createDemoState(normalizeSampleId(state.sample));
     bindEvents();
     initNextUpObserver();
+    window.addEventListener("scroll", syncRunHeaderState, { passive: true });
+    syncRunHeaderState();
     render();
 
     const route = readRoute();

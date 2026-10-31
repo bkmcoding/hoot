@@ -20,14 +20,23 @@ Open `http://127.0.0.1:8000` in a browser.
 - Item detail page with a next-restock answer and likely window, a buying-rhythm ledger, confidence and spending detail, and inline purchase editing
 - One-time checklist for irregular purchases
 - Immersive Shopping run with aisle grouping, one-tap logging, compact trip detail, and a finish receipt
-- Optional post-trip **Was Hoot right?** check that moves the next estimate when you still had some
-- Local demo data with reset
+- Optional post-trip **Was Hoot right?** check, plus **Still have some** on an overdue Next up, both correcting an estimate without a purchase; item detail keeps an active correction for review and undo, with earlier checks kept for reference
+- Two switchable local samples with reset: a six-staple starter household and a 44-item busy household
+
+### Demo samples
+
+The footer **Sample** select switches between two date-relative samples:
+
+- **Starter household** — 6 tracked staples and 2 one-time needs. This is the default first-run sample.
+- **Busy household** — 38 tracked staples and 6 one-time needs, with long purchase histories spread across every urgency zone. Use this one to judge density, scanning, and scrolling at household scale.
+
+Switching replaces local data and clears the shopping-run session, so it asks for confirmation. **Reset demo** restores whichever sample is active. The active sample is mirrored on `document.body.dataset.sample` for tests and review tooling.
 
 ### Quality and tooling
 
 ```bash
 npm install
-npm test                 # design tokens, prediction harness, and browser accessibility/overflow checks
+npm test                 # design tokens, sample invariants, prediction harness, and browser checks
 npm run audit:lighthouse  # generate a local Lighthouse report in .quality/
 ```
 

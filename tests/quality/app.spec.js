@@ -45,6 +45,215 @@ test("keeps the learning cue inside the Next up card at desktop and tablet width
   }
 });
 
+test("lets an overdue Next up be corrected without logging a purchase", async ({ page }) => {
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: width === 320 ? 900 : 1000 });
+    await page.goto("/");
+
+    const card = page.locator("#dashboard-list .item-card").first();
+    const status = card.locator(".next-up-meta .status-chip");
+    await expect(card).toContainText("Trash bags");
+    await expect(status).toHaveText("Overdue");
+
+    const correction = card.getByRole("button", {
+      name: "Still have some",
+      exact: true,
+    });
+    await expect(correction).toBeVisible();
+    if (width === 320) {
+      const box = await correction.boundingBox();
+      expect(box, "missing correction action at 320px").not.toBeNull();
+      expect(box.height, "short correction target at 320px").toBeGreaterThanOrEqual(44);
+    }
+
+    await correction.click();
+
+    await expect(status).toHaveText("Buy now");
+    await expect(card).toContainText("In 3 days");
+    await expect(correction).toHaveCount(0);
+    await expect(
+      card.getByRole("button", { name: "Log purchase", exact: true })
+    ).toBeFocused();
+
+    const afterCorrection = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+      const item = state.items.find((entry) => entry.id === "item-trash-bags");
+      return { purchaseCount: item.purchases.length, feedback: item.purchases[0].feedback };
+    });
+    expect(afterCorrection.purchaseCount).toBe(1);
+    expect(afterCorrection.feedback).toMatchObject({
+      verdict: "early",
+      source: "next-up",
+      shiftDays: 8,
+    });
+
+    const toast = page.locator(".toast", { hasText: "Trash bags marked still have some" });
+    await expect(toast).toBeVisible();
+    await toast.getByRole("button", { name: "Undo" }).click();
+
+    await expect(status).toHaveText("Overdue");
+    await expect(correction).toBeVisible();
+    await expect(card.locator(".item-title-button")).toBeFocused();
+
+    const restored = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+      const item = state.items.find((entry) => entry.id === "item-trash-bags");
+      return item.purchases[0].feedback;
+    });
+    expect(restored).toBeUndefined();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, `dashboard overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
+});
+
+test("keeps Next up corrections reviewable and lists superseded checks", async ({ page }) => {
+  await page.addInitScript(() => {
+    const key = "hoot-demo-state-v1";
+    if (localStorage.getItem(key)) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isoDate = (offset) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() + offset);
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        items: [
+          {
+            id: "item-trash-bags",
+            name: "Trash bags",
+            category: "Household",
+            unit: "40-count box",
+            reorderThresholdDays: 35,
+            isOneTime: false,
+            completed: false,
+            createdAt: isoDate(-70),
+            purchases: [
+              {
+                id: "purchase-trash-old",
+                date: isoDate(-70),
+                quantity: 1,
+                price: 11.99,
+                feedback: {
+                  verdict: "early",
+                  predictedDate: isoDate(-18),
+                  recordedAt: isoDate(-20),
+                  source: "next-up",
+                  shiftDays: 4,
+                },
+              },
+              {
+                id: "purchase-trash-1",
+                date: isoDate(-40),
+                quantity: 1,
+                price: 12.49,
+                feedback: {
+                  verdict: "right",
+                  predictedDate: isoDate(-5),
+                  recordedAt: isoDate(-1),
+                  source: "receipt",
+                },
+              },
+            ],
+          },
+        ],
+      })
+    );
+  });
+
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: width === 320 ? 900 : 1000 });
+    await page.goto("/");
+
+    const card = page.locator("#dashboard-list .item-card").first();
+    await expect(card).toContainText("Overdue");
+    await card.getByRole("button", { name: "Still have some", exact: true }).click();
+
+    await page.reload();
+    await expect(page.locator(".toast")).toHaveCount(0);
+
+    const stored = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+      const item = state.items.find((entry) => entry.id === "item-trash-bags");
+      return item.purchases.find((entry) => entry.id === "purchase-trash-1").feedback;
+    });
+    expect(stored).toMatchObject({ verdict: "early", source: "next-up" });
+    expect(stored.previousFeedback).toMatchObject({ verdict: "right" });
+
+    await page.getByRole("button", { name: "Trash bags", exact: true }).click();
+
+    const checks = page.locator(".rail-card", { hasText: "Your checks" });
+    await expect(checks).toContainText("1 right · 2 still had some");
+    await expect(checks.locator(".rail-correction-label")).toHaveText("Next up correction");
+    await expect(checks.locator(".rail-correction-summary")).toContainText("Still have some");
+    await expect(checks).toContainText(/recorded [A-Z][a-z]{2} \d{1,2}/);
+    await expect(checks.locator(".rail-correction .rail-note")).toContainText(
+      /Estimate moved from .+ to .+\./
+    );
+    await expect(
+      checks.getByRole("heading", { name: "Earlier checks", level: 3 })
+    ).toBeVisible();
+    const historyRows = checks.locator(".rail-check-history-item");
+    await expect(historyRows).toHaveCount(2);
+    await expect(historyRows.nth(0)).toContainText("Right");
+    await expect(historyRows.nth(0)).toContainText("Receipt");
+    await expect(historyRows.nth(1)).toContainText("Still had some");
+    await expect(historyRows.nth(1)).toContainText("Next up");
+
+    const undo = checks.getByRole("button", {
+      name: "Undo Still have some correction for Trash bags",
+    });
+    await expect(undo).toBeVisible();
+    if (width === 320) {
+      const box = await undo.boundingBox();
+      expect(box, "missing correction undo at 320px").not.toBeNull();
+      expect(box.height, "short correction undo target at 320px").toBeGreaterThanOrEqual(44);
+      const historyOverflow = await checks
+        .locator(".rail-check-history")
+        .evaluate((element) => element.scrollWidth - element.clientWidth);
+      expect(historyOverflow, "history overflow at 320px").toBeLessThanOrEqual(0);
+    }
+
+    await undo.click();
+
+    await expect(checks).toContainText("1 right · 1 still had some");
+    await expect(checks.locator(".rail-correction")).toHaveCount(0);
+    await expect(historyRows).toHaveCount(1);
+    await expect(historyRows.nth(0)).toContainText("Still had some");
+    await expect(historyRows.nth(0)).toContainText("Next up");
+    await expect(page.locator(".restock-answer .status-chip")).toHaveText("Overdue");
+    await expect(
+      page.locator(".restock-answer").getByRole("button", { name: "Log purchase", exact: true })
+    ).toBeFocused();
+    await expect(
+      page.locator(".toast", { hasText: "Trash bags correction undone" })
+    ).toBeVisible();
+
+    const restored = await page.evaluate(() => {
+      const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+      const item = state.items.find((entry) => entry.id === "item-trash-bags");
+      return item.purchases.find((entry) => entry.id === "purchase-trash-1").feedback;
+    });
+    expect(restored).toMatchObject({ verdict: "right" });
+    expect(restored.previousFeedback).toBeUndefined();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, `item detail overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
+});
+
 test("has no critical accessibility violations", async ({ page }) => {
   await page.goto("/");
   await page.locator("#view-dashboard").evaluate((view) => {
@@ -146,6 +355,56 @@ test("hides the phone dock while Next up is visible and restores it after", asyn
 
   await page.evaluate(() => window.scrollTo(0, 0));
   await expect(dock).toBeHidden();
+});
+
+test("keeps the phone Next up action above the fold and every lane label whole", async ({ page }) => {
+  for (const { width, height, compact } of [
+    { width: 320, height: 640, compact: true },
+    { width: 390, height: 844, compact: false },
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+
+    const card = page.locator("#dashboard-list .item-card").first();
+    const primary = card.getByRole("button", { name: "Log purchase", exact: true });
+    await expect(primary).toBeVisible();
+
+    const box = await primary.boundingBox();
+    expect(box, `missing primary action at ${width}px`).not.toBeNull();
+    expect(box.y, `primary action starts above the viewport at ${width}px`).toBeGreaterThanOrEqual(0);
+    expect(
+      box.y + box.height,
+      `primary action below the ${height}px fold at ${width}px`
+    ).toBeLessThanOrEqual(height);
+    expect(box.height, `primary action target at ${width}px`).toBeGreaterThanOrEqual(44);
+
+    const labels = await card.locator(".horizon-labels span").evaluateAll((elements) =>
+      elements.map((element) => ({
+        text: element.textContent.trim(),
+        clipped: element.scrollWidth > element.clientWidth + 1,
+      }))
+    );
+    expect(labels.map(({ text }) => text)).toEqual(["Overdue", "Buy now", "Watch", "Steady"]);
+    expect(labels.filter(({ clipped }) => clipped)).toEqual([]);
+
+    const compactCue = card.locator(".next-up-cue-compact");
+    const fullCue = card.locator(".next-up-cue-full");
+    if (compact) {
+      await expect(card.getByText("Learning", { exact: true })).toBeVisible();
+      await expect(compactCue).toBeVisible();
+      await expect(compactCue).toHaveText("1 of 3 · Manual 35-day");
+      await expect(fullCue).toBeHidden();
+    } else {
+      await expect(fullCue).toBeVisible();
+      await expect(fullCue).toHaveText("1 of 3 purchases · Manual 35-day estimate");
+      await expect(compactCue).toBeHidden();
+    }
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    );
+    expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+  }
 });
 
 test("fits all three navigation tabs at 320px without scrolling", async ({ page }) => {
@@ -322,13 +581,75 @@ test("states each calendar date once", async ({ page }) => {
 test("uses checklist wording on one-time item details", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "One-time" }).click();
-  await page.getByRole("button", { name: "Details", exact: true }).first().click();
+  await page.getByRole("button", { name: /^Details for / }).first().click();
 
   await expect(
     page.getByRole("heading", { name: "On your checklist" })
   ).toBeVisible();
   await expect(page.getByText(/Hoot does not predict a restock/)).toBeVisible();
   await expect(page.getByRole("heading", { name: "Buying rhythm" })).toHaveCount(0);
+});
+
+test("names every Details action for its item", async ({ page }) => {
+  await page.goto("/");
+
+  for (const view of ["dashboard", "one-time"]) {
+    if (view === "one-time") {
+      await page.getByRole("button", { name: "One-time", exact: true }).click();
+    }
+
+    await expect(
+      page.getByRole("button", { name: "Details", exact: true }),
+      `unnamed Details action on ${view}`
+    ).toHaveCount(0);
+
+    const labels = await page
+      .getByRole("button", { name: /^Details for / })
+      .evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
+
+    expect(labels.length, `missing named Details action on ${view}`).toBeGreaterThan(0);
+    expect(new Set(labels).size, `duplicate Details names on ${view}`).toBe(labels.length);
+    for (const label of labels) {
+      expect(label, `unexpected Details name on ${view}`).toMatch(/^Details for .+/);
+    }
+  }
+});
+
+test("holds the one-time ledger at a readable column on desktop", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "One-time", exact: true }).click();
+  await page.setViewportSize({ width: 1440, height: 900 });
+
+  const list = page.locator("#one-time-list");
+  const listBox = await list.boundingBox();
+  const headingBox = await page.locator("#view-one-time .section-heading").boundingBox();
+  expect(listBox, "missing one-time ledger at 1440px").not.toBeNull();
+  expect(headingBox, "missing one-time heading at 1440px").not.toBeNull();
+  expect(listBox.width, "one-time ledger wider than its reading column").toBeLessThanOrEqual(841);
+  expect(headingBox.width, "one-time heading wider than its reading column").toBeLessThanOrEqual(841);
+
+  const row = list.locator(".one-time-card").first();
+  const checkbox = row.getByRole("checkbox");
+  await expect(checkbox).toHaveAccessibleName(/^Mark .+ as purchased$/);
+  await checkbox.check();
+  await expect(checkbox).toBeChecked();
+  await expect(row).toHaveClass(/is-complete/);
+  await checkbox.uncheck();
+  await expect(checkbox).not.toBeChecked();
+  await expect(row).not.toHaveClass(/is-complete/);
+
+  const rowBox = await row.boundingBox();
+  expect(rowBox.width, "one-time row escapes the ledger at 1440px").toBeLessThanOrEqual(841);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const narrowBox = await list.boundingBox();
+  expect(narrowBox.width, "one-time ledger collapsed at 390px").toBeGreaterThan(300);
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+    ),
+    "one-time overflow at 390px"
+  ).toBeLessThanOrEqual(0);
 });
 
 test("focuses the checked item-type path when Add opens", async ({ page }) => {
@@ -352,6 +673,44 @@ test("focuses the checked item-type path when Add opens", async ({ page }) => {
   const trackedPath = page.getByRole("radio", { name: /Tracked staple/ });
   await expect(trackedPath).toBeChecked();
   await expect(trackedPath).toBeFocused();
+});
+
+test("keeps the add form's interval field above the sticky actions on phones", async ({ page }) => {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: width === 320 ? 640 : 844 });
+    await page.goto("/");
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+    await page.getByRole("button", { name: "Add item", exact: true }).click();
+
+    const field = page.locator("#add-threshold-field");
+    const hint = page.locator("#add-threshold-hint");
+    const footer = page.locator("#add-item-form .dialog-actions");
+    await expect(field).toBeVisible();
+    await expect(hint).toBeVisible();
+
+    const fieldBox = await field.boundingBox();
+    const hintBox = await hint.boundingBox();
+    const footerBox = await footer.boundingBox();
+    expect(fieldBox, `missing interval field at ${width}px`).not.toBeNull();
+    expect(hintBox, `missing interval hint at ${width}px`).not.toBeNull();
+    expect(footerBox, `missing sticky actions at ${width}px`).not.toBeNull();
+    expect(fieldBox.y + fieldBox.height, `interval field under the footer at ${width}px`).toBeLessThanOrEqual(
+      footerBox.y + 1
+    );
+    expect(hintBox.y + hintBox.height, `interval hint under the footer at ${width}px`).toBeLessThanOrEqual(
+      footerBox.y + 1
+    );
+
+    if (width === 320) {
+      await expect(page.locator("#add-item-dialog .dialog-header p")).toBeHidden();
+      await expect(page.locator("#add-category-hint")).toBeHidden();
+      await expect(page.locator("#add-unit-hint")).toBeHidden();
+    } else {
+      await expect(page.locator("#add-item-dialog .dialog-header p")).toBeVisible();
+      await expect(page.locator("#add-category-hint")).toBeVisible();
+      await expect(page.locator("#add-unit-hint")).toBeVisible();
+    }
+  }
 });
 
 test("opens item detail at the top with focus on the item heading", async ({ page }) => {
@@ -543,6 +902,60 @@ test("separates the observed gap from the interval used while learning", async (
   await expect(pattern).not.toContainText("Typical gap");
 });
 
+test("keeps projected estimate copy above AA at the micro scale", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Milk", exact: true }).click();
+
+  const samples = await page.evaluate(() => {
+    const selectors = [
+      ".rhythm-gap-row.is-estimate .rhythm-gap-days",
+      ".rhythm-gap-row.is-estimate .rhythm-gap-note",
+      ".rhythm-entry.is-estimate .rhythm-date",
+      ".rhythm-badge.is-estimate",
+      ".price-spark-title",
+    ];
+    const luminance = (color) => {
+      const [r, g, b] = color
+        .match(/\d+(?:\.\d+)?/g)
+        .slice(0, 3)
+        .map(Number);
+      const channel = (value) => {
+        const normalized = value / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      };
+      return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+    };
+
+    return selectors.map((selector) => {
+      const element = document.querySelector(selector);
+      const style = getComputedStyle(element);
+      let background = "rgba(0, 0, 0, 0)";
+      let parent = element;
+      while (parent) {
+        const candidate = getComputedStyle(parent).backgroundColor;
+        if (candidate !== "rgba(0, 0, 0, 0)" && candidate !== "transparent") {
+          background = candidate;
+          break;
+        }
+        parent = parent.parentElement;
+      }
+      const [lighter, darker] = [luminance(style.color), luminance(background)].sort(
+        (a, b) => b - a
+      );
+      return { selector, ratio: (lighter + 0.05) / (darker + 0.05) };
+    });
+  });
+
+  for (const sample of samples) {
+    expect(sample.ratio, sample.selector).toBeGreaterThanOrEqual(4.5);
+  }
+
+  await expect(page.locator(".rhythm-badge.is-estimate")).toHaveCSS("font-size", "11px");
+  await expect(page.locator(".price-spark-title")).toHaveCSS("font-size", "11px");
+});
+
 test("keeps purchase-history actions inside the phone viewport", async ({ page }) => {
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
@@ -567,6 +980,124 @@ test("keeps purchase-history actions inside the phone viewport", async ({ page }
     );
     expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
   }
+});
+
+test("wraps a long item name instead of widening the page", async ({ page }) => {
+  const name =
+    "ExtraLongUnbrokenHouseholdStapleNameForStressTestingContainingManyCharactersWithoutSpaces";
+
+  await page.addInitScript(({ itemName }) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const isoDate = (offset) => {
+      const date = new Date(today);
+      date.setDate(date.getDate() + offset);
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+        date.getDate()
+      ).padStart(2, "0")}`;
+    };
+
+    localStorage.setItem(
+      "hoot-demo-state-v1",
+      JSON.stringify({
+        items: [
+          {
+            id: "long-name",
+            name: itemName,
+            category: "Household",
+            unit: "refill pack",
+            reorderThresholdDays: 10,
+            isOneTime: false,
+            completed: false,
+            createdAt: isoDate(-10),
+            purchases: [{ id: "p1", date: isoDate(-10), quantity: 1, price: 4 }],
+          },
+        ],
+      })
+    );
+  }, { itemName: name });
+
+  for (const width of [1440, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/");
+
+    const title = page.locator("#dashboard-list .item-card .item-title-button").first();
+    await expect(title).toBeVisible();
+    const box = await title.boundingBox();
+    expect(box, `missing title at ${width}px`).not.toBeNull();
+    expect(box.x, `left clipping at ${width}px`).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width, `right clipping at ${width}px`).toBeLessThanOrEqual(width + 1);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      ),
+      `dashboard overflow at ${width}px`
+    ).toBeLessThanOrEqual(0);
+
+    await title.click();
+    await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      ),
+      `item detail overflow at ${width}px`
+    ).toBeLessThanOrEqual(0);
+  }
+});
+
+test("keeps queue dates whole when the row stacks at 320", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.goto("/");
+
+  const rows = page.locator(".item-row");
+  const count = await rows.count();
+  expect(count).toBeGreaterThan(0);
+
+  for (let index = 0; index < count; index += 1) {
+    const row = rows.nth(index);
+    const metrics = await row.evaluate((element) => {
+      const due = element.querySelector(".item-row-due");
+      const actions = element.querySelector(".item-row-actions");
+      const dueBox = due.getBoundingClientRect();
+      const actionBox = actions.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(due);
+      return {
+        name: element.querySelector(".item-title-button").textContent,
+        dueTextWidth: range.getBoundingClientRect().width,
+        dueWidth: dueBox.width,
+        actionsTop: actionBox.top,
+        dueBottom: dueBox.bottom,
+        actionWidths: [...actions.querySelectorAll(".btn")].map(
+          (button) => button.getBoundingClientRect().width
+        ),
+        actionHeights: [...actions.querySelectorAll(".btn")].map(
+          (button) => button.getBoundingClientRect().height
+        ),
+      };
+    });
+
+    expect(metrics.dueTextWidth, `clipped date for ${metrics.name}`).toBeLessThanOrEqual(
+      metrics.dueWidth + 1
+    );
+    expect(metrics.actionsTop, `actions overlap the date for ${metrics.name}`).toBeGreaterThanOrEqual(
+      metrics.dueBottom - 1
+    );
+    for (const width of metrics.actionWidths) {
+      expect(width, `cramped action for ${metrics.name}`).toBeGreaterThanOrEqual(100);
+    }
+    for (const height of metrics.actionHeights) {
+      expect(height, `short action for ${metrics.name}`).toBeGreaterThanOrEqual(44);
+    }
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const desktopMetrics = await rows.first().evaluate((element) => {
+    const dueBox = element.querySelector(".item-row-due").getBoundingClientRect();
+    const actionBox = element.querySelector(".item-row-actions").getBoundingClientRect();
+    return { actionsTop: actionBox.top, dueBottom: dueBox.bottom };
+  });
+  expect(desktopMetrics.actionsTop).toBeLessThan(desktopMetrics.dueBottom);
 });
 
 test("keeps the mobile viewport within the horizontal bounds", async ({ page }) => {

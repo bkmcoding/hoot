@@ -34,8 +34,13 @@ export function predictionFor(item, referenceDate = startOfDay()) {
   );
   const purchaseDates = sortedPurchases.map((purchase) => parseDate(purchase.date));
   const latestPurchase = sortedPurchases[sortedPurchases.length - 1] ?? null;
+  const recordedShiftDays = Number(latestPurchase?.feedback?.shiftDays);
   const feedbackShiftDays =
-    latestPurchase?.feedback?.verdict === "early" ? EARLY_RESTOCK_SHIFT_DAYS : 0;
+    latestPurchase?.feedback?.verdict === "early"
+      ? Number.isFinite(recordedShiftDays) && recordedShiftDays > 0
+        ? Math.round(recordedShiftDays)
+        : EARLY_RESTOCK_SHIFT_DAYS
+      : 0;
   const origin = purchaseDates.length ? purchaseDates[0] : parseDate(item.createdAt);
   const latest = purchaseDates.length ? purchaseDates[purchaseDates.length - 1] : origin;
   const purchaseCount = purchaseDates.length;
@@ -105,7 +110,9 @@ export function predictionFor(item, referenceDate = startOfDay()) {
 
   if (feedbackShiftDays) predictedDate = addDays(predictedDate, feedbackShiftDays);
 
-  const daysUntil = Math.ceil((predictedDate - today) / DAY_MS);
+  // Local midnights can be 23 or 25 hours apart across a DST change; round the
+  // calendar-day distance so a three-day move never reads as four.
+  const daysUntil = Math.round((predictedDate - today) / DAY_MS);
   const zone =
     daysUntil < 0
       ? "overdue"

@@ -16,6 +16,7 @@ colors:
   cream: "#f5efe3"
   amber-mark: "#d49b4c"
   projection: "#b0742a"
+  projection-ink: "#8a5a1f"
   selection: "#ebd3a6"
   backdrop: "rgba(31, 25, 16, 0.5)"
   primary-action: "#4e6247"
@@ -248,7 +249,7 @@ The mark is an owl’s feather drawn as a quill: one closed silhouette with two 
 - No ad language: no “effortless”, “never run out”, “smart”, “seamless”, or “your new”.
 - Prefer the concrete noun — restock date, checklist, purchase history — over model language such as prediction model, rhythm calculations, or estimates.
 - Keep provenance out of the UI. Method names, model versions, fit scores, and R² belong in code and tests, not on the item page. Explain what the date is based on in words instead.
-- “Hoot” belongs in the page title, the meta description, and accessibility labels, not in body copy.
+- “Hoot” belongs in the page title, the meta description, and accessibility labels, not in body copy. One exception: the finish receipt's optional check may ask “Due <date> · was Hoot right?” It is the only branded question in the interface.
 
 ## Colors
 
@@ -259,7 +260,7 @@ The mark is an owl’s feather drawn as a quill: one closed silhouette with two 
 ### Signals
 
 - **Terracotta** marks overdue items and destructive actions.
-- **Amber** marks items to buy now. A deeper amber-brown (`#7c4a22`) is the focus ring.
+- **Amber** marks items to buy now. The focus ring is a deeper amber-brown (`#7c4a22`); projected estimate copy uses `#8a5a1f` so 12px text clears AA, while the dashed estimate marker keeps `#b0742a`.
 - **Slate** marks items to watch.
 - **Sage** marks steady items.
 - **Warm neutral** marks learning and checklist states.
@@ -293,21 +294,24 @@ Hoot uses one system sans family with no external fonts. The stack names the pla
 - **Body:** 16px / 1.55.
 - **Label:** 12px, uppercase, 0.08em tracking.
 - **Metadata:** 12–13px.
+- **Micro:** 11px, weight 650–750, for functional labels such as **Estimate** and **Unit price history**.
 - **Button:** 14px, weight 700.
 - **Navigation tab:** 12px, uppercase, 0.08em tracking, weight 700, with a 2px night rule under the active destination. Below 360px it drops to 11px and 0.05em so all three labels fit a 320px viewport under wider fallback faces.
 
 **The Compare Rule.** Dates, quantities, prices, intervals, and model values use tabular numerals.
 
+Headings balance their lines. Prose uses pretty wrapping so a lone last word is pulled down where the browser supports it; the default wrap remains the fallback. User-entered item names and units may break at any character rather than widen a card or the page.
+
 ## Layout
 
-The shell has a sticky paper header, ledger-tab navigation, a visible Reset demo control in the footer, a 1200px content width, and an 8px rhythm. The dashboard heading carries a lightweight queue search, then leads with a focused **Next up** decision, a compact ranked restock queue, a quiet inventory summary strip, and the seven-day calendar with an **All 14 days** expansion. Header and dock actions read **Log purchase**, then **Add item**.
+The shell has a sticky paper header, ledger-tab navigation, a footer with the sample picker and Reset demo, a 1200px content width, and an 8px rhythm. The dashboard heading carries a lightweight queue search, then leads with a focused **Next up** decision, a compact ranked restock queue, a quiet inventory summary strip, and the seven-day calendar with an **All 14 days** expansion. Header and dock actions read **Log purchase**, then **Add item**.
 
 ### Shell behavior
 
 - **Desktop:** the header is at least 72px tall and holds the brand, ledger-tab navigation, and task actions in one scan line. The header carries no primary action: navigation is the only way into the Shopping run, and the dashboard's **Next up** card owns **Log purchase**.
 - **Tablet (661–980px):** the header becomes two rows: brand and actions on top, navigation below; the summary uses two columns; item detail becomes one column with the rhythm ledger before the reference rail, which uses two columns; the calendar uses four columns.
 - **Phone (≤660px):** the brand takes its own row and the three ledger tabs share the next at equal width, without a scroll container; **Log purchase** and **Add item** move to a single-row fixed bottom dock. The dock is hidden while **Next up** is visible and on item detail, then returns once the user leaves that surface. Queue rows compress to two lines, ledger entries stack date above details, fields stack, and dialog actions become sticky. The calendar uses two columns.
-- `.app-frame` reserves `--dock-height` of bottom padding so the dock never covers content. Reset demo sits in the footer and remains at least 44px tall on phones.
+- `.app-frame` reserves `--dock-height` of bottom padding so the dock never covers content. The footer groups a labelled **Sample** select with **Reset demo**; both remain at least 44px tall on phones and wrap without horizontal scrolling.
 
 ### Routes and browser history
 
@@ -321,6 +325,7 @@ Every stable surface has a hash route: `#/dashboard`, `#/one-time`, `#/shopping`
 | 981–1120px | **Next up** uses two columns with actions spanning the bottom; queue rows stay compact; the calendar uses four columns. |
 | 661–980px | Header becomes two rows; the summary uses two columns; item detail becomes one column with the rhythm ledger before the reference rail, which uses two columns; the calendar uses four columns. |
 | 660px and below | Single-column content, fixed action dock with observer-driven visibility, two-line queue rows, tightened **Next up**, stacked ledger entries and fields, and sticky 48px dialog actions; the calendar uses two columns. |
+| 360px and below | The **Next up** Learning cue compacts to progress and manual source, and the horizon lane rebalances its columns so every label stays whole; the primary **Log purchase** stays above a 640px viewport. Queue rows keep the predicted date beside the title at the 12px metadata size, and the two secondary actions share a full-width second line instead of squeezing the date. The add-item dialog hides its intro copy and optional Category/Unit hints, tightens field spacing, and keeps the interval field and helper above its sticky actions. |
 
 ## Elevation & Depth
 
@@ -354,7 +359,7 @@ Motion is calm and communicates state. Interface timing is 160–220ms.
 
 ### Dashboard hierarchy
 
-The populated dashboard has one unmistakable decision at the top: the highest-urgency tracked item. That **Next up** card owns the dashboard's one primary **Log purchase** action and the full Restock Horizon Lane. Until the item has three purchases, the card also carries a **Learning** chip, its purchase progress, and the manual interval source; its date heading reads **Estimated restock** rather than **Next predicted restock**. When history exists, a secondary **Log last** accelerator opens Log Purchase with today’s date and the most recent quantity and a known, non-zero total price. The remaining tracked items render as compact ranked rows with status, date, and secondary actions.
+The populated dashboard has one unmistakable decision at the top: the highest-urgency tracked item. That **Next up** card owns the dashboard's one primary **Log purchase** action and the full Restock Horizon Lane. Until the item has three purchases, the card also carries a **Learning** chip, its purchase progress, and the manual interval source; its date heading reads **Estimated restock** rather than **Next predicted restock**. When history exists, a secondary **Log last** accelerator opens Log Purchase with today’s date and the most recent quantity and a known, non-zero total price. An **Overdue** card with purchase history also offers **Still have some**: it records a correction on the latest purchase and moves the estimate three days out from today so a false Overdue clears, without writing a purchase. The change is announced in a toast with Undo, and focus returns to the next **Log purchase**. The remaining tracked items render as compact ranked rows with status, date, and secondary actions.
 
 Queue search matches name, category, and unit without displacing the global decision. Matches render beneath a **Search results** heading, and the count names the query. If the only match is the focused item, the section says so instead of repeating it as a row. No matches keep the global **Next up** card and offer **Clear search**. The lane and Today marker do not repeat across the queue.
 
@@ -383,15 +388,17 @@ Exact duplicate names, ignoring case and surrounding spaces, are rejected with a
 
 The focused **Next up** card is a decision strip with identity and status, then the horizon lane, then the actions. A slim inset rail in the zone color runs down the left edge, and the due chip uses the same zone tint. Item titles are buttons with a persistent warm underline and an expanded pointer target; explicit **Details** buttons remain available. Remaining queue rows use the same zone rail, but omit the horizon lane and Today marker to keep the queue compact.
 
+At 360px and below, the card’s Learning cue uses the compact `1 of 3 · Manual 35-day` form; the full phrase remains in the horizon group’s accessible description. The lane keeps the overdue boundary at one third so the Today marker and pointer stay aligned, while the other columns give **Buy now** and **Watch** enough width for their whole labels.
+
 ### Item detail
 
-Item detail answers one question first: when is this needed again. It leads with the item identity, then a **Next restock** answer card — date, due phrase, likely window when one exists, plain-language reason, and the only primary action, **Log purchase** — followed by the **Buying rhythm** ledger. A reference rail holds **Pattern**, **Confidence**, **Spending**, and **Your checks** with the collapsed **How Hoot got this date** disclosure. **Edit item** and **Delete** close the page; there is no second Log purchase. The page never shows R², fit strength, model versions, or internal method names.
+Item detail answers one question first: when is this needed again. It leads with the item identity, then a **Next restock** answer card — date, due phrase, likely window when one exists, plain-language reason, and the only primary action, **Log purchase** — followed by the **Buying rhythm** ledger. A reference rail holds **Pattern**, **Confidence**, **Spending**, and **Your checks** with the collapsed **How Hoot got this date** disclosure. **Your checks** counts every recorded right and still-had-some answer; the current **Next up** correction stays there after the toast with the date it was recorded, the estimate it moved, and **Undo correction**, which restores the check it replaced. A compact **Earlier checks** list keeps superseded receipt and Next up answers with their source and date; those rows are reference-only and no longer change the estimate. **Edit item** and **Delete** close the page; there is no second Log purchase. The page never shows R², fit strength, model versions, or internal method names.
 
 The ledger is one vertical timeline and the purchase history at once. Each purchase is a node with its date, quantity, total price, unit price when quantity is above one, and inline Edit/Delete actions. The line between nodes is the measured gap: its label states the days and, once learned, how far it sits from the typical gap. Purchase nodes are filled sage. The line from the last purchase to the estimate states how many days it adds and which basis it uses — the manual interval while learning, the learned gap after three purchases, or the check correction. The final estimate node is hollow and dashed, labeled **Estimate**, and never claims to be a purchase. A proportional, clamped connector height lets a long gap occupy more space without turning the page into a wall of whitespace. The separate purchase-history table is retired; the ledger owns the table’s dates, prices, and edit/delete actions.
 
 The reference rail adds evidence the ledger cannot. **Pattern** summarizes typical, shortest, longest, and last gaps and carries the model disclosure. **Confidence** names the sample size, measured gaps, gap range, and basis. **Spending** names known spend, average purchase, latest known unit price, and the change since the previous known price. When at least two purchases have a price, it adds a compact unit-price sparkline on the purchases’ date axis; the sparkline uses known prices only and is absent for a single price. Each point is a labeled button: tapping the plot selects the nearest purchase, Tab reaches each point, and a readout names the selected date and unit price. The SVG line is decorative; the point labels carry the accessible values. Prices stay per purchase; totals are labeled **Known spend** because a blank or zero price is unknown. Confidence copy describes the sample rather than asserting false precision.
 
-The answer adds a likely window only when at least two gaps exist: **Likely between <date> and <date>**, framed as a window rather than a guarantee, and widened when the gaps are irregular. While learning, **Pattern** separates the gap measured so far from the interval the estimate uses, so an observed gap and a manual interval cannot be mistaken for each other. One-time items replace the answer, ledger, rail, and spending with a single **On your checklist** card.
+The answer adds a likely window only when at least two gaps exist: **Likely between <date> and <date>**, framed as a window rather than a guarantee, and widened when the gaps are irregular. While learning, **Pattern** separates the gap measured so far from the interval the estimate uses, so an observed gap and a manual interval cannot be mistaken for each other. Projected gap copy uses the darker projection ink so the 12px days, note, and date clear AA; the dashed estimate marker keeps the lighter amber. The **Estimate** badge and **Unit price history** label use the 11px micro scale. One-time items replace the answer, ledger, rail, and spending with a single **On your checklist** card.
 
 ### Restock Horizon Lane
 
@@ -403,19 +410,33 @@ The schedule defaults to the next seven days and offers compact **Next 7 days** 
 
 ### One-time ledger
 
-Rows share one paper panel and are separated by hairlines. Checkboxes are circular and turn sage when checked. Completed items stay visible with muted ink and a strike-through.
+Rows share one paper panel and are separated by hairlines. Checkboxes are circular and turn sage when checked. Completed items stay visible with muted ink and a strike-through. At 1121px and wider, the heading and ledger hold an 840px reading column instead of stretching across the 1200px frame.
 
 The One-time heading offers a secondary **Add one-time item** action.
 
 ### Shopping run
 
-The run uses the immediate-logging model. **Log** writes the tracked purchase or checks off the one-time need at once, and the aisle row collapses to **Logged**. The collected list is **This trip**; the summary reads **Items**, **Logged**, and **Left**. There is no deferred cart or checkout step. Quantity, price, and the next restock estimate stay in **This trip**, where **Adjust** and **Undo** correct a log.
+The run uses the immediate-logging model. **Log** writes the tracked purchase or checks off the one-time need at once, and the aisle row collapses to **Logged**. The collected list is **This trip**; the summary reads **Items**, **Logged**, and **Left** for the draft after skips. There is no deferred cart or checkout step. Quantity, price, and the next restock estimate stay in **This trip**, where **Adjust** and **Undo** correct a log.
 
-At 981px and wider, the run opens from its focused column into a 1180px workspace: the progress strip and aisle list hold the left column, while **This trip** becomes a sticky paper panel in the right column. The panel stays in view as the aisles scroll; a long trip scrolls inside the panel while its header and **Finish shopping run** stay in place. At 980px and below, the run remains one column: progress, aisles, then **This trip**, with the finish action after the list.
+**Not this trip** removes an unlogged row from this trip without writing a purchase. A quiet skipped strip above the aisles names the skipped items and offers a single **Undo last**; skipped items are excluded from the summary and never appear on the receipt as logged purchases. **Add item** opens a 520px searchable sheet of items Hoot did not draft, including steady staples, Watch staples, and uncompleted one-time needs. Adding creates an unlogged row in its aisle; predictions change only when **Log** is pressed. Both are session-scoped and survive a reload until the run is finished.
+
+Aisles are paper panels with hairline-separated ledger rows, not nested cards. Each unchecked row carries a 3px zone rail and a status chip in the same terracotta/amber/slate/sage language as the dashboard; the chip names the status, and the meta line carries the unit and due phrase, not the category (the aisle heading owns it). **Log** is the row's only primary action and stays at the trailing edge. **Not this trip** is a quiet metadata-line action with a 44px target, never a second primary. At 340px and below the unit is omitted from the meta line so the timing and skip action stay compact.
+
+The header uses the page-title scale (30px desktop, 26px phones) and keeps **Show Watch**, **Add**, and **Exit run** as secondary actions; **Add** is named **Add to this trip** for assistive technology. At 660px and below the title and actions stack so the title never competes with the buttons. On phones the ordering sentence is shown on arrival, then collapses once the run scrolls so it stops adding sticky height; the title and actions remain, and the sentence returns at the top. The title receives programmatic focus on entry without a visible focus ring.
+
+At 981px and wider, the run opens from its focused column into a 1180px workspace: the progress strip and aisle list hold the left column, while **This trip** becomes a sticky paper panel in the right column. The panel stays in view as the aisles scroll; a long trip scrolls inside the panel while its header and **Finish shopping run** stay in place. At 980px and below, the run remains one column: progress, aisles, then **This trip**; the finish action follows the list while **This trip** is empty. Once there is something to finish it becomes sticky at 661–980px and fixed to the viewport bottom on phones, with matching bottom space reserved in the run. On phones that footer also carries **Undo last** for the most recent log, so a mis-tap can be reversed without scrolling to **This trip**; the action is absent from the desktop footer and while the trip is empty.
+
+When nothing is due, the aisle column shows a dedicated empty state — **Nothing is due right now** — that explains what the run drafts, offers **Show Watch items** when Watch has items, offers **Add to this trip**, and offers **Back to dashboard**. If every remaining row was skipped, it says so instead and points back to the skipped strip. The trip panel says logged items will appear when the run has something to pick; it never asks the user to log a row that does not exist.
 
 ### Finish receipt and prediction check
 
-The receipt asks one optional, inline question for each logged tracked staple: **Due <date> · was Hoot right?**, answered with **Yes, I was out** or **Still had some**. It is a quiet inset under the item, never a second dialog, and one-time entries never ask it. The answer is a correction to the estimate, not a new purchase. **Still had some** records the miss on that purchase and moves the next estimate three days later; the result line states the new date in place, and item detail counts checks and names the extra days under the estimate. Both answers can be changed until **Done**.
+The receipt asks one optional, inline question for each logged tracked staple: **Due <date> · was Hoot right?**, answered with **Yes, I was out** or **Still had some**. It is a quiet inset under the item, never a second dialog, and one-time entries never ask it. The same **Still have some** vocabulary appears on an overdue **Next up** card, but there it anchors the corrected estimate three days out from today and never creates a purchase. The answers are one native radio group inside a `fieldset` whose `legend` is the question, so the group carries its question and exactly one answer is checked until **Done**. Each radio covers its full answer target, keeping the visible label and the control the same hit area. The answer is a correction to the estimate, not a new purchase. **Still had some** records the miss on that purchase and moves the next estimate three days later; the result line states the new date in place, and item detail counts checks and names the extra days under the estimate.
+
+The receipt is a 520px sheet on desktop and fills the available height on phones. It scrolls as one body behind a sticky footer at every width; the answer buttons are 42px on desktop and at least 44px tall on phones, and the item list never becomes a nested scroll of its own. The receipt message names how many restock checks are ready rather than saying “predictions updated.”
+
+### Footer and sample picker
+
+The footer carries the sample-data note, a labelled native **Sample** select, and **Reset demo**. The select is 42px on desktop and 44px on phones, with the standard warm control border and amber focus ring. It names both built-in samples with their item counts. Switching is a secondary control, never a primary action; it asks for confirmation because it replaces local data, and **Reset demo** restores whichever sample is active.
 
 ### Dialogs and toasts
 
@@ -428,7 +449,7 @@ An empty state explains three things in place: why the surface is empty, what th
 ## Accessibility floor
 
 - Meet WCAG AA contrast for text and controls; color never carries status alone.
-- Give every interactive element a visible amber focus ring.
+- Give every interactive element a visible amber focus ring. Programmatically focused headings receive focus for screen-reader context but no visible outline; the ring belongs to controls.
 - Use semantic headings, buttons, labels, tables, and forms.
 - Focus the first useful control when a dialog opens, and restore focus to the trigger when it closes.
 - When item detail opens, reset the page to the top and move focus to the item heading. Leaving it with the in-page back control moves focus to the destination primary navigation.

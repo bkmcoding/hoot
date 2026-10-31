@@ -64,6 +64,44 @@ async function seedShoppingRun(page) {
   });
 }
 
+async function seedMinimalRun(page, { lastPurchaseDaysAgo, threshold }) {
+  await page.addInitScript(
+    ({ lastPurchaseDaysAgo, threshold }) => {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const iso = (offset) => {
+        const date = new Date(today);
+        date.setDate(date.getDate() + offset);
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      };
+      const item = {
+        id: "item-minimal",
+        name: "Test Flour",
+        category: "Pantry",
+        unit: "bag",
+        reorderThresholdDays: threshold,
+        isOneTime: false,
+        completed: false,
+        createdAt: iso(-(lastPurchaseDaysAgo + 5)),
+        purchases: [
+          {
+            id: "purchase-minimal",
+            date: iso(-lastPurchaseDaysAgo),
+            quantity: 1,
+            price: 3.5,
+          },
+        ],
+      };
+      localStorage.setItem("hoot-demo-state-v1", JSON.stringify({ items: [item] }));
+      localStorage.setItem(
+        "hoot-demo-store-run-v1",
+        JSON.stringify({ includeWatch: false, selected: [] })
+      );
+    },
+    { lastPurchaseDaysAgo, threshold }
+  );
+}
+
 async function openShoppingRun(page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Shopping", exact: true }).click();
@@ -83,7 +121,7 @@ test("opens Shopping Run from the header", async ({ page }) => {
   await expect(page.locator(".app-header")).toBeHidden();
   await expect(page.locator(".app-footer")).toBeHidden();
   await expect(page.locator(".store-run-cart-empty")).toContainText(
-    "Hoot saves the change now; Undo here reverses it."
+    "Log saves the change now; Undo reverses it."
   );
 });
 
@@ -337,6 +375,129 @@ test("undo restores a one-time item", async ({ page }) => {
   expect(completed).toBe(false);
 });
 
+test("skips an item for this trip without logging and restores it", async ({ page }) => {
+  await openShoppingRun(page);
+
+  await page
+    .getByRole("button", { name: "Not this trip for Overdue Milk" })
+    .click();
+
+  await expect(page.locator(".store-run-row", { hasText: "Overdue Milk" })).toHaveCount(0);
+  await expect(page.locator("#store-run-skipped")).toBeVisible();
+  await expect(page.locator("#store-run-skipped")).toContainText("Overdue Milk");
+  await expect(page.locator("#store-run-announcer")).toHaveText(
+    "Overdue Milk skipped this trip. 1 skipped."
+  );
+  await expect(page.locator("#store-run-summary article").first()).toContainText("2");
+
+  const purchaseCount = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+    return state.items.find((entry) => entry.id === "item-overdue").purchases.length;
+  });
+  expect(purchaseCount).toBe(1);
+
+  const session = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("hoot-demo-store-run-v1"))
+  );
+  expect(session.skippedIds).toEqual(["item-overdue"]);
+
+  await page.getByRole("button", { name: "Undo skipping Overdue Milk" }).click();
+
+  await expect(page.locator("#store-run-skipped")).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Not this trip for Overdue Milk" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Log Overdue Milk", exact: true })
+  ).toBeFocused();
+});
+
+test("keeps the skipped Undo below the sticky header when every row is skipped", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await openShoppingRun(page);
+
+  for (const name of ["Overdue Milk", "Buy-now Eggs", "One-time Candles"]) {
+    await page.getByRole("button", { name: `Not this trip for ${name}` }).click();
+  }
+
+  const undo = page.getByRole("button", { name: "Undo skipping One-time Candles" });
+  await expect(undo).toBeFocused();
+  await expect(page.locator("#store-run-empty")).toContainText(
+    "Everything left is skipped"
+  );
+
+  const [undoBox, headerBox] = await Promise.all([
+    undo.boundingBox(),
+    page.locator(".store-run-header").boundingBox(),
+  ]);
+  expect(undoBox.y).toBeGreaterThanOrEqual(headerBox.y + headerBox.height - 1);
+});
+
+test("adds a not-due item to this trip without logging it", async ({ page }) => {
+  await openShoppingRun(page);
+
+  await page.getByRole("button", { name: "Add to this trip", exact: true }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Add to this trip" });
+  const search = dialog.getByRole("searchbox", { name: "Find an item" });
+  await expect(dialog).toBeVisible();
+  await expect(search).toBeFocused();
+  await expect(
+    dialog.getByRole("button", { name: /Add Watch Apples to this trip/ })
+  ).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: /Add Overdue Milk to this trip/ })
+  ).toHaveCount(0);
+
+  await search.fill("no such thing");
+  await expect(dialog.getByText(/No items match/)).toBeVisible();
+
+  await search.fill("Watch Apples");
+  await dialog.getByRole("button", { name: /Add Watch Apples to this trip/ }).click();
+
+  const row = page.locator(".store-run-row", { hasText: "Watch Apples" });
+  await expect(dialog).toBeHidden();
+  await expect(row).toBeVisible();
+  await expect(row.locator(".status-chip")).toHaveText("Watch");
+  await expect(page.locator("#store-run-announcer")).toHaveText(
+    "Watch Apples added to this trip. Not logged."
+  );
+  await expect(
+    page.getByRole("button", { name: "Log Watch Apples", exact: true })
+  ).toBeFocused();
+
+  const purchaseCount = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+    return state.items.find((entry) => entry.id === "item-watch").purchases.length;
+  });
+  expect(purchaseCount).toBe(1);
+
+  const session = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("hoot-demo-store-run-v1"))
+  );
+  expect(session.selected).toEqual([]);
+  expect(session.extraIds).toContain("item-watch");
+});
+
+test("adds a not-due item to an empty run", async ({ page }) => {
+  await seedMinimalRun(page, { lastPurchaseDaysAgo: 0, threshold: 30 });
+  await openShoppingRun(page);
+
+  const empty = page.locator("#store-run-empty");
+  await expect(empty).toBeVisible();
+  await empty.getByRole("button", { name: "Add to this trip" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Add to this trip" });
+  await dialog.getByRole("button", { name: /Add Test Flour to this trip/ }).click();
+
+  await expect(empty).toBeHidden();
+  await expect(page.locator(".store-run-row", { hasText: "Test Flour" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Log Test Flour", exact: true })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Finish shopping run" })).toBeDisabled();
+});
+
 test("opens the existing purchase editor from a tracked logged row", async ({ page }) => {
   await openShoppingRun(page);
 
@@ -384,7 +545,7 @@ test("finishes the run, clears the trip, and returns to Dashboard", async ({ pag
   await page.getByRole("button", { name: "Finish shopping run" }).click();
   await expect(page.getByRole("heading", { name: "Shopping run finished" })).toBeVisible();
   await expect(page.locator("#finish-run-message")).toHaveText(
-    "2 items logged. 1 prediction updated."
+    "2 items logged. 1 restock check ready."
   );
   await expect(page.locator("#finish-run-summary")).toContainText("2 items");
   await expect(page.locator("#finish-run-summary")).toContainText("$4.50 known spend");
@@ -419,15 +580,26 @@ test("records a prediction check and applies a still-had-some shift", async ({ p
   const milkEntry = page.locator("#finish-run-list li", { hasText: "Overdue Milk" });
   const candleEntry = page.locator("#finish-run-list li", { hasText: "One-time Candles" });
   const check = milkEntry.locator(".prediction-check");
+  const checkGroup = page.getByRole("group", {
+    name: /Overdue Milk.*was Hoot right\?/,
+  });
 
   await expect(page.locator("#finish-run-hint")).toBeVisible();
   await expect(check).toContainText("was Hoot right?");
   await expect(candleEntry.locator(".prediction-check")).toHaveCount(0);
+  await expect(checkGroup).toBeVisible();
+  await expect(checkGroup.getByRole("radio")).toHaveCount(2);
 
-  const early = check.getByRole("button", { name: "Still had some" });
+  const early = checkGroup.getByRole("radio", { name: "Still had some" });
+  const right = checkGroup.getByRole("radio", { name: "Yes, I was out" });
+  await expect(early).not.toBeChecked();
+  await expect(right).not.toBeChecked();
+
   await early.click();
 
-  await expect(early).toHaveAttribute("aria-pressed", "true");
+  await expect(early).toBeChecked();
+  await expect(right).not.toBeChecked();
+  await expect(checkGroup.getByRole("radio", { checked: true })).toHaveCount(1);
   await expect(check.locator("[data-check-result]")).toHaveText(
     /Still had some · next estimate moved to/
   );
@@ -443,11 +615,12 @@ test("records a prediction check and applies a still-had-some shift", async ({ p
   expect(afterEarly.verdict).toBe("early");
   expect(afterEarly.predictedDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
 
-  const right = check.getByRole("button", { name: "Yes, I was out" });
-  await right.click();
+  await early.focus();
+  await page.keyboard.press("ArrowRight");
 
-  await expect(right).toHaveAttribute("aria-pressed", "true");
-  await expect(early).toHaveAttribute("aria-pressed", "false");
+  await expect(right).toBeChecked();
+  await expect(early).not.toBeChecked();
+  await expect(checkGroup.getByRole("radio", { checked: true })).toHaveCount(1);
   await expect(check.locator("[data-check-result]")).toHaveText(/Right · next estimate/);
 
   await page.getByRole("button", { name: "View purchase history" }).click();
@@ -564,6 +737,237 @@ test("toggles Watch items without disturbing the rest of the run", async ({ page
   );
 });
 
+test("collapses the ordering sentence after the phone run starts scrolling", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openShoppingRun(page);
+
+  const view = page.locator("#view-store-run");
+  const header = page.locator(".store-run-header");
+  const subtitle = header.locator("p");
+  const initialHeight = (await header.boundingBox()).height;
+  expect(initialHeight).toBeGreaterThan(130);
+  await expect(subtitle).toBeVisible();
+
+  await page.evaluate(() => window.scrollTo(0, 180));
+
+  await expect(view).toHaveClass(/is-header-condensed/);
+  await expect.poll(async () => (await header.boundingBox()).height).toBeLessThan(120);
+  await expect.poll(async () => (await subtitle.boundingBox()).height).toBeLessThan(1);
+
+  await page.evaluate(() => window.scrollTo(0, 0));
+
+  await expect(view).not.toHaveClass(/is-header-condensed/);
+  await expect.poll(async () => (await header.boundingBox()).height).toBeGreaterThan(
+    initialHeight - 2
+  );
+});
+
+test("keeps phone Log actions compact and trailing", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openShoppingRun(page);
+
+  const row = page.locator(".store-run-row", { hasText: "Buy-now Eggs" });
+  const button = row.getByRole("button", { name: "Log Buy-now Eggs", exact: true });
+  const rowBox = await row.boundingBox();
+  const buttonBox = await button.boundingBox();
+
+  expect(rowBox.height).toBeLessThan(110);
+  expect(buttonBox.height).toBeGreaterThanOrEqual(44);
+  expect(buttonBox.width).toBeLessThanOrEqual(100);
+  expect(buttonBox.x).toBeGreaterThan(rowBox.x + rowBox.width * 0.55);
+});
+
+test("offers Undo last in the phone footer for the latest log", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openShoppingRun(page);
+
+  const undoLast = page.locator(
+    '.store-run-footer [data-action="undo-last-run-item"]'
+  );
+  await expect(undoLast).toBeHidden();
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: "Log Overdue Milk", exact: true })
+    .click();
+  await expect(undoLast).toBeVisible();
+  await expect(undoLast).toBeInViewport();
+  await expect(
+    page
+      .locator(".store-run-footer")
+      .getByRole("button", { name: "Undo Overdue Milk", exact: true })
+  ).toBeVisible();
+
+  const footerPosition = await page
+    .locator(".store-run-footer")
+    .evaluate((element) => getComputedStyle(element).position);
+  expect(footerPosition).toBe("fixed");
+
+  await page
+    .locator(".store-run-row", { hasText: "Buy-now Eggs" })
+    .getByRole("button", { name: "Log Buy-now Eggs", exact: true })
+    .click();
+  await expect(
+    page
+      .locator(".store-run-footer")
+      .getByRole("button", { name: "Undo Buy-now Eggs", exact: true })
+  ).toBeVisible();
+
+  await undoLast.click();
+
+  await expect(page.locator(".store-run-row", { hasText: "Buy-now Eggs" })).toBeVisible();
+  await expect(page.locator(".store-run-row", { hasText: "Overdue Milk" })).toHaveClass(
+    /is-in-cart/
+  );
+  await expect(
+    page
+      .locator(".store-run-footer")
+      .getByRole("button", { name: "Undo Overdue Milk", exact: true })
+  ).toBeVisible();
+  await expect(page.locator("#store-run-cart")).toContainText("Overdue Milk");
+  await expect(page.locator("#store-run-cart")).not.toContainText("Buy-now Eggs");
+  await expect(page.locator("#store-run-cart")).toContainText("1 item");
+});
+
+test("keeps Undo last out of the desktop footer", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openShoppingRun(page);
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+
+  await expect(
+    page.locator('.store-run-footer [data-action="undo-last-run-item"]')
+  ).toBeHidden();
+});
+
+test("explains an empty run and keeps the finish footer out of the way", async ({ page }) => {
+  await seedMinimalRun(page, { lastPurchaseDaysAgo: 0, threshold: 30 });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await openShoppingRun(page);
+
+  const empty = page.locator("#store-run-empty");
+  await expect(empty).toBeVisible();
+  await expect(
+    empty.getByRole("heading", { name: "Nothing is due right now" })
+  ).toBeVisible();
+  await expect(page.locator("#store-run-groups .store-run-row")).toHaveCount(0);
+  await expect(page.locator("#store-run-cart")).toContainText("Nothing to log yet");
+  await expect(page.locator("#store-run-cart")).not.toContainText("Tap Log");
+  await expect(page.getByRole("button", { name: "Finish shopping run" })).toBeDisabled();
+  await expect(
+    page.locator('.store-run-footer [data-action="undo-last-run-item"]')
+  ).toBeHidden();
+
+  const footerPosition = await page
+    .locator(".store-run-footer")
+    .evaluate((element) => getComputedStyle(element).position);
+  expect(footerPosition).toBe("static");
+
+  await expect(
+    empty.getByRole("button", { name: "Show Watch items" })
+  ).toHaveCount(0);
+  await expect(empty.getByRole("button", { name: "Back to dashboard" })).toBeVisible();
+});
+
+test("recovers an empty run from Show Watch", async ({ page }) => {
+  await seedMinimalRun(page, { lastPurchaseDaysAgo: 0, threshold: 5 });
+  await openShoppingRun(page);
+
+  await expect(page.locator(".store-run-row", { hasText: "Test Flour" })).toBeVisible();
+  await page.getByRole("button", { name: "Hide Watch items" }).click();
+
+  const empty = page.locator("#store-run-empty");
+  await expect(empty).toBeVisible();
+
+  await empty.getByRole("button", { name: "Show Watch items" }).click();
+
+  await expect(page.locator("#store-run-groups .store-run-row", { hasText: "Test Flour" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log Test Flour", exact: true })).toBeFocused();
+});
+
+test("renders urgency as text and color on run rows", async ({ page }) => {
+  await openShoppingRun(page);
+
+  const milk = page.locator(".store-run-row", { hasText: "Overdue Milk" });
+  await expect(milk).toHaveClass(/horizon-overdue/);
+  await expect(milk.locator(".status-chip")).toHaveText("Overdue");
+  await expect(milk.locator(".status-chip")).toHaveClass(/status-overdue/);
+  await expect(milk.locator(".store-run-row-main small")).not.toContainText("Pantry");
+  await expect(milk.locator(".store-run-row-main small")).toContainText("half-gallon");
+});
+
+test("does not paint a focus ring around the run heading on keyboard entry", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Shopping", exact: true }).focus();
+  await page.keyboard.press("Enter");
+
+  const heading = page.getByRole("heading", { name: "Shopping run" });
+  await expect(heading).toBeFocused();
+  const outlineStyle = await heading.evaluate(
+    (element) => getComputedStyle(element).outlineStyle
+  );
+  expect(outlineStyle).toBe("none");
+});
+
+test("keeps the 320 receipt to one scroll region and 44px prediction answers", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await openShoppingRun(page);
+
+  for (const name of ["Overdue Milk", "Buy-now Eggs", "One-time Candles"]) {
+    await page
+      .locator(".store-run-row", { hasText: name })
+      .getByRole("button", { name: /^Log / })
+      .click();
+  }
+
+  await page.getByRole("button", { name: "Finish shopping run" }).click();
+
+  const answerHeights = await page
+    .locator(".prediction-check-actions .btn")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getBoundingClientRect().height)
+    );
+  expect(answerHeights.length).toBeGreaterThan(0);
+  for (const height of answerHeights) {
+    expect(height).toBeGreaterThanOrEqual(44);
+  }
+
+  const list = await page.locator("#finish-run-list").evaluate((element) => ({
+    overflowY: getComputedStyle(element).overflowY,
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(list.overflowY).toBe("visible");
+  expect(list.scrollHeight).toBeLessThanOrEqual(list.clientHeight + 1);
+
+  const dialogOverflow = await page
+    .locator("#finish-run-dialog")
+    .evaluate((element) => getComputedStyle(element).overflowY);
+  expect(dialogOverflow).toBe("auto");
+
+  const lastEntry = page.locator("#finish-run-list li").last();
+  await lastEntry.scrollIntoViewIfNeeded();
+  await expect(lastEntry).toBeInViewport();
+});
+
+test("sizes the finish receipt at 520px on desktop", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-chromium", "desktop sheet width");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openShoppingRun(page);
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+  await page.getByRole("button", { name: "Finish shopping run" }).click();
+
+  await expect(page.locator("#finish-run-dialog")).toHaveCSS("width", "520px");
+});
+
 test("keeps the Shopping Run view within the mobile horizontal bounds", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 568 });
   await openShoppingRun(page);
@@ -574,6 +978,47 @@ test("keeps the Shopping Run view within the mobile horizontal bounds", async ({
   );
 
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("keeps the add and skip controls usable at 320", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await openShoppingRun(page);
+
+  const skipHeights = await page
+    .locator(".store-run-skip")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getBoundingClientRect().height)
+    );
+  expect(skipHeights.length).toBeGreaterThan(0);
+  for (const height of skipHeights) expect(height).toBeGreaterThanOrEqual(44);
+
+  await page.getByRole("button", { name: "Add to this trip", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Add to this trip" });
+  await expect(dialog).toBeVisible();
+
+  const dialogOverflow = await dialog.evaluate(
+    (element) => element.scrollWidth - element.clientWidth
+  );
+  expect(dialogOverflow).toBeLessThanOrEqual(0);
+
+  const optionHeights = await dialog
+    .locator(".add-to-trip-option")
+    .evaluateAll((buttons) =>
+      buttons.map((button) => button.getBoundingClientRect().height)
+    );
+  expect(optionHeights.length).toBeGreaterThan(0);
+  for (const height of optionHeights) expect(height).toBeGreaterThanOrEqual(44);
+});
+
+test("has no critical accessibility violations in the add sheet", async ({ page }) => {
+  await openShoppingRun(page);
+  await page.getByRole("button", { name: "Add to this trip", exact: true }).click();
+
+  const results = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "best-practice"])
+    .analyze();
+
+  expect(results.violations).toEqual([]);
 });
 
 test("has no critical accessibility violations on the Shopping Run view", async ({ page }) => {
