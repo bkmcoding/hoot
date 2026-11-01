@@ -358,6 +358,10 @@ input[type="date"] {
   gap: var(--space-2);
 }
 
+body.is-one-time [data-dialog="log-purchase"] {
+  display: none;
+}
+
 .app-frame {
   width: min(1248px, 100%);
   margin: 0 auto;
@@ -1049,6 +1053,138 @@ input[type="date"] {
 .dashboard-stack {
   display: grid;
   gap: var(--space-5);
+}
+
+.current-trip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--primary);
+  border-radius: var(--radius-card);
+  background: var(--surface);
+  box-shadow: var(--highlight);
+}
+
+#current-trip-slot {
+  display: block;
+  margin-bottom: var(--space-4);
+}
+
+#current-trip-slot:empty {
+  display: none;
+}
+
+.current-trip-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.current-trip-kicker {
+  margin: 0;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.current-trip h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.current-trip p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.current-trip-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.current-trip-label-short {
+  display: none;
+}
+
+@media (max-width: 660px) {
+  .current-trip {
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 10px;
+    padding: 8px 10px;
+  }
+
+  #current-trip-slot {
+    margin-bottom: 8px;
+  }
+
+  .current-trip-copy {
+    display: flex;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 8px;
+  }
+
+  .current-trip-kicker {
+    font-size: 10px;
+    letter-spacing: 0.06em;
+  }
+
+  .current-trip h2 {
+    font-size: 16px;
+  }
+
+  .current-trip p {
+    font-size: 12px;
+  }
+
+  .current-trip-actions {
+    flex: none;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .current-trip .btn {
+    width: auto;
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: 12px;
+  }
+
+  .current-trip-label-long {
+    display: none;
+  }
+
+  .current-trip-label-short {
+    display: inline;
+  }
+}
+
+@media (max-width: 360px) {
+  .current-trip {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .current-trip-kicker {
+    display: none;
+  }
+
+  .current-trip .btn {
+    padding: 0 6px;
+    font-size: 11px;
+  }
 }
 
 .next-up-label {
@@ -2044,6 +2180,11 @@ body[data-density="dense"] .stat-card strong {
   text-transform: uppercase;
 }
 
+.calendar-plans-label strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
 .calendar-plans-list {
   display: flex;
   flex-wrap: wrap;
@@ -2080,6 +2221,24 @@ body[data-density="dense"] .stat-card strong {
 .calendar-plan-link small {
   color: var(--ink-faint);
   font-size: 11px;
+}
+
+.calendar-plans-more {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.calendar-plans-more:hover {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--ink);
 }
 
 .calendar-plan-chip {
@@ -2121,12 +2280,94 @@ body[data-density="dense"] .stat-card strong {
   color: var(--ink-soft);
 }
 
+.calendar-day-panel-decision {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-quiet);
+}
+
+.calendar-day-panel-selection {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
 .calendar-day-panel-list {
   display: grid;
   gap: 6px;
   margin: 0;
-  padding: 0;
+  max-height: min(52vh, 440px);
+  padding: 0 4px 0 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   list-style: none;
+}
+
+.calendar-plan-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-quiet);
+}
+
+.calendar-plan-row:hover {
+  border-color: var(--zone-border, var(--border-strong));
+}
+
+.calendar-plan-choice {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.calendar-plan-choice input {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.calendar-plan-choice-text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.calendar-plan-choice-text strong {
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.calendar-plan-detail {
+  flex: none;
+  margin-right: 6px;
+}
+
+.calendar-day-panel-earlier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.calendar-day-panel-earlier small {
+  color: var(--ink-faint);
+  font-size: 12px;
 }
 
 .calendar-day-panel-item {
@@ -2234,6 +2475,33 @@ body[data-density="dense"] .stat-card strong {
   .calendar-day--month.is-past,
   .calendar-day--month.is-empty:not(.is-today) {
     display: none;
+  }
+
+  .calendar-day-panel-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .calendar-day-panel-decision {
+    align-items: stretch;
+  }
+
+  .calendar-day-panel-decision .calendar-day-panel-actions {
+    width: 100%;
+  }
+
+  .calendar-day-panel-list {
+    max-height: min(44vh, 340px);
+  }
+
+  .calendar-day-panel-actions .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .calendar-plan-link,
+  .calendar-plans-more {
+    min-height: 44px;
   }
 }
 
@@ -2487,11 +2755,11 @@ body[data-density="dense"] .stat-card strong {
 
 #view-store-run .store-run-row,
 #view-store-run .store-run-skipped {
-  scroll-margin-top: calc(140px + env(safe-area-inset-top));
+  scroll-margin-top: calc(152px + env(safe-area-inset-top));
 }
 
 #view-store-run .store-run-skipped .btn {
-  scroll-margin-top: calc(140px + env(safe-area-inset-top));
+  scroll-margin-top: calc(152px + env(safe-area-inset-top));
 }
 
 .store-run-skipped {
@@ -2706,6 +2974,33 @@ body[data-density="dense"] .stat-card strong {
   color: var(--ink-soft);
 }
 
+@media (max-width: 660px) {
+  .store-run-row {
+    gap: 8px;
+    padding: 10px 0 10px 12px;
+  }
+
+  .store-run-row-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 4px 8px;
+  }
+
+  .store-run-row-meta > small {
+    min-width: 0;
+  }
+
+  .store-run-row .store-run-skip {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 2px;
+    color: var(--ink-faint);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+}
+
 .store-run-cart {
   padding: var(--space-4);
   border: 1px solid var(--border);
@@ -2716,10 +3011,37 @@ body[data-density="dense"] .stat-card strong {
 
 .store-run-cart-header {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
   margin-bottom: var(--space-2);
+}
+
+.store-run-cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
+.store-run-cart-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.store-run-cart-header .btn {
+  min-height: 36px;
+  padding: 0 10px;
+}
+
+@media (max-width: 660px) {
+  .store-run-cart-header .btn {
+    min-height: 44px;
+  }
 }
 
 .store-run-cart-header h2 {
@@ -3278,6 +3600,21 @@ body.is-store-run .toast-region {
   gap: var(--space-3);
   align-content: start;
   align-items: start;
+}
+
+.item-evidence-line {
+  display: none;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--surface-quiet);
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+.item-evidence-line strong {
+  color: var(--ink);
 }
 
 .rail-card {
@@ -3967,6 +4304,8 @@ body.is-store-run .toast-region {
   box-shadow: var(--shadow-toast);
   animation: toast-life 3400ms var(--ease-standard) both;
   pointer-events: auto;
+  cursor: pointer;
+  user-select: none;
 }
 
 .toast::before {
@@ -4208,6 +4547,10 @@ body.is-store-run .toast-region {
 
   .header-actions.is-hidden {
     display: none;
+  }
+
+  body.is-one-time .header-actions {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .header-actions .btn {
@@ -4452,6 +4795,11 @@ body.is-store-run .toast-region {
     min-height: 48px;
   }
 
+  .item-evidence-line {
+    display: grid;
+    gap: 3px;
+  }
+
   .detail-actions {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -4517,11 +4865,11 @@ body.is-store-run .toast-region {
     right: var(--space-4);
     bottom: calc(var(--dock-height) + var(--space-3));
     left: var(--space-4);
-    justify-items: stretch;
+    justify-items: end;
   }
 
   .toast {
-    max-width: none;
+    max-width: calc(100vw - 32px);
   }
 
 }
@@ -4871,6 +5219,33 @@ body.is-store-run .toast-region {
   #view-dashboard > .section-heading {
     gap: var(--space-3);
     margin-bottom: var(--space-4);
+  }
+
+  /* A live trip adds a status strip above the queue. Compact the focused card
+     by the same amount so its primary action still clears a 640px viewport. */
+  #view-dashboard:has(.current-trip) .item-card {
+    gap: 6px;
+    padding-block: 8px;
+  }
+
+  #view-dashboard:has(.current-trip) .item-card-header {
+    gap: 2px;
+  }
+
+  #view-dashboard:has(.current-trip) .item-card-header > div > p:not(.next-up-estimate) {
+    display: none;
+  }
+
+  #view-dashboard:has(.current-trip) .restock-horizon {
+    gap: 2px;
+  }
+
+  #view-dashboard:has(.current-trip) .horizon-rail {
+    margin-top: 4px;
+  }
+
+  #view-dashboard:has(.current-trip) .horizon-pointer span {
+    display: none;
   }
 
   /* The density control adds a row on phones; drop the supportive heading copy

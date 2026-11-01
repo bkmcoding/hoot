@@ -3541,23 +3541,36 @@ import {
     toastElement.className = `toast toast-${kind}`;
     toastElement.textContent = message;
 
+    let removeTimer = null;
+    const dismiss = () => {
+      if (removeTimer) {
+        window.clearTimeout(removeTimer);
+        removeTimer = null;
+      }
+      toastElement.remove();
+    };
+
     if (action) {
       const actionButton = document.createElement("button");
       actionButton.className = "toast-action";
       actionButton.type = "button";
       actionButton.textContent = action.label;
-      actionButton.addEventListener("click", async () => {
-        window.clearTimeout(removeTimer);
-        toastElement.remove();
+      actionButton.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        dismiss();
         await action.onAction();
       });
       toastElement.append(actionButton);
     }
 
+    toastElement.addEventListener("click", () => {
+      dismiss();
+    });
+
     $("#toast-region").append(toastElement);
     const lifetime = action ? 6400 : 3400;
     toastElement.style.animationDuration = `${lifetime}ms`;
-    const removeTimer = window.setTimeout(() => toastElement.remove(), lifetime);
+    removeTimer = window.setTimeout(dismiss, lifetime);
   }
 
   function showDialog(dialog, trigger = null) {

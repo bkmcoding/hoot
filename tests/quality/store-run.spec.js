@@ -121,7 +121,7 @@ test("opens Shopping Run from the header", async ({ page }) => {
   await expect(page.locator(".app-header")).toBeHidden();
   await expect(page.locator(".app-footer")).toBeHidden();
   await expect(page.locator(".store-run-cart-empty")).toContainText(
-    "Log saves the change now; Undo reverses it."
+    "The list is the trip. Tap Log on each item as you pick it up."
   );
 });
 
@@ -719,7 +719,7 @@ test("includes Watch when the dashboard Next up is in Watch", async ({ page }) =
   await expect(
     page.locator("#store-run-groups .store-run-row", { hasText: "Watch Pears" })
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hide Watch items" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Remove Watch items" })).toHaveAttribute(
     "aria-pressed",
     "true"
   );
@@ -743,7 +743,7 @@ test("dismissing the receipt keeps the run active", async ({ page }) => {
 test("toggles Watch items without disturbing the rest of the run", async ({ page }) => {
   await openShoppingRun(page);
 
-  const watchToggle = page.getByRole("button", { name: "Show Watch items" });
+  const watchToggle = page.getByRole("button", { name: "Include Watch items" });
   await expect(watchToggle).toHaveAttribute("aria-pressed", "false");
 
   await watchToggle.click();
@@ -751,15 +751,15 @@ test("toggles Watch items without disturbing the rest of the run", async ({ page
   await expect(
     page.locator("#store-run-groups .store-run-row", { hasText: "Watch Apples" })
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Hide Watch items" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Remove Watch items" })).toHaveAttribute(
     "aria-pressed",
     "true"
   );
 
-  await page.getByRole("button", { name: "Hide Watch items" }).click();
+  await page.getByRole("button", { name: "Remove Watch items" }).click();
 
   await expect(page.locator(".store-run-row", { hasText: "Watch Apples" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Show Watch items" })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Include Watch items" })).toHaveAttribute(
     "aria-pressed",
     "false"
   );
@@ -854,7 +854,7 @@ test("offers Undo last in the phone footer for the latest log", async ({ page })
   ).toBeVisible();
   await expect(page.locator("#store-run-cart")).toContainText("Overdue Milk");
   await expect(page.locator("#store-run-cart")).not.toContainText("Buy-now Eggs");
-  await expect(page.locator("#store-run-cart")).toContainText("1 item");
+  await expect(page.locator("#store-run-cart")).toContainText("1 of 3 picked");
 });
 
 test("keeps Undo last out of the desktop footer", async ({ page }) => {
@@ -882,7 +882,7 @@ test("explains an empty run and keeps the finish footer out of the way", async (
     empty.getByRole("heading", { name: "Nothing is due right now" })
   ).toBeVisible();
   await expect(page.locator("#store-run-groups .store-run-row")).toHaveCount(0);
-  await expect(page.locator("#store-run-cart")).toContainText("Nothing to log yet");
+  await expect(page.locator("#store-run-cart")).toContainText("Nothing to pick yet");
   await expect(page.locator("#store-run-cart")).not.toContainText("Tap Log");
   await expect(page.getByRole("button", { name: "Finish shopping run" })).toBeDisabled();
   await expect(
@@ -895,22 +895,22 @@ test("explains an empty run and keeps the finish footer out of the way", async (
   expect(footerPosition).toBe("static");
 
   await expect(
-    empty.getByRole("button", { name: "Show Watch items" })
+    empty.getByRole("button", { name: "Include Watch items" })
   ).toHaveCount(0);
   await expect(empty.getByRole("button", { name: "Back to dashboard" })).toBeVisible();
 });
 
-test("recovers an empty run from Show Watch", async ({ page }) => {
+test("recovers an empty run from Include Watch", async ({ page }) => {
   await seedMinimalRun(page, { lastPurchaseDaysAgo: 0, threshold: 5 });
   await openShoppingRun(page);
 
   await expect(page.locator(".store-run-row", { hasText: "Test Flour" })).toBeVisible();
-  await page.getByRole("button", { name: "Hide Watch items" }).click();
+  await page.getByRole("button", { name: "Remove Watch items" }).click();
 
   const empty = page.locator("#store-run-empty");
   await expect(empty).toBeVisible();
 
-  await empty.getByRole("button", { name: "Show Watch items" }).click();
+  await empty.getByRole("button", { name: "Include Watch items" }).click();
 
   await expect(page.locator("#store-run-groups .store-run-row", { hasText: "Test Flour" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Log Test Flour", exact: true })).toBeFocused();
@@ -1074,4 +1074,83 @@ test("has no critical accessibility violations on the finish receipt", async ({ 
     .analyze();
 
   expect(results.violations).toEqual([]);
+});
+
+test("keeps an active trip on the dashboard and saves leftovers as a plan", async ({ page }) => {
+  await openShoppingRun(page);
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+  await page.getByRole("button", { name: "Exit run", exact: true }).click();
+
+  const strip = page.locator(".current-trip");
+  await expect(strip).toBeVisible();
+  await expect(strip).toContainText("Trip in progress");
+  await expect(strip).toContainText("1 of");
+
+  await page.getByRole("button", { name: "Resume trip", exact: true }).click();
+  await page
+    .locator("#store-run-cart")
+    .getByRole("button", { name: /Save the items left/ })
+    .click();
+
+  const plans = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("hoot-demo-plans-v1") || "[]")
+  );
+  expect(plans).toHaveLength(1);
+  expect(plans[0].itemIds.length).toBeGreaterThan(0);
+  expect(plans[0].itemIds).not.toContain("item-overdue");
+});
+
+test("discards an active trip without deleting its plan or purchase history", async ({ page }) => {
+  await openShoppingRun(page);
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+  await page
+    .locator("#store-run-cart")
+    .getByRole("button", { name: /Save the items left/ })
+    .click();
+  await expect(
+    page.locator("#store-run-cart").getByRole("button", { name: "Discard this trip" })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Exit run", exact: true }).click();
+
+  const strip = page.locator(".current-trip");
+  await expect(strip).toContainText("Trip in progress");
+
+  await page.setViewportSize({ width: 320, height: 568 });
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+  );
+  expect(overflow, "active trip strip overflow at 320px").toBeLessThanOrEqual(0);
+
+  await page.getByRole("button", { name: "Discard trip", exact: true }).click();
+
+  const dialog = page.locator("#confirm-dialog");
+  await expect(dialog).toContainText("Its plan stays on the calendar.");
+  await expect(dialog).toContainText("stays in purchase history");
+  await dialog.getByRole("button", { name: "Discard trip", exact: true }).click();
+
+  await expect(strip).toHaveCount(0);
+  await expect(page.locator("#dashboard-title")).toBeFocused();
+
+  const plans = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("hoot-demo-plans-v1") || "[]")
+  );
+  expect(plans).toHaveLength(1);
+
+  const purchases = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+    return state.items.find((item) => item.id === "item-overdue").purchases.length;
+  });
+  expect(purchases).toBe(2);
+
+  await page.reload();
+  await expect(page.locator(".current-trip")).toHaveCount(0);
 });

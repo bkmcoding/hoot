@@ -55,7 +55,7 @@
         >
           <div class="section-heading">
             <div>
-              <h1 id="dashboard-title">Upcoming restocks</h1>
+              <h1 id="dashboard-title" tabindex="-1">Upcoming restocks</h1>
               <p class="section-copy" id="dashboard-copy">The next item to decide, then the rest of your staples.</p>
               <p class="section-copy" id="calendar-caption">Expected restocks for the next thirty days.</p>
             </div>
@@ -123,6 +123,8 @@
             </div>
           </div>
 
+          <div id="current-trip-slot"></div>
+
           <div id="dashboard-list" class="dashboard-stack"></div>
 
           <div class="stats-grid" role="group" aria-label="Inventory summary">
@@ -178,7 +180,7 @@
           <header class="store-run-header">
             <div>
               <h1 id="store-run-title" tabindex="-1">Shopping run</h1>
-              <p id="store-run-subtitle">Log each item as you pick it up. Aisles first, urgency second.</p>
+              <p id="store-run-subtitle">Log each item as you pick it up. Sorted by what’s due next.</p>
 
             </div>
             <div class="store-run-actions">
@@ -187,7 +189,7 @@
                 type="button"
                 data-action="toggle-watch-items"
                 aria-pressed="false"
-              >Show Watch items</button>
+              >Include Watch items</button>
               <button
                 class="btn btn-secondary"
                 type="button"
@@ -227,7 +229,7 @@
               <div class="store-run-groups" id="store-run-groups"></div>
             </div>
 
-            <aside class="store-run-trip" aria-label="This trip">
+            <aside class="store-run-trip" aria-label="Trip log and finish">
               <section class="store-run-cart" id="store-run-cart" aria-label="Items logged this trip"></section>
 
               <footer class="store-run-footer">

@@ -407,6 +407,46 @@ test("keeps the phone Next up action above the fold and every lane label whole",
   }
 });
 
+test("keeps the Next up primary above the phone fold with an active trip", async ({ page }) => {
+  await page.addInitScript(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(
+      today.getDate(),
+    ).padStart(2, "0")}`;
+    localStorage.setItem(
+      "hoot-demo-store-run-v1",
+      JSON.stringify({
+        runDate: iso,
+        planned: false,
+        includeWatch: false,
+        selected: [],
+        extraIds: [],
+        skippedIds: [],
+      }),
+    );
+  });
+
+  for (const { width, height } of [
+    { width: 320, height: 640 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+
+    const primary = page
+      .locator("#dashboard-list .item-card")
+      .first()
+      .getByRole("button", { name: "Log purchase", exact: true });
+    const box = await primary.boundingBox();
+    expect(box, `missing primary action at ${width}px`).not.toBeNull();
+    expect(
+      box.y + box.height,
+      `primary action below the ${height}px fold at ${width}px`,
+    ).toBeLessThanOrEqual(height);
+  }
+});
+
 test("fits all three navigation tabs at 320px without scrolling", async ({ page }) => {
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 700 });
@@ -1112,4 +1152,20 @@ test("keeps the mobile viewport within the horizontal bounds", async ({ page }) 
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("dismisses toast immediately on tap or click", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.waitForSelector("#dashboard-list");
+
+  const card = page.locator("#dashboard-list .item-card");
+  const correction = card.getByRole("button", { name: "Still have some" });
+  await correction.click();
+
+  const toast = page.locator(".toast");
+  await expect(toast).toBeVisible();
+
+  await toast.click();
+  await expect(toast).toHaveCount(0);
 });
