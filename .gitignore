@@ -25,3 +25,6 @@ test-results/
 # Design review snapshots and logo exploration scratch
 .impeccable/
 .logo-explore/
+
+# Agent attachments
+.cloud-attachments/

@@ -151,6 +151,48 @@ test("orders by due date by default and switches to aisles", async ({ page }) =>
   await expect(aisleButton).toBeFocused();
 });
 
+test("customizes aisle walk sequence and persists the order", async ({ page }) => {
+  await openShoppingRun(page);
+
+  const aisleButton = page.locator(".run-order").getByRole("button", { name: "Aisle" });
+  await aisleButton.click();
+
+  const aisleOrderBtn = page.locator("#store-run-aisle-order-btn");
+  await expect(aisleOrderBtn).toBeVisible();
+  await aisleOrderBtn.click();
+
+  const dialog = page.locator("#aisle-order-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "Aisle walk order" })).toBeVisible();
+
+  const pantryRow = dialog.locator('.aisle-order-row[data-category="Pantry"]');
+  await expect(pantryRow).toBeVisible();
+  const moveUp = pantryRow.getByRole("button", { name: "Move Pantry earlier in trip" });
+  await expect(moveUp).toBeEnabled();
+  await moveUp.click();
+
+  await expect(page.locator("#aisle-order-status")).toContainText("Moved Pantry earlier in trip.");
+
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+
+  const groups = page.locator("#store-run-groups .store-run-group");
+  await expect(groups.locator("h2")).toHaveText(["Pantry", "Household"]);
+
+  const saved = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("hoot-demo-aisle-order-v1") || "[]")
+  );
+  expect(saved[0]).toBe("Pantry");
+
+  await aisleOrderBtn.click();
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Reset to A–Z" }).click();
+  await expect(page.locator("#aisle-order-status")).toContainText("Reset aisle order to alphabetical.");
+  await dialog.getByRole("button", { name: "Done" }).click();
+
+  await expect(groups.locator("h2")).toHaveText(["Household", "Pantry"]);
+});
+
 test("uses immediate logging language instead of cart language", async ({ page }) => {
   await openShoppingRun(page);
 
@@ -264,7 +306,8 @@ test("logs a purchase and marks a tracked item as logged", async ({ page }) => {
   const checkedRow = page.locator(".store-run-row.is-in-cart", { hasText: "Overdue Milk" });
   await expect(checkedRow).toContainText("Logged");
   await expect(checkedRow.locator(".status-chip")).toHaveCount(0);
-  await expect(checkedRow.getByRole("button")).toHaveCount(0);
+  await expect(checkedRow.getByRole("button", { name: "Adjust Overdue Milk" })).toBeVisible();
+  await expect(checkedRow.getByRole("button", { name: "Undo Overdue Milk" })).toBeVisible();
   await expect(page.locator("#store-run-announcer")).toHaveText(
     "Overdue Milk logged. 1 logged this trip."
   );
@@ -655,6 +698,57 @@ test("records a prediction check and applies a still-had-some shift", async ({ p
   await expect(
     page.locator(".rail-card", { hasText: "Your checks" })
   ).toContainText("1 right");
+});
+
+test("marks all restock checks as right in one tap and allows exceptions", async ({ page }) => {
+  await openShoppingRun(page);
+
+  await page
+    .locator(".store-run-row", { hasText: "Overdue Milk" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+  await page
+    .locator(".store-run-row", { hasText: "Buy-now Eggs" })
+    .getByRole("button", { name: /^Log / })
+    .click();
+
+  await page.getByRole("button", { name: "Finish shopping run" }).click();
+
+  const bulkButton = page.locator("#finish-run-all-right");
+  await expect(bulkButton).toBeVisible();
+  await expect(bulkButton).toHaveText("All predictions were right");
+
+  const milkGroup = page.getByRole("group", { name: /Overdue Milk.*was Hoot right\?/ });
+  const eggsGroup = page.getByRole("group", { name: /Buy-now Eggs.*was Hoot right\?/ });
+
+  await expect(milkGroup.getByRole("radio", { name: "Yes, I was out" })).not.toBeChecked();
+  await expect(eggsGroup.getByRole("radio", { name: "Yes, I was out" })).not.toBeChecked();
+
+  await bulkButton.click();
+
+  await expect(milkGroup.getByRole("radio", { name: "Yes, I was out" })).toBeChecked();
+  await expect(eggsGroup.getByRole("radio", { name: "Yes, I was out" })).toBeChecked();
+  await expect(page.locator("#prediction-check-status")).toContainText(
+    "Marked 2 predictions as right."
+  );
+
+  const eggsEarly = eggsGroup.getByRole("radio", { name: "Still had some" });
+  await eggsEarly.click();
+
+  await expect(eggsEarly).toBeChecked();
+  await expect(milkGroup.getByRole("radio", { name: "Yes, I was out" })).toBeChecked();
+
+  const feedback = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem("hoot-demo-state-v1"));
+    const milk = state.items.find((entry) => entry.id === "item-overdue");
+    const eggs = state.items.find((entry) => entry.id === "item-buy-now");
+    return {
+      milk: milk.purchases[milk.purchases.length - 1].feedback.verdict,
+      eggs: eggs.purchases[eggs.purchases.length - 1].feedback.verdict,
+    };
+  });
+  expect(feedback.milk).toBe("right");
+  expect(feedback.eggs).toBe("early");
 });
 
 test("opens purchase history from the finish receipt", async ({ page }) => {
@@ -1153,4 +1247,68 @@ test("discards an active trip without deleting its plan or purchase history", as
 
   await page.reload();
   await expect(page.locator(".current-trip")).toHaveCount(0);
+});
+
+
+test("marks an item out of stock in aisle run and surfaces out of stock indicator on dashboard", async ({ page }) => {
+  await openShoppingRun(page);
+
+  // Mark Overdue Milk as out of stock
+  await page.getByRole("button", { name: "Out of stock for Overdue Milk" }).click();
+
+  await expect(page.locator(".store-run-row", { hasText: "Overdue Milk" })).toHaveCount(0);
+  const skippedTray = page.locator("#store-run-skipped");
+  await expect(skippedTray).toBeVisible();
+  await expect(skippedTray).toContainText("Out of stock");
+  await expect(skippedTray).toContainText("Overdue Milk");
+  await expect(page.locator("#store-run-announcer")).toContainText("Overdue Milk marked out of stock.");
+
+  // Log Buy-now Eggs
+  await page.locator(".store-run-row", { hasText: "Buy-now Eggs" }).getByRole("button", { name: /^Log / }).click();
+
+  // Finish shopping run
+  await page.getByRole("button", { name: "Finish shopping run" }).click();
+  await expect(page.getByRole("heading", { name: "Shopping run finished" })).toBeVisible();
+  await expect(page.locator("#finish-run-message")).toContainText("1 out of stock");
+
+  // Done returns to dashboard
+  await page.getByRole("button", { name: "Done" }).click();
+  await expect(page.getByRole("heading", { name: "Upcoming restocks" })).toBeVisible();
+
+  // Dashboard queue still holds Overdue Milk and shows Out of stock chip
+  const overdueMilkRow = page.locator(".item-row, .item-card", { hasText: "Overdue Milk" }).first();
+  await expect(overdueMilkRow).toBeVisible();
+  await expect(overdueMilkRow.locator(".status-oos")).toContainText("Out of stock");
+
+  // Logging purchase clears the out of stock badge
+  await overdueMilkRow.getByRole("button", { name: "Log purchase" }).click();
+  const logDialog = page.locator("#log-purchase-dialog");
+  await expect(logDialog).toBeVisible();
+  await logDialog.locator("#log-purchase-form").getByRole("button", { name: "Log purchase", exact: true }).click();
+  await expect(logDialog).toBeHidden();
+
+  // Chip is gone
+  await expect(page.locator(".item-row, .item-card", { hasText: "Overdue Milk" }).first().locator(".status-oos")).toHaveCount(0);
+});
+
+test("adjusts purchase directly from the in-aisle logged row", async ({ page }) => {
+  await openShoppingRun(page);
+
+  // Log Overdue Milk
+  await page.locator(".store-run-row", { hasText: "Overdue Milk" }).getByRole("button", { name: /^Log / }).click();
+
+  const checkedRow = page.locator(".store-run-row.is-in-cart", { hasText: "Overdue Milk" });
+  await expect(checkedRow).toBeVisible();
+
+  // Tap Adjust directly on the aisle row
+  await checkedRow.getByRole("button", { name: "Adjust Overdue Milk" }).click();
+
+  const editDialog = page.locator("#edit-purchase-dialog");
+  await expect(editDialog).toBeVisible();
+  await page.fill("#edit-purchase-price", "5.49");
+  await editDialog.getByRole("button", { name: "Save changes" }).click();
+  await expect(editDialog).toBeHidden();
+
+  // Aisle row reflects adjusted price
+  await expect(checkedRow).toContainText("$5.49");
 });

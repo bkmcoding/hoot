@@ -257,3 +257,24 @@ test("predictionFor classifies watch and steady zones", () => {
   assert.equal(steady.zone, "steady");
   assert.equal(steady.statusLabel, "Steady");
 });
+
+test("predictionFor respects effectiveStartDate on early restocks without interval contraction", () => {
+  const today = parseDate("2026-10-26");
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-10-01",
+    reorderThresholdDays: 7,
+    purchases: [
+      { date: "2026-10-01" },
+      { date: "2026-10-08" },
+      { date: "2026-10-15" },
+      // Early restock on Oct 19, but effectiveStartDate is Oct 22
+      { date: "2026-10-19", earlyRestock: true, effectiveStartDate: "2026-10-22" },
+    ],
+  };
+
+  const prediction = predictionFor(item, today);
+  // Interval between 10-15 and 10-22 is 7 days, so next predicted date is 10-29
+  assert.equal(toISODate(prediction.date), "2026-10-29");
+  assert.deepEqual(prediction.intervals, [7, 7, 7]);
+});

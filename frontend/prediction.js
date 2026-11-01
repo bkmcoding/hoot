@@ -33,6 +33,9 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     (left, right) => parseDate(left.date) - parseDate(right.date),
   );
   const purchaseDates = sortedPurchases.map((purchase) => parseDate(purchase.date));
+  const effectiveDates = sortedPurchases.map((purchase) =>
+    parseDate(purchase.effectiveStartDate ?? purchase.date),
+  );
   const latestPurchase = sortedPurchases[sortedPurchases.length - 1] ?? null;
   const recordedShiftDays = Number(latestPurchase?.feedback?.shiftDays);
   const feedbackShiftDays =
@@ -41,11 +44,11 @@ export function predictionFor(item, referenceDate = startOfDay()) {
         ? Math.round(recordedShiftDays)
         : EARLY_RESTOCK_SHIFT_DAYS
       : 0;
-  const origin = purchaseDates.length ? purchaseDates[0] : parseDate(item.createdAt);
-  const latest = purchaseDates.length ? purchaseDates[purchaseDates.length - 1] : origin;
-  const purchaseCount = purchaseDates.length;
-  const intervals = purchaseDates.slice(1).map((date, index) => {
-    const previous = purchaseDates[index];
+  const origin = effectiveDates.length ? effectiveDates[0] : parseDate(item.createdAt);
+  const latest = effectiveDates.length ? effectiveDates[effectiveDates.length - 1] : origin;
+  const purchaseCount = effectiveDates.length;
+  const intervals = effectiveDates.slice(1).map((date, index) => {
+    const previous = effectiveDates[index];
     return Math.max(1, Math.round((date - previous) / DAY_MS));
   });
   const averageInterval = intervals.length
@@ -64,7 +67,7 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     predictedDate = addDays(latest, item.reorderThresholdDays);
     method = `Manual ${item.reorderThresholdDays}-day estimate`;
   } else {
-    const yValues = purchaseDates.map((date) => Math.round((date - origin) / DAY_MS));
+    const yValues = effectiveDates.map((date) => Math.round((date - origin) / DAY_MS));
     const xValues = yValues.map((_, index) => index);
     const xMean = xValues.reduce((sum, value) => sum + value, 0) / xValues.length;
     const yMean = yValues.reduce((sum, value) => sum + value, 0) / yValues.length;

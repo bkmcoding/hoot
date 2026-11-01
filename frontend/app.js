@@ -324,6 +324,31 @@ import {
   }
 
   const STORE_RUN_KEY = "hoot-demo-store-run-v1";
+  const AISLE_ORDER_KEY = "hoot-demo-aisle-order-v1";
+
+  function loadAisleOrder() {
+    try {
+      const raw = window.localStorage.getItem(AISLE_ORDER_KEY);
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((c) => typeof c === "string") : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveAisleOrder(order) {
+    try {
+      if (order && order.length) {
+        window.localStorage.setItem(AISLE_ORDER_KEY, JSON.stringify(order));
+      } else {
+        window.localStorage.removeItem(AISLE_ORDER_KEY);
+      }
+    } catch {
+      // Storage unavailable
+    }
+  }
+
+  let aisleOrder = loadAisleOrder();
   const DENSITY_KEY = "hoot-demo-density-v1";
   const PLANS_KEY = "hoot-demo-plans-v1";
   const MONTH_DAYS = 30;
@@ -351,6 +376,12 @@ import {
             (id) => !selected.has(id),
           )
         : [];
+      const outOfStockIds = Array.isArray(parsed.outOfStockIds)
+        ? [...new Set(parsed.outOfStockIds.filter((id) => typeof id === "string"))].filter(
+            (id) => !selected.has(id),
+          )
+        : [];
+      const lastSkippedId = typeof parsed.lastSkippedId === "string" ? parsed.lastSkippedId : null;
 
       return {
         runDate: typeof parsed.runDate === "string" ? parsed.runDate : null,
@@ -362,6 +393,12 @@ import {
             : [],
         ),
         skippedIds,
+        outOfStockIds,
+        lastSkippedId,
+        earlyRestocks:
+          parsed.earlyRestocks && typeof parsed.earlyRestocks === "object"
+            ? parsed.earlyRestocks
+            : {},
       };
     } catch {
       return null;
@@ -378,6 +415,9 @@ import {
           selected: Array.from(storeRun.selected.entries()),
           extraIds: Array.from(storeRun.extraIds),
           skippedIds: storeRun.skippedIds,
+          outOfStockIds: storeRun.outOfStockIds || [],
+          lastSkippedId: storeRun.lastSkippedId ?? null,
+          earlyRestocks: storeRun.earlyRestocks || {},
         }),
       );
     } catch {
@@ -401,6 +441,10 @@ import {
           itemIds: plan.itemIds.filter((id) => typeof id === "string"),
           includeWatch: Boolean(plan.includeWatch),
           createdAt: typeof plan.createdAt === "string" ? plan.createdAt : plan.date,
+          earlyRestocks:
+            plan.earlyRestocks && typeof plan.earlyRestocks === "object"
+              ? plan.earlyRestocks
+              : {},
         }));
     } catch {
       return [];
@@ -425,6 +469,46 @@ import {
     }
   }
 
+  const OUT_OF_STOCK_TODAY_KEY = "hoot-demo-oos-today-v1";
+
+  function loadOutOfStockToday() {
+    try {
+      const raw = window.localStorage.getItem(OUT_OF_STOCK_TODAY_KEY);
+      const parsed = JSON.parse(raw);
+      return new Set(Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : []);
+    } catch {
+      return new Set();
+    }
+  }
+
+  function saveOutOfStockToday() {
+    try {
+      if (outOfStockTodayIds.size) {
+        window.localStorage.setItem(OUT_OF_STOCK_TODAY_KEY, JSON.stringify([...outOfStockTodayIds]));
+      } else {
+        window.localStorage.removeItem(OUT_OF_STOCK_TODAY_KEY);
+      }
+    } catch {}
+  }
+
+  let outOfStockTodayIds = loadOutOfStockToday();
+
+  function markOutOfStockToday(itemId) {
+    outOfStockTodayIds.add(itemId);
+    saveOutOfStockToday();
+  }
+
+  function clearOutOfStockToday(itemId) {
+    if (outOfStockTodayIds.delete(itemId)) {
+      saveOutOfStockToday();
+    }
+  }
+
+  function isOutOfStockToday(itemId) {
+    if (storeRun && storeRun.outOfStockIds && storeRun.outOfStockIds.includes(itemId)) return true;
+    return outOfStockTodayIds.has(itemId);
+  }
+
   let state = loadState() ?? createDemoState();
   let storeRun = loadStoreRun() ?? {
     runDate: null,
@@ -432,6 +516,9 @@ import {
     selected: new Map(),
     extraIds: new Set(),
     skippedIds: [],
+    outOfStockIds: [],
+    lastSkippedId: null,
+    earlyRestocks: {},
   };
   let plans = loadPlans();
   let runOrder = "due";
@@ -447,8 +534,12 @@ import {
   let density = loadDensity();
   let dashboardView = loadDashboardView();
   let steadyFoldExpanded = false;
-  let calendarRange = 30;
+  let calendarRange = typeof window !== "undefined" && window.innerWidth <= 660 ? 7 : MONTH_DAYS;
   let openCalendarDay = null;
+  let gravityHorizon = 3;
+  let dayPanelDate = null;
+  let dayPanelExtraIds = new Set();
+  let dayPanelSelection = new Set();
   let pendingRunReceipt = null;
   let addToTripSearch = "";
   let nextUpObserver = null;
@@ -514,8 +605,11 @@ import {
         date: purchase.date,
         quantity: purchase.quantity,
         price: purchase.price,
+        ...(purchase.earlyRestock ? { earlyRestock: true } : {}),
+        ...(purchase.effectiveStartDate ? { effectiveStartDate: purchase.effectiveStartDate } : {}),
       });
       item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
+      clearOutOfStockToday(id);
       saveState();
       return clone(item);
     },
@@ -527,6 +621,8 @@ import {
       purchase.date = input.date;
       purchase.quantity = input.quantity;
       purchase.price = input.price;
+      if (input.earlyRestock !== undefined) purchase.earlyRestock = input.earlyRestock;
+      if (input.effectiveStartDate !== undefined) purchase.effectiveStartDate = input.effectiveStartDate;
       item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
       saveState();
       return clone(item);
@@ -558,6 +654,7 @@ import {
       const item = state.items.find((entry) => entry.id === id);
       if (!item) throw new Error("Item not found");
       item.completed = Boolean(completed);
+      if (completed) clearOutOfStockToday(id);
       saveState();
       return clone(item);
     },
@@ -850,6 +947,7 @@ import {
           <div class="next-up-meta">
             <span class="next-up-label">Next up</span>
             <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+            ${isOutOfStockToday(item.id) ? '<span class="status-chip status-oos">Out of stock</span>' : ""}
           </div>
           <div>
             <h2>
@@ -891,6 +989,7 @@ import {
             >${escapeHtml(item.name)}</button>
           </h3>
           <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+          ${isOutOfStockToday(item.id) ? '<span class="status-chip status-oos">Out of stock</span>' : ""}
         </div>
         <strong class="item-row-due">${formatFullDate(prediction.date)}</strong>
         <div class="item-row-actions">
@@ -1095,6 +1194,34 @@ import {
     return [...overdue, ...due.filter(({ prediction }) => prediction.daysUntil >= 0)];
   }
 
+  
+  function monthDaySynergyEntries(date, horizonDays = gravityHorizon) {
+    if (date < today) return [];
+    const dayEntries = monthDayEntries(date);
+    const dayItemIds = new Set(dayEntries.map(({ item }) => item.id));
+
+    const startDate = addDays(date, 1);
+    const endDate = addDays(date, horizonDays);
+
+    const tracked = state.items
+      .filter((item) => !item.isOneTime)
+      .map((item) => ({ item, prediction: predictionFor(item) }))
+      .filter(({ prediction }) => prediction && prediction.daysUntil >= 0);
+
+    return tracked
+      .filter(({ item, prediction }) => {
+        if (dayItemIds.has(item.id)) return false;
+        const predDate = parseDate(prediction.date);
+        return predDate >= startDate && predDate <= endDate;
+      })
+      .map(({ item, prediction }) => {
+        const predDate = parseDate(prediction.date);
+        const daysAfter = Math.round((predDate - date) / DAY_MS);
+        return { item, prediction, daysAfter };
+      })
+      .sort((a, b) => a.daysAfter - b.daysAfter || a.item.name.localeCompare(b.item.name));
+  }
+
   function calendarDayZone(entries) {
     for (const zone of ["overdue", "buy-now", "watch", "steady"]) {
       if (entries.some(({ prediction }) => prediction.zone === zone)) return zone;
@@ -1109,7 +1236,9 @@ import {
     const zone = calendarDayZone(entries);
     const isToday = iso === toISODate(today);
     const isPast = date < today;
-    const isInteractive = !isPast && Boolean(entries.length || plan);
+    const synergy = !isPast ? monthDaySynergyEntries(date, 3) : [];
+    const hasSynergy = synergy.length > 0;
+    const isInteractive = !isPast && Boolean(entries.length || plan || hasSynergy);
     const visible = entries.slice(0, namesLimit);
     const more = entries.length - visible.length;
     const countLabel = entries.length
@@ -1121,7 +1250,8 @@ import {
       "calendar-day--month",
       isToday ? "is-today" : "",
       isPast ? "is-past" : "",
-      entries.length || plan ? "" : "is-empty",
+      entries.length || plan || hasSynergy ? "" : "is-empty",
+      hasSynergy ? "has-synergy" : "",
       zone ? `horizon-${zone}` : "",
     ]
       .filter(Boolean)
@@ -1142,6 +1272,7 @@ import {
       }
       ${more > 0 ? `<span class="calendar-day-more">+${more} more</span>` : ""}
       ${plan ? `<span class="calendar-plan-chip">Planned</span>` : ""}
+      ${hasSynergy && !plan ? `<span class="calendar-synergy-indicator" title="${synergy.length} nearby restocks align with this day" aria-label="${synergy.length} synergy restocks"></span>` : ""}
     `;
 
     const toggle = isInteractive
@@ -1151,16 +1282,74 @@ import {
     return `<div class="${classes}">${toggle}</div>`;
   }
 
+  function initDayPanel(iso) {
+    dayPanelDate = iso;
+    dayPanelExtraIds.clear();
+    const date = parseDate(iso);
+    const plan = planForDate(date);
+    const entries = monthDayEntries(date);
+    if (plan && plan.itemIds) {
+      dayPanelSelection = new Set(plan.itemIds);
+    } else {
+      dayPanelSelection = new Set(entries.map(({ item }) => item.id));
+    }
+  }
+
+  function getDayPanelRoster(date) {
+    const iso = toISODate(date);
+    const plan = planForDate(date);
+    const entries = monthDayEntries(date);
+    const rosterMap = new Map();
+
+    for (const entry of entries) {
+      rosterMap.set(entry.item.id, entry);
+    }
+
+    if (plan) {
+      for (const id of plan.itemIds) {
+        if (!rosterMap.has(id)) {
+          const item = state.items.find((entry) => entry.id === id);
+          if (item && !item.isOneTime) {
+            rosterMap.set(id, { item, prediction: predictionFor(item) });
+          }
+        }
+      }
+    }
+
+    if (dayPanelDate === iso) {
+      for (const id of dayPanelExtraIds) {
+        if (!rosterMap.has(id)) {
+          const item = state.items.find((entry) => entry.id === id);
+          if (item && !item.isOneTime) {
+            rosterMap.set(id, { item, prediction: predictionFor(item) });
+          }
+        }
+      }
+    }
+
+    return Array.from(rosterMap.values()).filter(({ prediction }) => prediction);
+  }
+
   function calendarDayPanel(date) {
     const iso = toISODate(date);
-    const entries = monthDayEntries(date);
+    if (dayPanelDate !== iso) {
+      initDayPanel(iso);
+    }
+    const roster = getDayPanelRoster(date);
     const plan = planForDate(date);
-    const zone = calendarDayZone(entries);
+    const zone = calendarDayZone(monthDayEntries(date));
     const zoneClass = zone ? ` horizon-${zone}` : "";
     const isPast = date < today;
-    const summary = entries.length
-      ? `${entries.length} ${entries.length === 1 ? "item" : "items"} due`
-      : "Nothing is due";
+    const count = dayPanelSelection.size;
+    const totalCount = roster.length;
+    const startText = `Start trip with ${count} ${count === 1 ? "item" : "items"}`;
+
+    const rosterIds = new Set(roster.map(({ item }) => item.id));
+    const earlierItems = state.items
+      .filter((item) => !item.isOneTime && !rosterIds.has(item.id))
+      .map((item) => ({ item, prediction: predictionFor(item) }))
+      .filter(({ prediction }) => prediction && toISODate(prediction.date) < iso);
+
     const planNames = plan
       ? plan.itemIds
           .map((itemId) => state.items.find((item) => item.id === itemId))
@@ -1180,33 +1369,98 @@ import {
         <header class="calendar-day-panel-head">
           <div>
             <h3 id="calendar-day-panel-title" tabindex="-1">${formatFullDate(date)}</h3>
-            <p>${summary}${plan ? " · planned trip" : ""}</p>
+            <p class="calendar-day-panel-selection">${count} of ${totalCount} ${totalCount === 1 ? "item" : "items"} selected${plan ? " · planned trip" : ""}</p>
           </div>
           <button class="btn btn-ghost btn-sm" type="button" data-action="close-calendar-day">Close day</button>
         </header>
         ${
-          entries.length
-            ? `<ul class="calendar-day-panel-list">${entries
+          isPast
+            ? ""
+            : `<div class="calendar-day-panel-actions">
+                <button class="btn btn-primary" type="button" data-action="start-run-date" data-date="${iso}">${startText}</button>
+                <button class="btn btn-secondary" type="button" data-action="save-plan-date" data-date="${iso}">${plan ? "Update plan" : "Save plan"}</button>
+              </div>`
+        }
+        ${
+          !isPast && earlierItems.length
+            ? `<div class="calendar-day-panel-earlier">
+                <button class="btn btn-secondary btn-sm" type="button" data-action="add-earlier-due" data-date="${iso}">Add ${earlierItems.length} due earlier</button>
+              </div>`
+            : ""
+        }
+        ${
+          roster.length
+            ? `<ul class="calendar-day-panel-list">${roster
                 .map(
                   ({ item, prediction }) => `
-              <li>
-                <button class="calendar-day-panel-item horizon-${escapeHtml(prediction.zone)}" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">
-                  <strong>${escapeHtml(item.name)}</strong>
-                  <span class="calendar-day-panel-meta">
-                    <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
-                    <small>${escapeHtml(formatDue(prediction.daysUntil))}</small>
+              <li class="calendar-plan-row">
+                <label class="calendar-plan-choice">
+                  <input type="checkbox" data-action="toggle-plan-item" data-id="${escapeHtml(item.id)}" ${dayPanelSelection.has(item.id) ? "checked" : ""}>
+                  <span class="calendar-plan-choice-text">
+                    <strong>${escapeHtml(item.name)}</strong>
+                    <span class="calendar-day-panel-meta">
+                      <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+                      <small>${escapeHtml(formatDue(prediction.daysUntil))}</small>
+                    </span>
                   </span>
-                </button>
+                </label>
+                <button class="btn btn-ghost btn-sm calendar-plan-detail" type="button" data-action="detail" data-id="${escapeHtml(item.id)}">Details</button>
               </li>`,
                 )
                 .join("")}</ul>`
             : `<p class="calendar-day-panel-empty">No restocks land on this date.</p>`
         }
         ${
+          !isPast && monthDaySynergyEntries(date, gravityHorizon).length
+            ? (() => {
+                const synergyItems = monthDaySynergyEntries(date, gravityHorizon);
+                const count = synergyItems.length;
+                return `
+                  <div class="calendar-day-synergy" id="calendar-day-synergy">
+                    <div class="calendar-synergy-header">
+                      <div>
+                        <h4 id="calendar-synergy-heading">Trip synergy</h4>
+                        <p>${count} ${count === 1 ? "restock" : "restocks"} due in the next ${gravityHorizon} days</p>
+                      </div>
+                      <div class="calendar-synergy-horizon" role="group" aria-label="Synergy look-ahead">
+                        <button type="button" class="btn btn-ghost btn-sm ${gravityHorizon === 2 ? "is-active" : ""}" data-action="set-gravity-horizon" data-days="2">+2d</button>
+                        <button type="button" class="btn btn-ghost btn-sm ${gravityHorizon === 3 ? "is-active" : ""}" data-action="set-gravity-horizon" data-days="3">+3d</button>
+                        <button type="button" class="btn btn-ghost btn-sm ${gravityHorizon === 5 ? "is-active" : ""}" data-action="set-gravity-horizon" data-days="5">+5d</button>
+                      </div>
+                    </div>
+                    <ul class="calendar-synergy-list" aria-labelledby="calendar-synergy-heading">
+                      ${synergyItems
+                        .map(
+                          ({ item, prediction, daysAfter }) => `
+                        <li class="calendar-synergy-row">
+                          <div class="calendar-synergy-info">
+                            <strong>${escapeHtml(item.name)}</strong>
+                            <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+                            <small>Due ${formatWeekday(prediction.date)} (+${daysAfter}d)</small>
+                          </div>
+                          <button class="btn btn-secondary btn-sm" type="button" data-action="add-synergy-item" data-id="${escapeHtml(item.id)}" data-due="${escapeHtml(toISODate(prediction.date))}">
+                            Sweep into trip
+                          </button>
+                        </li>
+                      `,
+                        )
+                        .join("")}
+                    </ul>
+                    <div class="calendar-synergy-actions">
+                      <button class="btn btn-secondary btn-sm" type="button" data-action="sweep-all-synergy" data-date="${iso}">
+                        Sweep all ${count} into trip
+                      </button>
+                    </div>
+                  </div>
+                `;
+              })()
+            : ""
+        }
+        ${
           plan
             ? `<div class="calendar-day-plan">
                 <div class="calendar-day-plan-copy">
-                  <p><strong>Planned trip</strong> · ${planNames.length} ${planNames.length === 1 ? "item" : "items"}</p>
+                  <p><strong>Saved plan</strong> · ${planNames.length} ${planNames.length === 1 ? "item" : "items"}</p>
                   <p class="calendar-day-plan-items">${escapeHtml(planItemsText)}</p>
                 </div>
                 <div class="calendar-day-plan-actions">
@@ -1215,14 +1469,6 @@ import {
                 </div>
               </div>`
             : ""
-        }
-        ${
-          isPast
-            ? ""
-            : `<div class="calendar-day-panel-actions">
-                <button class="btn btn-primary" type="button" data-action="start-run-date" data-date="${iso}">Start this shopping run</button>
-                <button class="btn btn-secondary" type="button" data-action="save-plan-date" data-date="${iso}">${plan ? "Update plan for this date" : "Save as a plan for this date"}</button>
-              </div>`
         }
       </section>
     `;
@@ -1235,6 +1481,36 @@ import {
       element.hidden = true;
       element.replaceChildren();
     }
+  }
+
+  function renderCalendarPlansOnly() {
+    const brief = $("#calendar-brief");
+    if (brief) {
+      brief.hidden = true;
+      brief.replaceChildren();
+    }
+    const plansBlock = $("#calendar-plans");
+    if (!plansBlock) return;
+    const upcomingPlans = plans
+      .filter((plan) => parseDate(plan.date) >= today)
+      .sort((left, right) => left.date.localeCompare(right.date));
+    plansBlock.hidden = upcomingPlans.length === 0;
+    plansBlock.innerHTML = upcomingPlans.length
+      ? `<span class="calendar-plans-label">Saved plans</span>
+        <ul class="calendar-plans-list">
+          ${upcomingPlans
+            .map((plan) => {
+              const count = plan.itemIds.filter((itemId) =>
+                state.items.some((item) => item.id === itemId),
+              ).length;
+              return `<li><button class="calendar-plan-link" type="button" data-action="open-calendar-day" data-date="${escapeHtml(plan.date)}">
+                <strong>${escapeHtml(formatDate(parseDate(plan.date)))}</strong>
+                <small>${count ? `${count} ${count === 1 ? "item" : "items"}` : "No items yet"}</small>
+              </button></li>`;
+            })
+            .join("")}
+        </ul>`
+      : "";
   }
 
   function renderCalendarBrief() {
@@ -1297,7 +1573,7 @@ import {
 
     plansBlock.hidden = upcomingPlans.length === 0;
     plansBlock.innerHTML = upcomingPlans.length
-      ? `<span class="calendar-plans-label">Planned trips</span>
+      ? `<span class="calendar-plans-label">Saved plans</span>
         <ul class="calendar-plans-list">
           ${upcomingPlans
             .map((plan) => {
@@ -1370,7 +1646,7 @@ import {
       return;
     }
 
-    hideCalendarBrief();
+    renderCalendarPlansOnly();
     container.classList.remove("is-month");
     container.setAttribute("role", "list");
 
@@ -1466,7 +1742,7 @@ import {
   }
 
   function isRunItemSkipped(itemId) {
-    return storeRun.skippedIds.includes(itemId);
+    return storeRun.skippedIds.includes(itemId) || Boolean(storeRun.outOfStockIds && storeRun.outOfStockIds.includes(itemId));
   }
 
   function runRosterEntries() {
@@ -1475,25 +1751,40 @@ import {
     const runReferenceDate = storeRun.runDate ? parseDate(storeRun.runDate) : today;
     const isFutureRun = runReferenceDate.getTime() > today.getTime();
 
-    for (const entry of buildShoppingRun(state.items, {
-      includeWatch: storeRun.includeWatch,
-      referenceDate: runReferenceDate,
-      includeOneTime: !isFutureRun,
-    })) {
-      roster.set(entry.item.id, entry);
-    }
+    if (storeRun.runDate) {
+      for (const id of storeRun.extraIds) {
+        const item = state.items.find((candidate) => candidate.id === id);
+        if (!item) continue;
+        if (item.isOneTime && item.completed && !storeRun.selected.has(id)) continue;
+        const prediction = item.isOneTime ? null : predictionFor(item, runReferenceDate);
+        roster.set(id, {
+          item,
+          type: item.isOneTime ? "one-time" : "tracked",
+          priority: item.isOneTime ? 4 : (prediction?.daysUntil < 0 ? 1 : (prediction?.zone === "buy-now" ? 2 : 3)),
+          prediction,
+        });
+      }
+    } else {
+      for (const entry of buildShoppingRun(state.items, {
+        includeWatch: storeRun.includeWatch,
+        referenceDate: runReferenceDate,
+        includeOneTime: !isFutureRun,
+      })) {
+        roster.set(entry.item.id, entry);
+      }
 
-    for (const extraId of storeRun.extraIds) {
-      if (roster.has(extraId)) continue;
-      const item = state.items.find((candidate) => candidate.id === extraId);
-      if (!item) continue;
-      if (item.isOneTime && item.completed && !storeRun.selected.has(extraId)) continue;
+      for (const extraId of storeRun.extraIds) {
+        if (roster.has(extraId)) continue;
+        const item = state.items.find((candidate) => candidate.id === extraId);
+        if (!item) continue;
+        if (item.isOneTime && item.completed && !storeRun.selected.has(extraId)) continue;
 
-      roster.set(extraId, {
-        item,
-        type: item.isOneTime ? "one-time" : "tracked",
-        priority: 4,
-      });
+        roster.set(extraId, {
+          item,
+          type: item.isOneTime ? "one-time" : "tracked",
+          priority: 4,
+        });
+      }
     }
 
     for (const selectedId of storeRun.selected.keys()) {
@@ -1538,6 +1829,17 @@ import {
     const isLogged = storeRun.selected.has(item.id);
 
     if (isLogged) {
+      const selection = storeRun.selected.get(item.id);
+      const purchase = selection?.purchaseId
+        ? item.purchases.find((entry) => entry.id === selection.purchaseId)
+        : null;
+      let logDetail = "";
+      if (purchase) {
+        logDetail = ` · ${formatQuantity(purchase.quantity, item.unit)} · ${formatPurchasePrice(purchase.price)}`;
+      } else if (item.isOneTime) {
+        logDetail = " · Checklist";
+      }
+
       return `
         <article class="store-run-row is-in-cart" data-item-id="${escapeHtml(item.id)}" aria-label="${escapeHtml(item.name)} logged this trip">
           <span class="run-check" aria-hidden="true">
@@ -1545,7 +1847,23 @@ import {
           </span>
           <div class="store-run-row-main">
             <strong>${escapeHtml(item.name)}</strong>
-            <small>Logged</small>
+            <small>Logged${escapeHtml(logDetail)}</small>
+          </div>
+          <div class="store-run-row-cart-actions">
+            <button
+              class="btn btn-secondary btn-sm"
+              type="button"
+              data-action="adjust-run-item"
+              data-id="${escapeHtml(item.id)}"
+              aria-label="Adjust ${escapeHtml(item.name)}"
+            >Adjust</button>
+            <button
+              class="btn btn-ghost btn-sm"
+              type="button"
+              data-action="undo-run-item"
+              data-id="${escapeHtml(item.id)}"
+              aria-label="Undo ${escapeHtml(item.name)}"
+            >Undo</button>
           </div>
         </article>
       `;
@@ -1570,13 +1888,22 @@ import {
           </div>
           <div class="store-run-row-meta">
             <small>${categoryText}<span class="store-run-unit">${unitText}</span>${escapeHtml(timing)}</small>
-            <button
-              class="btn btn-ghost btn-sm store-run-skip"
-              type="button"
-              data-action="skip-run-item"
-              data-id="${escapeHtml(item.id)}"
-              aria-label="Not this trip for ${escapeHtml(item.name)}"
-            >Not this trip</button>
+            <div class="store-run-row-skips">
+              <button
+                class="btn btn-ghost btn-sm store-run-oos"
+                type="button"
+                data-action="oos-run-item"
+                data-id="${escapeHtml(item.id)}"
+                aria-label="Out of stock for ${escapeHtml(item.name)}"
+              >Out of stock</button>
+              <button
+                class="btn btn-ghost btn-sm store-run-skip"
+                type="button"
+                data-action="skip-run-item"
+                data-id="${escapeHtml(item.id)}"
+                aria-label="Not this trip for ${escapeHtml(item.name)}"
+              >Not this trip</button>
+            </div>
           </div>
         </div>
         <button
@@ -1616,39 +1943,59 @@ import {
     const container = $("#store-run-skipped");
     if (!container) return [];
 
-    const skipped = storeRun.skippedIds
+    const skipped = (storeRun.skippedIds || [])
+      .map((itemId) => state.items.find((item) => item.id === itemId))
+      .filter(Boolean);
+    const outOfStock = (storeRun.outOfStockIds || [])
       .map((itemId) => state.items.find((item) => item.id === itemId))
       .filter(Boolean);
 
-    if (!skipped.length) {
+    const allSkipped = [...skipped, ...outOfStock];
+
+    if (!allSkipped.length) {
       container.hidden = true;
       container.replaceChildren();
       return [];
     }
 
-    const names = skipped.map((item) => item.name);
-    const visibleNames = names.slice(0, 3);
-    let label = visibleNames.join(", ");
-    if (names.length > 3) {
-      label += ` and ${names.length - 3} more`;
-    } else if (names.length > 1) {
-      label = `${visibleNames.slice(0, -1).join(", ")} and ${visibleNames[visibleNames.length - 1]}`;
+    const formatNames = (items) => {
+      const names = items.map((item) => item.name);
+      const visibleNames = names.slice(0, 3);
+      let label = visibleNames.join(", ");
+      if (names.length > 3) {
+        label += ` and ${names.length - 3} more`;
+      } else if (names.length > 1) {
+        label = `${visibleNames.slice(0, -1).join(", ")} and ${visibleNames[visibleNames.length - 1]}`;
+      }
+      return label;
+    };
+
+    let summaryHtml = "";
+    if (outOfStock.length && skipped.length) {
+      summaryHtml = `<span>Unavailable</span> <strong>${escapeHtml(formatNames(outOfStock))} (out of stock)</strong> · <span>Skipped</span> <strong>${escapeHtml(formatNames(skipped))}</strong>`;
+    } else if (outOfStock.length) {
+      summaryHtml = `<span>Out of stock</span> <strong>${escapeHtml(formatNames(outOfStock))}</strong>`;
+    } else {
+      summaryHtml = `<span>Skipped this trip</span> <strong>${escapeHtml(formatNames(skipped))}</strong>`;
     }
-    const last = skipped[skipped.length - 1];
+
+    const last =
+      (storeRun.lastSkippedId && allSkipped.find((item) => item.id === storeRun.lastSkippedId)) ||
+      allSkipped[allSkipped.length - 1];
 
     container.hidden = false;
     container.innerHTML = `
-      <p><span>Skipped this trip</span> <strong>${escapeHtml(label)}</strong></p>
+      <p>${summaryHtml}</p>
       <button
         class="btn btn-ghost btn-sm"
         type="button"
         data-action="undo-skip-run-item"
         data-id="${escapeHtml(last.id)}"
         aria-label="Undo skipping ${escapeHtml(last.name)}"
-      >${skipped.length > 1 ? "Undo last" : "Undo"}</button>
+      >${allSkipped.length > 1 ? "Undo last" : "Undo"}</button>
     `;
 
-    return skipped;
+    return allSkipped;
   }
 
   function renderStoreRunCart(entries) {
@@ -1657,21 +2004,39 @@ import {
       .filter((entry) => storeRun.selected.has(entry.item.id))
       .map((entry) => ({ ...entry, selection: storeRun.selected.get(entry.item.id) }));
 
-    const countLabel = `${selectedEntries.length} ${
-      selectedEntries.length === 1 ? "item" : "items"
-    }`;
+    const countLabel = `${selectedEntries.length} of ${entries.length} picked`;
+
+    const cartActions = `
+      <div class="store-run-cart-heading-actions">
+        <button
+          class="btn btn-secondary btn-sm"
+          type="button"
+          data-action="save-trip-plan"
+          aria-label="Save the items left as a plan"
+        >Save the items left</button>
+        <button
+          class="btn btn-ghost btn-sm"
+          type="button"
+          data-action="discard-trip"
+          aria-label="Discard this trip"
+        >Discard this trip</button>
+      </div>
+    `;
 
     if (!selectedEntries.length) {
       const hasDraft = entries.length > 0;
       cart.innerHTML = `
         <header class="store-run-cart-header">
-          <h2>This trip</h2>
-          <span>0 items</span>
+          <div class="store-run-cart-heading">
+            <h2>This trip</h2>
+            <span>${countLabel}</span>
+          </div>
+          ${cartActions}
         </header>
         <div class="store-run-cart-empty">
-          <strong>${hasDraft ? "Nothing logged yet" : "Nothing to log yet"}</strong>
+          <strong>${hasDraft ? "Nothing logged yet" : "Nothing to pick yet"}</strong>
           <p>${hasDraft
-            ? "Log saves the change now; Undo reverses it."
+            ? "The list is the trip. Tap Log on each item as you pick it up."
             : "Logged items will appear here when the run has something to pick."}</p>
         </div>
       `;
@@ -1680,8 +2045,11 @@ import {
 
     cart.innerHTML = `
       <header class="store-run-cart-header">
-        <h2>This trip</h2>
-        <span>${countLabel}</span>
+        <div class="store-run-cart-heading">
+          <h2>This trip</h2>
+          <span>${countLabel}</span>
+        </div>
+        ${cartActions}
       </header>
       <ul class="store-run-cart-list">
         ${selectedEntries
@@ -1736,8 +2104,11 @@ import {
     const entries = runRosterEntries().filter((entry) => !isRunItemSkipped(entry.item.id));
     const groups =
       runOrder === "aisle"
-        ? groupShoppingRun(entries)
+        ? groupShoppingRun(entries, aisleOrder)
         : groupShoppingRunByDue(entries, runReferenceDate);
+
+    const aisleBtn = $("#store-run-aisle-order-btn");
+    if (aisleBtn) aisleBtn.hidden = runOrder !== "aisle" || groups.length === 0;
     const summary = shoppingRunSummary(entries, new Set(storeRun.selected.keys()));
 
     $("#store-run-summary").innerHTML = `
@@ -1777,7 +2148,7 @@ import {
           <h2>${hasSkipped ? "Everything left is skipped" : "Nothing is due right now"}</h2>
           <p>${message}</p>
           <div class="store-run-empty-actions">
-            ${hasWatchRecovery ? `<button class="btn btn-secondary" type="button" data-action="toggle-watch-items" data-watch-style="long">Show Watch items</button>` : ""}
+            ${hasWatchRecovery ? `<button class="btn btn-secondary" type="button" data-action="toggle-watch-items" data-watch-style="long">Include Watch items</button>` : ""}
             <button class="btn btn-secondary" type="button" data-action="open-add-to-trip">Add to this trip</button>
             <button class="btn btn-ghost" type="button" data-view="dashboard">Back to dashboard</button>
           </div>
@@ -1901,14 +2272,14 @@ import {
       const longLabel = button.dataset.watchStyle === "long";
       button.textContent = storeRun.includeWatch
         ? longLabel
-          ? "Hide Watch items"
-          : "Hide Watch"
+          ? "Remove Watch items"
+          : "Remove Watch"
         : longLabel
-          ? "Show Watch items"
-          : "Show Watch";
+          ? "Include Watch items"
+          : "Include Watch";
       button.setAttribute(
         "aria-label",
-        storeRun.includeWatch ? "Hide Watch items" : "Show Watch items",
+        storeRun.includeWatch ? "Remove Watch items" : "Include Watch items",
       );
       button.setAttribute("aria-pressed", String(storeRun.includeWatch));
     }
@@ -1920,6 +2291,8 @@ import {
       button.classList.toggle("is-active", selected);
       button.setAttribute("aria-pressed", String(selected));
     }
+    const aisleBtn = $("#store-run-aisle-order-btn");
+    if (aisleBtn) aisleBtn.hidden = runOrder !== "aisle";
   }
 
   function announceRun(message) {
@@ -1982,10 +2355,15 @@ import {
         storeRun.selected.set(itemId, { type: "one-time", priority });
       } else {
         const latest = latestPurchaseFor(item);
+        const isEarly = Boolean(storeRun.earlyRestocks?.[itemId]);
+        const effectiveStartDate = isEarly ? storeRun.earlyRestocks[itemId] : null;
+
         const updatedItem = await hootApi.logPurchase(itemId, {
           date: toISODate(today),
           quantity: latest?.quantity ?? 1,
           price: latest?.price ?? null,
+          earlyRestock: isEarly,
+          effectiveStartDate: effectiveStartDate,
         });
         const createdPurchase = updatedItem.purchases[updatedItem.purchases.length - 1];
         if (!createdPurchase) throw new Error("Purchase not created");
@@ -1995,6 +2373,8 @@ import {
           purchaseId: createdPurchase.id,
           priority,
           predictedDate: prediction ? toISODate(prediction.date) : null,
+          earlyRestock: isEarly,
+          effectiveStartDate: effectiveStartDate,
         });
       }
 
@@ -2012,6 +2392,31 @@ import {
     }
   }
 
+  function markStoreRunItemOutOfStock(itemId) {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || storeRun.selected.has(itemId) || isRunItemSkipped(itemId)) return;
+
+    const rowIds = [
+      ...document.querySelectorAll("#store-run-groups .store-run-row:not(.is-in-cart)"),
+    ].map((row) => row.dataset.itemId);
+    const currentIndex = rowIds.indexOf(itemId);
+    const nextId = currentIndex < 0 ? null : (rowIds[currentIndex + 1] ?? rowIds[currentIndex - 1]);
+
+    if (!storeRun.outOfStockIds) storeRun.outOfStockIds = [];
+    storeRun.outOfStockIds.push(itemId);
+    storeRun.lastSkippedId = itemId;
+    saveStoreRun();
+    render();
+    const count = storeRun.outOfStockIds.length;
+    announceRun(
+      `${item.name} marked out of stock. ${count} out of stock.`,
+    );
+
+    if (!focusRunRowItem(nextId)) {
+      $('.store-run-skipped [data-action="undo-skip-run-item"]')?.focus();
+    }
+  }
+
   function skipShoppingRunItem(itemId) {
     const item = state.items.find((entry) => entry.id === itemId);
     if (!item || storeRun.selected.has(itemId) || isRunItemSkipped(itemId)) return;
@@ -2023,6 +2428,7 @@ import {
     const nextId = currentIndex < 0 ? null : (rowIds[currentIndex + 1] ?? rowIds[currentIndex - 1]);
 
     storeRun.skippedIds.push(itemId);
+    storeRun.lastSkippedId = itemId;
     saveStoreRun();
     render();
     announceRun(
@@ -2036,14 +2442,24 @@ import {
 
   function undoSkipRunItem(itemId) {
     const skipIndex = storeRun.skippedIds.indexOf(itemId);
-    if (skipIndex === -1) return;
+    const oosIndex = storeRun.outOfStockIds ? storeRun.outOfStockIds.indexOf(itemId) : -1;
+    if (skipIndex === -1 && oosIndex === -1) return;
     const item = state.items.find((entry) => entry.id === itemId);
 
-    storeRun.skippedIds.splice(skipIndex, 1);
+    if (skipIndex !== -1) {
+      storeRun.skippedIds.splice(skipIndex, 1);
+    } else if (oosIndex !== -1) {
+      storeRun.outOfStockIds.splice(oosIndex, 1);
+    }
+    if (storeRun.lastSkippedId === itemId) {
+      const allLeft = [...(storeRun.skippedIds || []), ...(storeRun.outOfStockIds || [])];
+      storeRun.lastSkippedId = allLeft[allLeft.length - 1] ?? null;
+    }
     saveStoreRun();
     render();
+    const totalUnavailable = storeRun.skippedIds.length + (storeRun.outOfStockIds?.length ?? 0);
     announceRun(
-      `${item?.name ?? "Item"} restored to this trip. ${storeRun.skippedIds.length} skipped.`,
+      `${item?.name ?? "Item"} restored to this trip. ${totalUnavailable} skipped.`,
     );
 
     if (!focusRunRowItem(itemId)) {
@@ -2052,6 +2468,85 @@ import {
         $('.store-run-actions [data-action="open-add-to-trip"]')
       )?.focus();
     }
+  }
+
+  function saveTripAsPlan() {
+    const unloggedIds = runRosterEntries()
+      .filter((entry) => !isRunItemSkipped(entry.item.id) && !storeRun.selected.has(entry.item.id))
+      .map((entry) => entry.item.id);
+    const planDate = storeRun.runDate || toISODate(today);
+    const existing = plans.find((p) => p.date === planDate);
+    const plan = {
+      id: existing?.id ?? makeId("plan"),
+      date: planDate,
+      itemIds: unloggedIds,
+      includeWatch: storeRun.includeWatch,
+      createdAt: existing?.createdAt ?? toISODate(today),
+    };
+    plans = [...plans.filter((p) => p.date !== planDate), plan];
+    savePlans();
+    toast(`Saved ${unloggedIds.length} items left as a plan.`);
+  }
+
+  function requestDiscardTrip(trigger) {
+    openConfirm({
+      title: "Discard trip?",
+      message: "This clears the active trip. Its plan stays on the calendar. Logged purchases stays in purchase history.",
+      confirmLabel: "Discard trip",
+      trigger,
+      onConfirm: () => {
+        storeRun = {
+          runDate: null,
+          includeWatch: false,
+          selected: new Map(),
+          extraIds: new Set(),
+          skippedIds: [],
+          outOfStockIds: [],
+          lastSkippedId: null,
+          earlyRestocks: {},
+        };
+        saveStoreRun();
+        setView("dashboard");
+        render();
+        $("#dashboard-title")?.focus({ preventScroll: true });
+        toast("Trip discarded.");
+      },
+    });
+  }
+
+  function renderCurrentTrip() {
+    const slot = $("#current-trip-slot");
+    if (!slot) return;
+
+    const hasTrip = storeRun.selected.size > 0 || Boolean(storeRun.runDate) || (storeRun.extraIds && storeRun.extraIds.size > 0);
+    if (!hasTrip) {
+      slot.innerHTML = "";
+      return;
+    }
+
+    const entries = runRosterEntries().filter((e) => !isRunItemSkipped(e.item.id));
+    const total = entries.length;
+    const inCart = storeRun.selected.size;
+    const remaining = Math.max(0, total - inCart);
+    const dateLabel = storeRun.runDate ? formatFullDate(parseDate(storeRun.runDate)) : "Today";
+
+    slot.innerHTML = `
+      <aside class="current-trip" aria-label="Trip in progress">
+        <div class="current-trip-copy">
+          <span class="current-trip-kicker">Trip in progress</span>
+          <h2>Trip · ${escapeHtml(dateLabel)}</h2>
+          <p>${inCart} of ${total} picked · ${remaining} left</p>
+        </div>
+        <div class="current-trip-actions">
+          ${
+            remaining === 0 && inCart > 0
+              ? '<button class="btn btn-primary" type="button" data-action="finish-trip">Finish trip</button>'
+              : '<button class="btn btn-primary" type="button" data-action="resume-trip">Resume trip</button>'
+          }
+          <button class="btn btn-secondary" type="button" data-action="discard-trip">Discard trip</button>
+        </div>
+      </aside>
+    `;
   }
 
   function addRunExtra(itemId) {
@@ -2065,6 +2560,13 @@ import {
 
     storeRun.extraIds.add(itemId);
     storeRun.skippedIds = storeRun.skippedIds.filter((id) => id !== itemId);
+    if (storeRun.outOfStockIds) {
+      storeRun.outOfStockIds = storeRun.outOfStockIds.filter((id) => id !== itemId);
+    }
+    if (storeRun.lastSkippedId === itemId) {
+      const allLeft = [...(storeRun.skippedIds || []), ...(storeRun.outOfStockIds || [])];
+      storeRun.lastSkippedId = allLeft[allLeft.length - 1] ?? null;
+    }
     addItemToPlannedRun(itemId);
     saveStoreRun();
 
@@ -2151,6 +2653,10 @@ import {
       hasKnownPrice: knownPrices.length > 0,
       historyItemId: historyEntry?.item.id ?? null,
       skippedCount: storeRun.skippedIds.length,
+      outOfStockCount: (storeRun.outOfStockIds || []).length,
+      outOfStockItems: (storeRun.outOfStockIds || [])
+        .map((id) => state.items.find((item) => item.id === id))
+        .filter(Boolean),
     };
   }
 
@@ -2272,23 +2778,182 @@ import {
     `;
   }
 
+  function markAllPredictionsRight(trigger) {
+    if (!pendingRunReceipt) return;
+
+    let markedCount = 0;
+    for (const entry of pendingRunReceipt.entries) {
+      if (entry.selection?.type === "tracked" && entry.selection.predictedDate && entry.purchase) {
+        entry.purchase.feedback = {
+          verdict: "right",
+          predictedDate: entry.selection.predictedDate,
+          recordedAt: toISODate(today),
+          source: "receipt",
+        };
+        markedCount += 1;
+      }
+    }
+
+    if (markedCount > 0) {
+      saveState();
+
+      $$("#finish-run-list .prediction-check").forEach((check) => {
+        const itemId = check.dataset.checkItem;
+        const entry = pendingRunReceipt.entries.find(({ item }) => item.id === itemId);
+        if (!entry) return;
+
+        $$('[data-action="run-feedback"]', check).forEach((input) => {
+          input.checked = input.value === "right";
+        });
+
+        const next = predictionFor(entry.item, today);
+        const result = check.querySelector("[data-check-result]");
+        if (result) {
+          result.hidden = false;
+          result.textContent = `Right · next estimate ${formatDate(next.date)}`;
+        }
+      });
+
+      render();
+
+      const status = $("#prediction-check-status");
+      if (status) {
+        status.textContent = `Marked ${markedCount} ${markedCount === 1 ? "prediction" : "predictions"} as right.`;
+      }
+    }
+  }
+
+  function getActiveCategories() {
+    const categories = new Set();
+    for (const item of state.items) {
+      if (item.category && item.category !== "Uncategorized") {
+        categories.add(item.category);
+      }
+    }
+    return [...categories].sort((left, right) => {
+      if (aisleOrder.length) {
+        const leftIdx = aisleOrder.indexOf(left);
+        const rightIdx = aisleOrder.indexOf(right);
+        if (leftIdx !== -1 && rightIdx !== -1) return leftIdx - rightIdx;
+        if (leftIdx !== -1) return -1;
+        if (rightIdx !== -1) return 1;
+      }
+      return left.localeCompare(right);
+    });
+  }
+
+  function renderAisleOrderList() {
+    const list = $("#aisle-order-list");
+    if (!list) return;
+
+    const categories = getActiveCategories();
+    const entries = runRosterEntries().filter((entry) => !isRunItemSkipped(entry.item.id));
+    const counts = {};
+    for (const entry of entries) {
+      const cat = entry.item.category;
+      if (cat) counts[cat] = (counts[cat] || 0) + 1;
+    }
+
+    list.innerHTML = categories
+      .map((cat, index) => {
+        const isFirst = index === 0;
+        const isLast = index === categories.length - 1;
+        const count = counts[cat] || 0;
+        const countLabel = count ? `${count} ${count === 1 ? "item" : "items"}` : "0 items";
+
+        return `
+          <li class="aisle-order-row" data-category="${escapeHtml(cat)}">
+            <div>
+              <span class="aisle-order-name">${escapeHtml(cat)}</span>
+              <span class="aisle-order-meta">${countLabel}</span>
+            </div>
+            <div class="aisle-order-steppers">
+              <button
+                class="aisle-order-stepper"
+                type="button"
+                data-action="move-aisle-up"
+                data-category="${escapeHtml(cat)}"
+                aria-label="Move ${escapeHtml(cat)} earlier in trip"
+                ${isFirst ? "disabled" : ""}
+              >↑</button>
+              <button
+                class="aisle-order-stepper"
+                type="button"
+                data-action="move-aisle-down"
+                data-category="${escapeHtml(cat)}"
+                aria-label="Move ${escapeHtml(cat)} later in trip"
+                ${isLast ? "disabled" : ""}
+              >↓</button>
+            </div>
+          </li>
+        `;
+      })
+      .join("");
+  }
+
+  function openAisleOrderDialog(trigger) {
+    renderAisleOrderList();
+    showDialog($("#aisle-order-dialog"), trigger);
+  }
+
+  function moveAisleCategory(category, direction, trigger) {
+    const categories = getActiveCategories();
+    const index = categories.indexOf(category);
+    if (index === -1) return;
+
+    const targetIndex = index + direction;
+    if (targetIndex < 0 || targetIndex >= categories.length) return;
+
+    const temp = categories[index];
+    categories[index] = categories[targetIndex];
+    categories[targetIndex] = temp;
+
+    aisleOrder = categories;
+    saveAisleOrder(aisleOrder);
+    renderAisleOrderList();
+    renderStoreRun();
+
+    const status = $("#aisle-order-status");
+    if (status) {
+      status.textContent = `Moved ${category} ${direction < 0 ? "earlier" : "later"} in trip.`;
+    }
+
+    const action = direction < 0 ? "move-aisle-up" : "move-aisle-down";
+    $(`[data-action="${action}"][data-category="${CSS.escape(category)}"]`)?.focus();
+  }
+
+  function resetAisleOrder() {
+    aisleOrder = [];
+    saveAisleOrder([]);
+    renderAisleOrderList();
+    renderStoreRun();
+
+    const status = $("#aisle-order-status");
+    if (status) {
+      status.textContent = "Reset aisle order to alphabetical.";
+    }
+  }
+
   function finishShoppingRun(trigger) {
     const receipt = buildRunReceipt();
     if (!receipt.entries.length) return;
 
     const count = receipt.entries.length;
     const checkCount = receipt.entries.filter(
-      ({ selection }) => selection?.type === "tracked" && selection.predictedDate,
+      ({ selection }) => selection?.type === "tracked" && selection.predictedDate && !selection.earlyRestock,
     ).length;
     const itemWord = count === 1 ? "item" : "items";
     pendingRunReceipt = receipt;
 
+    const oosText = receipt.outOfStockCount
+      ? ` ${receipt.outOfStockCount} out of stock.`
+      : "";
     const skippedText = receipt.skippedCount
       ? ` ${receipt.skippedCount} skipped.`
       : "";
 
     $("#finish-run-title").textContent = "Shopping run finished";
-    $("#finish-run-message").textContent = `${count} ${itemWord} logged.${skippedText}${
+    $("#finish-run-message").textContent = `${count} ${itemWord} logged.${oosText}${skippedText}${
       checkCount
         ? ` ${checkCount} ${
             checkCount === 1 ? "restock check" : "restock checks"
@@ -2303,17 +2968,28 @@ import {
           : `<span>Spending not recorded</span>`
       }
     `;
-    $("#finish-run-hint").hidden = checkCount === 0;
+    const hasChecks = checkCount > 0;
+    const checksBar = $("#finish-run-checks-bar");
+    if (checksBar) checksBar.hidden = !hasChecks;
+    const hint = $("#finish-run-hint");
+    if (hint) hint.hidden = !hasChecks;
     $("#prediction-check-status").textContent = "";
     $("#finish-run-list").innerHTML = receipt.entries
       .map(({ item, purchase, selection }) => {
         const detail = purchase
           ? `${formatQuantity(purchase.quantity, item.unit)} · ${formatPurchasePrice(purchase.price)}`
           : "One-time checklist";
-        const check =
-          selection?.type === "tracked" && selection.predictedDate
-            ? predictionCheckMarkup(item, purchase, selection.predictedDate)
-            : "";
+        let check = "";
+        if (selection?.earlyRestock && selection?.effectiveStartDate) {
+          check = `
+            <div class="finish-run-early-buffer">
+              <span class="status-chip status-buffer">Early buffer</span>
+              <p class="finish-run-buffer-note">Restocked early to save a trip · countdown continues from ${formatDate(parseDate(selection.effectiveStartDate))}.</p>
+            </div>
+          `;
+        } else if (selection?.type === "tracked" && selection.predictedDate) {
+          check = predictionCheckMarkup(item, purchase, selection.predictedDate);
+        }
         return `
           <li class="finish-run-entry">
             <div class="finish-run-entry-line">
@@ -2330,25 +3006,120 @@ import {
     showDialog($("#finish-run-dialog"), trigger);
   }
 
+  
+  function addSynergyItem(itemId, date, originalDueDate) {
+    const iso = toISODate(date);
+    let plan = plans.find((p) => p.date === iso);
+    if (!plan) {
+      const currentDueIds = monthDayEntries(date).map(({ item }) => item.id);
+      plan = {
+        id: makeId("plan"),
+        date: iso,
+        itemIds: currentDueIds,
+        includeWatch: true,
+        createdAt: toISODate(today),
+        earlyRestocks: {},
+      };
+      plans.push(plan);
+    }
+    if (!plan.earlyRestocks) plan.earlyRestocks = {};
+    if (!plan.itemIds.includes(itemId)) {
+      plan.itemIds.push(itemId);
+    }
+    plan.earlyRestocks[itemId] = originalDueDate;
+    if (dayPanelDate === iso) {
+      dayPanelExtraIds.add(itemId);
+      dayPanelSelection.add(itemId);
+    }
+    savePlans();
+    renderRestockCalendar();
+    const item = state.items.find((i) => i.id === itemId);
+    toast(`${item ? item.name : "Item"} swept into trip as early restock.`);
+  }
+
+  function sweepAllSynergy(date) {
+    const iso = toISODate(date);
+    const synergy = monthDaySynergyEntries(date, gravityHorizon);
+    if (!synergy.length) return;
+
+    let plan = plans.find((p) => p.date === iso);
+    if (!plan) {
+      const currentDueIds = monthDayEntries(date).map(({ item }) => item.id);
+      plan = {
+        id: makeId("plan"),
+        date: iso,
+        itemIds: currentDueIds,
+        includeWatch: true,
+        createdAt: toISODate(today),
+        earlyRestocks: {},
+      };
+      plans.push(plan);
+    }
+    if (!plan.earlyRestocks) plan.earlyRestocks = {};
+
+    for (const { item, prediction } of synergy) {
+      if (!plan.itemIds.includes(item.id)) {
+        plan.itemIds.push(item.id);
+      }
+      plan.earlyRestocks[item.id] = toISODate(prediction.date);
+      if (dayPanelDate === iso) {
+        dayPanelExtraIds.add(item.id);
+        dayPanelSelection.add(item.id);
+      }
+    }
+
+    savePlans();
+    renderRestockCalendar();
+    toast(`Swept ${synergy.length} early restocks into trip.`);
+  }
+
   function startRunFromDate(date) {
     const iso = toISODate(date);
-    const plan = planForDate(date);
+    let plan = planForDate(date);
+    const itemIds =
+      dayPanelSelection && dayPanelDate === iso
+        ? Array.from(dayPanelSelection)
+        : (plan ? plan.itemIds : monthDayEntries(date).map(({ item }) => item.id));
+
+    const wasExisting = Boolean(plan);
+    if (!plan) {
+      plan = {
+        id: makeId("plan"),
+        date: iso,
+        itemIds,
+        includeWatch: true,
+        createdAt: toISODate(today),
+        earlyRestocks: {},
+      };
+      plans.push(plan);
+    } else {
+      plan.itemIds = itemIds;
+    }
+    savePlans();
+
     storeRun.runDate = iso;
     storeRun.selected = new Map();
-    storeRun.extraIds = new Set(plan ? plan.itemIds : []);
+    storeRun.extraIds = new Set(itemIds);
     storeRun.skippedIds = [];
+    storeRun.outOfStockIds = [];
+    storeRun.lastSkippedId = null;
     storeRun.includeWatch = true;
+    storeRun.earlyRestocks = plan && plan.earlyRestocks ? { ...plan.earlyRestocks } : {};
     saveStoreRun();
     openCalendarDay = null;
     renderRestockCalendar();
     setView("store-run");
-    toast(`Shopping run for ${formatFullDate(date)}.`);
+    toast(wasExisting ? "Plan updated." : "Plan saved.");
   }
 
   function savePlanForDate(date) {
     const iso = toISODate(date);
-    const itemIds = monthDayEntries(date).map(({ item }) => item.id);
     const existing = plans.find((plan) => plan.date === iso);
+    const itemIds =
+      dayPanelSelection && dayPanelDate === iso
+        ? Array.from(dayPanelSelection)
+        : (existing ? existing.itemIds : monthDayEntries(date).map(({ item }) => item.id));
+
     plans = [
       ...plans.filter((plan) => plan.date !== iso),
       {
@@ -2357,15 +3128,12 @@ import {
         itemIds,
         includeWatch: existing?.includeWatch ?? true,
         createdAt: existing?.createdAt ?? toISODate(today),
+        earlyRestocks: existing?.earlyRestocks ?? {},
       },
     ];
     savePlans();
     renderRestockCalendar();
-    toast(
-      itemIds.length
-        ? `${existing ? "Plan updated" : "Plan saved"} for ${formatFullDate(date)} · ${itemIds.length} ${itemIds.length === 1 ? "item" : "items"}.`
-        : `${existing ? "Plan updated" : "Plan saved"} for ${formatFullDate(date)}. Nothing is due yet; add items during the run.`,
-    );
+    toast(existing ? "Plan updated." : "Plan saved.");
     $(
       `[data-action="save-plan-date"][data-date="${CSS.escape(iso)}"]`,
     )?.focus({ preventScroll: true });
@@ -2386,7 +3154,10 @@ import {
     storeRun.selected = new Map();
     storeRun.extraIds = new Set(plan.itemIds);
     storeRun.skippedIds = [];
+    storeRun.outOfStockIds = [];
+    storeRun.lastSkippedId = null;
     storeRun.includeWatch = plan.includeWatch;
+    storeRun.earlyRestocks = plan.earlyRestocks ? { ...plan.earlyRestocks } : {};
     saveStoreRun();
     openCalendarDay = null;
     renderRestockCalendar();
@@ -2411,15 +3182,24 @@ import {
       plans = plans.filter((plan) => plan.date !== completedRunDate);
       savePlans();
     }
+    if (receipt?.outOfStockItems?.length) {
+      for (const item of receipt.outOfStockItems) {
+        markOutOfStockToday(item.id);
+      }
+    }
     storeRun = {
       runDate: null,
       includeWatch: false,
       selected: new Map(),
       extraIds: new Set(),
       skippedIds: [],
+      outOfStockIds: [],
+      lastSkippedId: null,
+      earlyRestocks: {},
     };
     saveStoreRun();
 
+    render();
     setView("dashboard", { replace: true });
 
     if (openHistory && receipt?.historyItemId) {
@@ -2669,6 +3449,7 @@ import {
           <div class="rhythm-content">
             <div class="rhythm-head">
               <time class="rhythm-date" datetime="${escapeHtml(purchase.date)}">${formatFullDate(parseDate(purchase.date))}</time>
+              ${purchase.earlyRestock && purchase.effectiveStartDate ? `<span class="status-chip status-buffer">Early buffer (${formatDate(parseDate(purchase.effectiveStartDate))})</span>` : ""}
             </div>
             <p class="rhythm-purchase">${escapeHtml(formatQuantity(purchase.quantity, item.unit))} · ${formatPurchasePrice(purchase.price)}${escapeHtml(unitPrice)}</p>
             ${purchaseActionButtons(item, purchase)}
@@ -2988,6 +3769,7 @@ import {
             : `<div class="item-layout">
           <div class="item-main">
             ${restockAnswer(item, prediction)}
+            <p class="item-evidence-line"><strong>Confidence</strong> · ${escapeHtml(prediction.confidencePhrase || "Learning your rhythm")}</p>
             ${rhythmLedger(item, prediction)}
           </div>
           <aside class="item-rail" aria-label="Pattern, confidence, and spending details">
@@ -3034,8 +3816,15 @@ import {
     if (sampleSelect) sampleSelect.value = document.body.dataset.sample;
     renderStats();
     renderDashboard();
+    renderCurrentTrip();
     renderRestockCalendar();
     renderOneTime();
+    const headerLog = document.querySelector('.header-actions [data-dialog="log-purchase"]');
+    if (headerLog) headerLog.hidden = currentView === "one-time";
+    const queueSearchInput = $("#queue-search");
+    if (queueSearchInput) {
+      queueSearchInput.placeholder = window.innerWidth <= 340 ? "Search items" : "Search name, category, or unit";
+    }
     if (currentView === "store-run") {
       renderStoreRun();
     }
@@ -3116,8 +3905,14 @@ import {
       if (button.dataset.view === nextView) button.setAttribute("aria-current", "page");
       else button.removeAttribute("aria-current");
     });
-    if (nextView === "dashboard") syncNextUpDock();
-    else updateMobileDock();
+    const headerLog = document.querySelector('.header-actions [data-dialog="log-purchase"]');
+    if (headerLog) headerLog.hidden = nextView === "one-time";
+    if (nextView === "dashboard") {
+      renderCurrentTrip();
+      syncNextUpDock();
+    } else {
+      updateMobileDock();
+    }
     if (nextView === "store-run") {
       if (!storeRun.selected.size) {
         const [nextUp] = rankedTrackedEntries();
@@ -3685,13 +4480,20 @@ import {
     } catch {
       // Ignore storage failures; the in-memory session still resets.
     }
+    aisleOrder = [];
+    saveAisleOrder([]);
     storeRun = {
       runDate: null,
       includeWatch: false,
       selected: new Map(),
       extraIds: new Set(),
       skippedIds: [],
+      outOfStockIds: [],
+      lastSkippedId: null,
+      earlyRestocks: {},
     };
+    outOfStockTodayIds.clear();
+    saveOutOfStockToday();
     clearPlans();
   }
 
@@ -3737,6 +4539,7 @@ import {
       confirmLabel: "Reset demo",
       onConfirm: async () => {
         await hootApi.resetDemo();
+        clearStoreRunSession();
         currentItemId = null;
         itemReturnView = "dashboard";
         queueSearch = "";
@@ -3865,9 +4668,14 @@ import {
         renderDashboard();
         searchInput.focus();
       } else if (action === "open-calendar-day") {
+        calendarRange = MONTH_DAYS;
         openCalendarDay = actionButton.dataset.date;
         renderRestockCalendar();
-        $("#calendar-day-panel-title")?.focus({ preventScroll: true });
+        const panelTitle = $("#calendar-day-panel-title");
+        if (panelTitle) {
+          panelTitle.focus();
+          panelTitle.scrollIntoView({ block: "nearest" });
+        }
       } else if (action === "toggle-calendar-day") {
         const iso = actionButton.dataset.date;
         const wasOpen = openCalendarDay === iso;
@@ -3878,7 +4686,11 @@ import {
             preventScroll: true,
           });
         } else {
-          $("#calendar-day-panel-title")?.focus({ preventScroll: true });
+          const panelTitle = $("#calendar-day-panel-title");
+          if (panelTitle) {
+            panelTitle.focus();
+            panelTitle.scrollIntoView({ block: "nearest" });
+          }
         }
       } else if (action === "close-calendar-day") {
         const iso = openCalendarDay;
@@ -3889,14 +4701,87 @@ import {
             preventScroll: true,
           });
         }
+      } else if (action === "set-gravity-horizon") {
+        gravityHorizon = Number(actionButton.dataset.days);
+        renderRestockCalendar();
+      } else if (action === "add-synergy-item") {
+        if (openCalendarDay) {
+          addSynergyItem(actionButton.dataset.id, parseDate(openCalendarDay), actionButton.dataset.due);
+        }
+      } else if (action === "sweep-all-synergy") {
+        sweepAllSynergy(parseDate(actionButton.dataset.date));
+      } else if (action === "toggle-plan-item" || (event.target && event.target.matches('[data-action="toggle-plan-item"]'))) {
+        const checkbox = event.target;
+        const itemId = checkbox.dataset.id;
+        if (checkbox.checked) {
+          dayPanelSelection.add(itemId);
+        } else {
+          dayPanelSelection.delete(itemId);
+        }
+        const roster = getDayPanelRoster(parseDate(openCalendarDay));
+        const count = dayPanelSelection.size;
+        const selectionEl = document.querySelector(".calendar-day-panel-selection");
+        if (selectionEl) {
+          selectionEl.textContent = `${count} of ${roster.length} ${roster.length === 1 ? "item" : "items"} selected`;
+        }
+        const startBtn = document.querySelector('[data-action="start-run-date"]');
+        if (startBtn) {
+          startBtn.textContent = `Start trip with ${count} ${count === 1 ? "item" : "items"}`;
+        }
+      } else if (action === "add-earlier-due") {
+        const date = parseDate(actionButton.dataset.date);
+        const iso = toISODate(date);
+        const roster = getDayPanelRoster(date);
+        const rosterIds = new Set(roster.map(({ item }) => item.id));
+        const earlier = state.items
+          .filter((item) => !item.isOneTime && !rosterIds.has(item.id))
+          .map((item) => ({ item, prediction: predictionFor(item) }))
+          .filter(({ prediction }) => prediction && toISODate(prediction.date) < iso);
+        for (const { item } of earlier) {
+          dayPanelExtraIds.add(item.id);
+          dayPanelSelection.add(item.id);
+        }
+        renderRestockCalendar();
+        toast(`Added ${earlier.length} earlier restocks.`);
       } else if (action === "start-run-date") {
-        startRunFromDate(parseDate(actionButton.dataset.date));
+        const date = parseDate(actionButton.dataset.date);
+        const iso = toISODate(date);
+        if (
+          storeRun.runDate &&
+          storeRun.runDate !== iso &&
+          (storeRun.selected.size > 0 || (storeRun.extraIds && storeRun.extraIds.size > 0))
+        ) {
+          openConfirm({
+            title: "Replace the active trip?",
+            message: "Replace the active trip from another date with this new trip?",
+            confirmLabel: "Start new trip",
+            trigger: actionButton,
+            onConfirm: () => {
+              startRunFromDate(date);
+            },
+          });
+        } else {
+          startRunFromDate(date);
+        }
       } else if (action === "save-plan-date") {
         savePlanForDate(parseDate(actionButton.dataset.date));
       } else if (action === "resume-plan") {
         resumePlan(actionButton.dataset.planId);
       } else if (action === "delete-plan") {
-        deletePlan(actionButton.dataset.planId);
+        const planId = actionButton.dataset.planId;
+        openConfirm({
+          title: "Delete plan?",
+          message: "This removes the saved plan for this date.",
+          confirmLabel: "Delete plan",
+          trigger: actionButton,
+          onConfirm: () => {
+            plans = plans.filter((plan) => plan.id !== planId);
+            savePlans();
+            renderRestockCalendar();
+            $("#calendar-day-panel-title")?.focus({ preventScroll: true });
+            toast("Plan deleted.");
+          },
+        });
       } else if (action === "toggle-steady-fold") {
         steadyFoldExpanded = !steadyFoldExpanded;
         renderDashboard();
@@ -3942,6 +4827,24 @@ import {
         undoShoppingRunItem(itemId, actionButton);
       } else if (action === "undo-last-run-item") {
         undoShoppingRunItem(itemId, actionButton);
+      } else if (action === "resume-trip") {
+        setView("store-run");
+      } else if (action === "finish-trip") {
+        finishShoppingRun(actionButton);
+      } else if (action === "discard-trip") {
+        requestDiscardTrip(actionButton);
+      } else if (action === "save-trip-plan") {
+        saveTripAsPlan();
+      } else if (action === "open-aisle-order") {
+        openAisleOrderDialog(actionButton);
+      } else if (action === "move-aisle-up") {
+        moveAisleCategory(actionButton.dataset.category, -1, actionButton);
+      } else if (action === "move-aisle-down") {
+        moveAisleCategory(actionButton.dataset.category, 1, actionButton);
+      } else if (action === "reset-aisle-order") {
+        resetAisleOrder();
+      } else if (action === "all-predictions-right") {
+        markAllPredictionsRight(actionButton);
       } else if (action === "finish-run") {
         finishShoppingRun(actionButton);
       } else if (action === "finish-run-done") {
@@ -3956,6 +4859,8 @@ import {
         addRunExtra(itemId);
       } else if (action === "skip-run-item") {
         skipShoppingRunItem(itemId);
+      } else if (action === "oos-run-item") {
+        markStoreRunItemOutOfStock(itemId);
       } else if (action === "undo-skip-run-item") {
         undoSkipRunItem(itemId);
       }

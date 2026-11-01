@@ -204,25 +204,34 @@
             <div class="store-run-aisles">
               <div class="store-run-summary" id="store-run-summary"></div>
               <div class="store-run-toolbar">
-                <p class="store-run-toolbar-label" id="store-run-order-label">Order</p>
-                <div
-                  class="density-toggle run-order"
-                  role="group"
-                  aria-labelledby="store-run-order-label"
-                >
-                  <button
-                    class="density-button is-active"
-                    type="button"
-                    data-run-order="due"
-                    aria-pressed="true"
-                  >Due date</button>
-                  <button
-                    class="density-button"
-                    type="button"
-                    data-run-order="aisle"
-                    aria-pressed="false"
-                  >Aisle</button>
+                <div class="store-run-toolbar-main">
+                  <p class="store-run-toolbar-label" id="store-run-order-label">Order</p>
+                  <div
+                    class="density-toggle run-order"
+                    role="group"
+                    aria-labelledby="store-run-order-label"
+                  >
+                    <button
+                      class="density-button is-active"
+                      type="button"
+                      data-run-order="due"
+                      aria-pressed="true"
+                    >Due date</button>
+                    <button
+                      class="density-button"
+                      type="button"
+                      data-run-order="aisle"
+                      aria-pressed="false"
+                    >Aisle</button>
+                  </div>
                 </div>
+                <button
+                  class="btn btn-secondary btn-sm"
+                  type="button"
+                  data-action="open-aisle-order"
+                  id="store-run-aisle-order-btn"
+                  hidden
+                >Aisle order</button>
               </div>
               <div class="store-run-skipped" id="store-run-skipped" hidden></div>
               <div class="empty-state store-run-empty" id="store-run-empty" hidden></div>
@@ -614,6 +623,26 @@
       </form>
     </dialog>
 
+    <dialog class="hoot-dialog aisle-order-dialog" id="aisle-order-dialog" aria-labelledby="aisle-order-title">
+      <header class="dialog-header">
+        <div>
+          <h2 id="aisle-order-title">Aisle walk order</h2>
+          <p class="dialog-subtitle">Arrange categories to match your grocery store layout.</p>
+        </div>
+        <button class="icon-button" type="button" data-close aria-label="Close aisle order">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+          </svg>
+        </button>
+      </header>
+      <ul class="aisle-order-list" id="aisle-order-list" aria-label="Aisle categories sequence"></ul>
+      <p class="sr-only" id="aisle-order-status" role="status" aria-live="polite"></p>
+      <footer class="dialog-actions">
+        <button class="btn btn-secondary" type="button" data-action="reset-aisle-order">Reset to A–Z</button>
+        <button class="btn btn-primary" type="button" data-close data-autofocus>Done</button>
+      </footer>
+    </dialog>
+
     <dialog class="hoot-dialog finish-run-dialog" id="finish-run-dialog" aria-labelledby="finish-run-title">
       <header class="dialog-header">
         <div>
@@ -627,9 +656,12 @@
         </button>
       </header>
       <div class="finish-run-summary" id="finish-run-summary" role="status" aria-live="polite"></div>
-      <p class="finish-run-hint" id="finish-run-hint" hidden>
-        These staples were due around now. If you still had some, say so and the next estimate moves three days later.
-      </p>
+      <div class="finish-run-checks-bar" id="finish-run-checks-bar" hidden>
+        <p class="finish-run-hint" id="finish-run-hint">
+          These staples were due around now. If you still had some, say so and the next estimate moves three days later.
+        </p>
+        <button class="btn btn-secondary btn-sm" type="button" data-action="all-predictions-right" id="finish-run-all-right">All predictions were right</button>
+      </div>
       <ul class="finish-run-list" id="finish-run-list" aria-label="Trip items and prediction checks"></ul>
       <p class="sr-only" id="prediction-check-status" role="status" aria-live="polite"></p>
       <footer class="dialog-actions">

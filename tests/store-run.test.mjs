@@ -80,6 +80,22 @@ test("excludes completed one-time items", () => {
   assert.equal(isShoppingRunEligible(item, true, referenceDate), false);
 });
 
+test("groups entries by custom category order when provided", () => {
+  const entries = [
+    { item: { id: "1", name: "Apples", category: "Produce", isOneTime: false }, type: "tracked", priority: 0 },
+    { item: { id: "2", name: "Bread", category: "Bakery", isOneTime: false }, type: "tracked", priority: 0 },
+    { item: { id: "3", name: "Milk", category: "Dairy", isOneTime: false }, type: "tracked", priority: 0 },
+  ];
+
+  const customOrder = ["Dairy", "Produce", "Bakery"];
+  const groups = groupShoppingRun(entries, customOrder);
+
+  assert.deepEqual(
+    groups.map((group) => group.category),
+    ["Dairy", "Produce", "Bakery"],
+  );
+});
+
 test("groups entries by category and sorts each group by urgency", () => {
   const entries = [
     {

@@ -47,7 +47,7 @@ export function buildShoppingRun(
     .sort(compareEntries);
 }
 
-export function groupShoppingRun(entries) {
+export function groupShoppingRun(entries, customOrder = []) {
   const groupsByCategory = new Map();
 
   for (const entry of entries) {
@@ -59,9 +59,16 @@ export function groupShoppingRun(entries) {
   }
 
   return [...groupsByCategory]
-    .sort(([leftCategory], [rightCategory]) =>
-      leftCategory.localeCompare(rightCategory),
-    )
+    .sort(([leftCategory], [rightCategory]) => {
+      if (customOrder && customOrder.length) {
+        const leftIndex = customOrder.indexOf(leftCategory);
+        const rightIndex = customOrder.indexOf(rightCategory);
+        if (leftIndex !== -1 && rightIndex !== -1) return leftIndex - rightIndex;
+        if (leftIndex !== -1) return -1;
+        if (rightIndex !== -1) return 1;
+      }
+      return leftCategory.localeCompare(rightCategory);
+    })
     .map(([category, categoryEntries]) => ({
       category,
       entries: [...categoryEntries].sort(compareEntries),

@@ -968,6 +968,12 @@ body.is-one-time [data-dialog="log-purchase"] {
   border-color: var(--steady-border);
 }
 
+.status-chip.status-oos {
+  color: var(--ink-soft);
+  background: var(--learning-bg);
+  border-color: var(--learning-border);
+}
+
 .status-learning {
   color: var(--learning);
   background: var(--learning-bg);
@@ -1174,7 +1180,11 @@ body.is-one-time [data-dialog="log-purchase"] {
 @media (max-width: 360px) {
   .current-trip {
     gap: 6px;
-    padding: 8px 10px;
+    padding: 4px 8px;
+  }
+
+  #current-trip-slot {
+    margin-bottom: 4px;
   }
 
   .current-trip-kicker {
@@ -2452,6 +2462,138 @@ body[data-density="dense"] .stat-card strong {
   gap: var(--space-2);
 }
 
+
+/* Calendar Trip Gravity & Restock Synergy */
+.calendar-synergy-indicator {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--primary);
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.calendar-day-synergy {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--surface-quiet);
+}
+
+.calendar-synergy-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.calendar-synergy-header h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.calendar-synergy-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.calendar-synergy-horizon {
+  display: flex;
+  gap: 4px;
+}
+
+.calendar-synergy-horizon .btn {
+  min-height: 32px;
+  padding: 2px 8px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink-soft);
+  background: var(--surface);
+}
+
+.calendar-synergy-horizon .btn.is-active {
+  background: var(--selection);
+  border-color: var(--focus);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.calendar-synergy-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.calendar-synergy-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.calendar-synergy-info {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.calendar-synergy-info strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.calendar-synergy-info small {
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.calendar-synergy-row .btn {
+  flex: none;
+}
+
+.calendar-synergy-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Status Chip - Early Buffer */
+.status-chip.status-buffer {
+  color: var(--steady);
+  background: var(--steady-bg);
+  border-color: var(--steady-border);
+}
+
+.finish-run-early-buffer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.finish-run-buffer-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
 .calendar-day-panel-empty {
   margin: 0;
   color: var(--ink-soft);
@@ -2692,8 +2834,85 @@ body[data-density="dense"] .stat-card strong {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-2);
+  gap: var(--space-2) var(--space-3);
   min-width: 0;
+}
+
+.store-run-toolbar-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hoot-dialog.aisle-order-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+
+.aisle-order-list {
+  display: grid;
+  gap: 6px;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+
+.aisle-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--surface-quiet);
+}
+
+.aisle-order-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.aisle-order-meta {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.aisle-order-steppers {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.aisle-order-stepper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard), border-color var(--duration-fast) var(--ease-standard);
+}
+
+.aisle-order-stepper:hover:not(:disabled) {
+  background: var(--surface-tint);
+  border-color: var(--border-strong);
+}
+
+.aisle-order-stepper:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .store-run-toolbar[hidden] {
@@ -2860,11 +3079,26 @@ body[data-density="dense"] .stat-card strong {
 }
 
 .store-run-row.is-in-cart {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
   min-height: 44px;
   padding: 8px var(--space-2) 8px var(--space-4);
   background: var(--steady-bg);
   box-shadow: none;
+  gap: 8px;
+}
+
+.store-run-row-cart-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.store-run-row-cart-actions .btn {
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
 }
 
 .store-run-row.is-in-cart::before {
@@ -2963,14 +3197,23 @@ body[data-density="dense"] .stat-card strong {
   min-width: 0;
 }
 
-.store-run-skip {
+.store-run-row-skips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.store-run-skip,
+.store-run-oos {
   min-height: 28px;
   padding: 0 6px;
   font-size: 12px;
   color: var(--ink-faint);
 }
 
-.store-run-skip:hover {
+.store-run-skip:hover,
+.store-run-oos:hover {
   color: var(--ink-soft);
 }
 
@@ -2981,9 +3224,10 @@ body[data-density="dense"] .stat-card strong {
   }
 
   .store-run-row-meta {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: space-between;
     gap: 4px 8px;
   }
 
@@ -2991,7 +3235,14 @@ body[data-density="dense"] .stat-card strong {
     min-width: 0;
   }
 
-  .store-run-row .store-run-skip {
+  .store-run-row-skips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .store-run-row .store-run-skip,
+  .store-run-row .store-run-oos {
     min-width: 0;
     min-height: 44px;
     padding: 0 2px;
@@ -3385,6 +3636,32 @@ body.is-store-run .toast-region {
 .finish-run-summary span {
   font-size: 14px;
   color: var(--ink-soft);
+}
+
+.finish-run-checks-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-3);
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  background: var(--surface-quiet);
+}
+
+.finish-run-checks-bar[hidden] {
+  display: none;
+}
+
+.finish-run-checks-bar .finish-run-hint {
+  margin: 0;
+  flex: 1 1 240px;
+}
+
+.finish-run-checks-bar .btn {
+  flex: none;
 }
 
 .finish-run-hint {
@@ -4940,7 +5217,14 @@ body.is-store-run .toast-region {
   }
 
   body.is-store-run .store-run-row.is-in-cart {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .store-run-row-cart-actions .btn {
+    min-height: 44px;
+    padding: 0 8px;
   }
 
   .hoot-dialog.finish-run-dialog {
@@ -4950,6 +5234,22 @@ body.is-store-run .toast-region {
 
   .prediction-check-actions .btn {
     min-height: 44px;
+  }
+
+  .finish-run-checks-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .finish-run-checks-bar .btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  .aisle-order-stepper {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
   }
 
 }
@@ -5215,12 +5515,7 @@ body.is-store-run .toast-region {
   }
 }
 
-@media (max-width: 360px) {
-  #view-dashboard > .section-heading {
-    gap: var(--space-3);
-    margin-bottom: var(--space-4);
-  }
-
+@media (max-width: 660px) {
   /* A live trip adds a status strip above the queue. Compact the focused card
      by the same amount so its primary action still clears a 640px viewport. */
   #view-dashboard:has(.current-trip) .item-card {
@@ -5246,6 +5541,13 @@ body.is-store-run .toast-region {
 
   #view-dashboard:has(.current-trip) .horizon-pointer span {
     display: none;
+  }
+}
+
+@media (max-width: 360px) {
+  #view-dashboard > .section-heading {
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
   }
 
   /* The density control adds a row on phones; drop the supportive heading copy

@@ -24,7 +24,7 @@ Do not read archived critique snapshots except the newest, completed plans, sess
 ## Current state
 
 - `main` contains the merged shopping-run feature. There is no active feature branch.
-- Implemented: dashboard with **Next up**, ranked queue, search, 7/14-day calendar; add/edit/delete; log purchase and **Log last**; hash-routed item detail with a next-restock answer, likely window, buying-rhythm ledger, confidence and spending detail, prediction checks, and inline purchase editing; one-time ledger; immersive Shopping run with aisle groups, Watch toggle, **This trip**, and a receipt with the optional post-trip **Was Hoot right?** check; two switchable demo samples; reset demo.
+- Implemented: dashboard with a **List / Calendar** view switcher that swaps the main area in place, an active-trip strip, **Next up**, ranked queue, queue search, **Spacious / Dense** density with an explicit **Steady** fold, a week-aligned **Month** calendar (the default range) with status-colored days, a month brief, and an in-place day panel, plus 7/14-day strips, dated plans with per-item selection and an earlier-due sweep, starting a shopping run from a date, plan-owned trip rosters, and saving a trip back as a plan; add/edit/delete; log purchase and **Log last**; hash-routed item detail with a next-restock answer, likely window, buying-rhythm ledger, confidence and spending detail, prediction checks, and inline purchase editing; one-time ledger; immersive Shopping run with due-date ordering, aisle grouping, Watch toggle, a **Logged** receipt, and a finish receipt with the optional post-trip **Was Hoot right?** check; two switchable demo samples; reset demo.
 - Not implemented: backend integration, authentication, household sharing, reminders, barcode lookup, price trends, export/import, and whole-history prediction drift reporting. Treat these as roadmap, not current behavior.
 
 ## Demo samples
@@ -38,6 +38,8 @@ Switch with the footer **Sample** select. Changing samples asks for confirmation
 
 When changing layout, density, overflow, or task flow, verify both samples at 1440, 980, 390, and 320. A change that only works at starter scale is not verified. Existing exact-value tests intentionally run on starter; add busy coverage when behavior differs by scale. Do not infer the busy sample's rhythms from item names; `tests/demo-data.test.mjs` owns those invariants.
 
+Dashboard density is a real layout mode: **Spacious** is the default; **Dense** uses one compact ledger and folds **Steady** rows behind a summary band. Verify both densities at every width. Dense must never fold search results or the **Next up** item, and the fold band must keep its exact count and “Still tracked.” copy so no one reads it as a filter. `tests/quality/density.spec.js` covers this on the busy household; `document.body.dataset.density` is the QA hook (`spacious` or `dense`).
+
 ## Design constraints
 
 - Warm Ledger only: cream canvas, paper surfaces, warm hairlines, earth inks, sage primary, amber focus, tabular numerals. No dark mode, gradients, glass, glow, web fonts, icon fonts, frameworks, or mascot owl.
@@ -49,7 +51,7 @@ When changing layout, density, overflow, or task flow, verify both samples at 14
 
 - Use the `brainstorming` skill before changing behavior, `impeccable` for scored design reviews, and `web-design-guidelines` for UI code checks.
 - For a whole-system critique, inspect the dashboard, add/log dialogs, item detail, one-time ledger, calendar, and Shopping run at 1440, 980, 390, and 320 widths.
-- Run every whole-system critique against both demo samples. The busy household is the required scale test for density, scanning, and vertical length; the starter household remains the baseline for first-run clarity.
+- Run every whole-system critique against both demo samples and both dashboard densities. The busy household is the required scale test for density, scanning, and vertical length; the starter household remains the baseline for first-run clarity. Dense should be judged for scan speed and the fold’s clarity, not just height.
 - Score all ten Nielsen heuristics only when the surface is an Operate surface; state any degraded sub-agent status honestly.
 - Persist the new snapshot under `.impeccable/critique/` and update this file only when the authoritative doc set changes.
 
