@@ -143,6 +143,18 @@
               <strong id="stat-established">0</strong>
               <p>Using purchase history</p>
             </article>
+            <button
+              class="stat-card stat-card-action"
+              id="stat-card-rhythm"
+              type="button"
+              data-action="open-rhythm-audit"
+              aria-haspopup="dialog"
+              aria-label="Rhythm health audit"
+            >
+              <span>Rhythm health</span>
+              <strong id="stat-rhythm-health">0 clockwork</strong>
+              <p id="stat-rhythm-sub">View cadence audit</p>
+            </button>
             <article class="stat-card">
               <span>One-time</span>
               <strong id="stat-one-time">0</strong>
@@ -667,6 +679,25 @@
       <footer class="dialog-actions">
         <button class="btn btn-secondary" type="button" data-action="finish-run-history" id="finish-run-history">View purchase history</button>
         <button class="btn btn-primary" type="button" data-action="finish-run-done" data-autofocus>Done</button>
+      </footer>
+    </dialog>
+
+    <dialog class="hoot-dialog rhythm-audit-dialog" id="rhythm-audit-dialog" aria-labelledby="rhythm-audit-title">
+      <header class="dialog-header">
+        <div>
+          <h2 id="rhythm-audit-title">Rhythm health & cadence audit</h2>
+          <p class="dialog-subtitle">Historical drift, stability, and baseline calibration for all tracked staples.</p>
+        </div>
+        <button class="icon-button" type="button" data-close aria-label="Close rhythm audit">
+          <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+            <path d="M4.2 4.2l7.6 7.6M11.8 4.2l-7.6 7.6" />
+          </svg>
+        </button>
+      </header>
+      <div class="rhythm-audit-summary" id="rhythm-audit-summary" role="status" aria-live="polite"></div>
+      <div class="rhythm-audit-groups" id="rhythm-audit-groups"></div>
+      <footer class="dialog-actions">
+        <button class="btn btn-primary" type="button" data-close data-autofocus>Done</button>
       </footer>
     </dialog>
 

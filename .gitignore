@@ -26,5 +26,6 @@ test-results/
 .impeccable/
 .logo-explore/
 
-# Agent attachments
+# Agent attachments and internal specs
 .cloud-attachments/
+docs/superpowers/

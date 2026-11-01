@@ -55,6 +55,15 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     ? intervals.reduce((sum, value) => sum + value, 0) / intervals.length
     : null;
 
+  const pivotDate = item.cadencePivotDate ? parseDate(item.cadencePivotDate) : null;
+  const isRecalibrated = Boolean(pivotDate);
+  const activeEffectiveDates = pivotDate
+    ? sortedPurchases
+        .filter((p) => parseDate(p.date) >= pivotDate)
+        .map((p) => parseDate(p.effectiveStartDate ?? p.date))
+    : effectiveDates;
+  const activeCount = activeEffectiveDates.length;
+
   let predictedDate;
   let method;
   let slope = null;
@@ -63,11 +72,14 @@ export function predictionFor(item, referenceDate = startOfDay()) {
   let fittedDates = null;
   let projectionMode = "manual";
 
-  if (purchaseCount < 3) {
+  if (isRecalibrated ? activeCount < 3 : purchaseCount < 3) {
     predictedDate = addDays(latest, item.reorderThresholdDays);
-    method = `Manual ${item.reorderThresholdDays}-day estimate`;
+    method = isRecalibrated
+      ? `Recalibrated baseline (${item.reorderThresholdDays}-day estimate)`
+      : `Manual ${item.reorderThresholdDays}-day estimate`;
   } else {
-    const yValues = effectiveDates.map((date) => Math.round((date - origin) / DAY_MS));
+    const yOrigin = activeEffectiveDates.length ? activeEffectiveDates[0] : origin;
+    const yValues = activeEffectiveDates.map((date) => Math.round((date - yOrigin) / DAY_MS));
     const xValues = yValues.map((_, index) => index);
     const xMean = xValues.reduce((sum, value) => sum + value, 0) / xValues.length;
     const yMean = yValues.reduce((sum, value) => sum + value, 0) / yValues.length;
@@ -101,12 +113,12 @@ export function predictionFor(item, referenceDate = startOfDay()) {
       predictedDate = addDays(latest, averageGap);
       method = `Average interval from ${purchaseCount} purchases`;
     } else {
-      predictedDate = addDays(origin, Math.round(nextY));
-      method = `Learned from ${purchaseCount} purchases`;
+      predictedDate = addDays(yOrigin, Math.round(nextY));
+      method = isRecalibrated ? `Recalibrated from ${activeCount} purchases` : `Learned from ${purchaseCount} purchases`;
       slope = fittedSlope;
       intercept = fittedIntercept;
       rSquared = Number.isFinite(fittedR) ? fittedR : null;
-      fittedDates = fittedYValues.map((value) => addDays(origin, Math.round(value)));
+      fittedDates = fittedYValues.map((value) => addDays(yOrigin, Math.round(value)));
       projectionMode = "regression";
     }
   }
@@ -133,7 +145,7 @@ export function predictionFor(item, referenceDate = startOfDay()) {
         : zone === "watch"
           ? "Watch"
           : "Steady";
-  const maturity = purchaseCount < 3 ? "learning" : "learned";
+  const maturity = (isRecalibrated ? activeCount < 3 : purchaseCount < 3) ? "learning" : "learned";
   const fitStrength =
     rSquared === null
       ? null
@@ -145,11 +157,13 @@ export function predictionFor(item, referenceDate = startOfDay()) {
   const confidence =
     purchaseCount === 0
       ? "No purchases yet"
-      : purchaseCount < 3
-        ? `Learning · ${purchaseCount} of 3 purchases`
-        : rSquared === null
-          ? "Moderate rhythm"
-          : `${fitStrength.charAt(0).toUpperCase()}${fitStrength.slice(1)} rhythm`;
+      : isRecalibrated && activeCount < 3
+        ? `Recalibrated · ${activeCount} of 3 purchases`
+        : purchaseCount < 3
+          ? `Learning · ${purchaseCount} of 3 purchases`
+          : rSquared === null
+            ? "Moderate rhythm"
+            : `${fitStrength.charAt(0).toUpperCase()}${fitStrength.slice(1)} rhythm`;
 
   return {
     date: predictedDate,
@@ -172,6 +186,7 @@ export function predictionFor(item, referenceDate = startOfDay()) {
     fittedDates,
     projectionMode,
     feedbackShiftDays,
+    cadencePivotDate: item.cadencePivotDate ?? null,
   };
 }
 
@@ -191,5 +206,111 @@ export function likelyWindowFor(prediction) {
     shortestGap,
     longestGap,
     wide: (end - start) / DAY_MS > 7,
+  };
+}
+
+export function rhythmDriftFor(item) {
+  if (!item || item.isOneTime) return null;
+
+  const sortedPurchases = [...item.purchases].sort(
+    (left, right) => parseDate(left.date) - parseDate(right.date),
+  );
+  if (sortedPurchases.length < 2) {
+    return {
+      mad: null,
+      netBias: null,
+      trend: "learning",
+      label: "Learning rhythm",
+      baselineInterval: item.reorderThresholdDays ?? 7,
+      recentInterval: item.reorderThresholdDays ?? 7,
+      diffDays: 0,
+      isDrifting: false,
+      cycleCount: 0,
+      stdDev: null,
+    };
+  }
+
+  const effectiveDates = sortedPurchases.map((purchase) =>
+    parseDate(purchase.effectiveStartDate ?? purchase.date),
+  );
+
+  const intervals = effectiveDates.slice(1).map((date, index) => {
+    const previous = effectiveDates[index];
+    return Math.max(1, Math.round((date - previous) / DAY_MS));
+  });
+
+  const cycleCount = intervals.length;
+  const baselineInterval =
+    item.reorderThresholdDays ??
+    Math.round(intervals.reduce((sum, val) => sum + val, 0) / intervals.length);
+
+  const deltas = [];
+  let runningSum = 0;
+  for (let k = 0; k < intervals.length; k += 1) {
+    const expected =
+      k === 0
+        ? (item.reorderThresholdDays ?? intervals[0])
+        : Math.round(runningSum / k);
+    deltas.push(intervals[k] - expected);
+    runningSum += intervals[k];
+  }
+
+  const mad = Math.round(
+    (deltas.reduce((sum, d) => sum + Math.abs(d), 0) / deltas.length) * 10,
+  ) / 10;
+  const netBias = Math.round(
+    (deltas.reduce((sum, d) => sum + d, 0) / deltas.length) * 10,
+  ) / 10;
+
+  const recentWindowSize = Math.min(3, Math.max(2, Math.floor(intervals.length / 2)));
+  const recentSlice = intervals.slice(-recentWindowSize);
+  const recentInterval = Math.round(
+    recentSlice.reduce((sum, val) => sum + val, 0) / recentSlice.length,
+  );
+  const diffDays = recentInterval - baselineInterval;
+
+  const variance =
+    intervals.reduce((sum, val) => sum + (val - baselineInterval) ** 2, 0) /
+    intervals.length;
+  const stdDev = Math.round(Math.sqrt(variance) * 10) / 10;
+
+  let trend;
+  let label;
+  let isDrifting = false;
+
+  if (sortedPurchases.length < 3) {
+    trend = "learning";
+    label = "Learning rhythm";
+  } else if (stdDev > 6 && Math.abs(diffDays) < 3) {
+    trend = "erratic";
+    label = "Erratic rhythm";
+    isDrifting = true;
+  } else if (diffDays >= 3) {
+    trend = "stretching";
+    label = `Cadence stretching (+${diffDays}d)`;
+    isDrifting = true;
+  } else if (diffDays <= -3) {
+    trend = "accelerating";
+    label = `Cadence accelerating (${diffDays}d)`;
+    isDrifting = true;
+  } else if (mad <= 2) {
+    trend = "clockwork";
+    label = "Clockwork rhythm";
+  } else {
+    trend = "steady";
+    label = "Steady rhythm";
+  }
+
+  return {
+    mad,
+    netBias,
+    trend,
+    label,
+    baselineInterval,
+    recentInterval,
+    diffDays,
+    isDrifting,
+    cycleCount,
+    stdDev,
   };
 }

@@ -452,6 +452,25 @@ The receipt asks one optional, inline question for each logged tracked staple: *
 
 The receipt is a 520px sheet on desktop and fills the available height on phones. It scrolls as one body behind a sticky footer at every width; the answer buttons are 42px on desktop and at least 44px tall on phones, and the item list never becomes a nested scroll of its own. The receipt message names how many restock checks are ready rather than saying “predictions updated.”
 
+### Prediction drift, rhythm health, and cadence recalibration
+
+Tracked items analyze their whole historical cadence through Mean Absolute Drift (MAD), net bias, and trend classification:
+- **Status chips:**
+  - `Clockwork`: Sage soft background, Sage ink, text "Clockwork" (high fit, low drift $\le 2$ days).
+  - `Steady`: Paper surface, warm border, Earth ink, text "Steady" (cadence within $\pm 2$ days or 15%).
+  - `Stretching`: Amber soft background, Amber ink, text "Stretching" (recent cadence $> 2$ days longer than baseline).
+  - `Accelerating`: Amber soft background, Amber ink, text "Accelerating" (recent cadence $> 2$ days shorter than baseline).
+  - `Erratic`: Terracotta soft background, Terracotta ink, text "Erratic" (high variance $> 5$ days or low fit).
+  - `Learning`: Slate soft background, Slate ink, text "Learning" ($< 3$ purchases).
+- **Item detail diagnostics:**
+  - Inside `#item-analysis`, a **Rhythm health & drift** card presents the health chip, historical accuracy (e.g., "Accurate within $\pm 1.2$ days across 8 restocks"), and cadence shift analysis.
+  - When stretching or accelerating is detected, an inline Warm Ledger banner explains the cadence shift and surfaces a secondary action: `Recalibrate baseline to N days`.
+  - Recalibrating establishes a `cadencePivotDate`, updating the baseline threshold to match recent buying behavior without discarding historical purchases from spending or ledger views.
+  - Buying rhythm ledger rows corresponding to a recalibration display a `Recalibrated baseline` tag.
+- **Dashboard audit surface:**
+  - The inventory summary carries an interactive **Rhythm health** stat summarizing household health counts.
+  - Tapping opens the native `<dialog>` paper sheet (`#rhythm-audit-dialog`), listing staples grouped by rhythm health with 1-tap inline recalibration for drifting items.
+
 ### Footer and sample picker
 
 The footer carries the sample-data note, a labelled native **Sample** select, and **Reset demo**. The select is 42px on desktop and 44px on phones, with the standard warm control border and amber focus ring. It names both built-in samples with their item counts. Switching is a secondary control, never a primary action; it asks for confirmation because it replaces local data, and **Reset demo** restores whichever sample is active.

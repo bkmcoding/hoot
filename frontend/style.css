@@ -968,6 +968,31 @@ body.is-one-time [data-dialog="log-purchase"] {
   border-color: var(--steady-border);
 }
 
+.status-clockwork {
+  color: var(--steady);
+  background: var(--steady-bg);
+  border-color: var(--steady-border);
+}
+
+.status-stretching,
+.status-accelerating {
+  color: var(--buy-now);
+  background: var(--buy-now-bg);
+  border-color: var(--buy-now-border);
+}
+
+.status-erratic {
+  color: var(--overdue);
+  background: var(--overdue-bg);
+  border-color: var(--overdue-border);
+}
+
+.status-chip.status-recalibrated {
+  color: var(--steady);
+  background: var(--steady-bg);
+  border-color: var(--steady-border);
+}
+
 .status-chip.status-oos {
   color: var(--ink-soft);
   background: var(--learning-bg);
@@ -1021,13 +1046,33 @@ body.is-one-time [data-dialog="log-purchase"] {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   margin: var(--space-8) 0;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-inner);
   background: var(--surface-quiet);
   box-shadow: var(--highlight);
+}
+
+.stat-card-action {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  border: 0;
+  cursor: pointer;
+  appearance: none;
+  border-radius: 0;
+  transition: background-color 140ms ease;
+}
+
+.stat-card-action:hover {
+  background: var(--surface-tint);
+}
+
+.stat-card-action:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
 }
 
 .stat-card {
@@ -2915,6 +2960,90 @@ body[data-density="dense"] .stat-card strong {
   cursor: default;
 }
 
+/* Rhythm health audit dialog */
+
+.hoot-dialog.rhythm-audit-dialog {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.rhythm-audit-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: var(--space-4);
+}
+
+.rhythm-audit-groups {
+  display: grid;
+  gap: var(--space-5);
+  max-height: 56vh;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.rhythm-audit-section {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.rhythm-audit-section-title {
+  font-size: 11px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.rhythm-audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.rhythm-audit-row {
+  border-bottom: 1px solid var(--border);
+}
+
+.rhythm-audit-row:last-child {
+  border-bottom: 0;
+}
+
+.rhythm-audit-cell {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
+
+.rhythm-audit-cell-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.rhythm-audit-link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rhythm-audit-link:hover {
+  color: var(--primary);
+}
+
+.rhythm-audit-metrics {
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.rhythm-audit-action-cell {
+  text-align: right;
+  white-space: nowrap;
+}
+
 .store-run-toolbar[hidden] {
   display: none;
 }
@@ -3969,6 +4098,38 @@ body.is-store-run .toast-region {
   border-top: 1px solid var(--border);
 }
 
+/* Rhythm drift card & recalibration */
+
+.rhythm-drift-card .rail-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.rhythm-drift-card .rail-card-header h2 {
+  margin-bottom: 0;
+}
+
+.drift-recalibration-callout {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin: var(--space-2) 0;
+  border: 1px solid var(--buy-now-border);
+  border-radius: var(--radius-inner);
+  background: var(--buy-now-bg);
+}
+
+.drift-callout-copy {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--buy-now);
+  font-weight: 500;
+}
+
 .rail-correction {
   display: grid;
   gap: 6px;
@@ -4722,6 +4883,10 @@ body.is-store-run .toast-region {
 
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stat-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .item-layout {

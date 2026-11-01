@@ -5,6 +5,7 @@ import {
   likelyWindowFor,
   parseDate,
   predictionFor,
+  rhythmDriftFor,
   startOfDay,
   toISODate,
 } from "./prediction.js";
@@ -829,11 +830,24 @@ import {
     const predictions = tracked.map((item) => predictionFor(item));
     const attention = predictions.filter((prediction) => prediction.daysUntil <= 3).length;
     const established = tracked.filter((item) => item.purchases.length >= 3).length;
+    const itemDrifts = tracked.map(rhythmDriftFor).filter(Boolean);
+    const clockworkCount = itemDrifts.filter((d) => d.trend === "clockwork").length;
+    const driftingCount = itemDrifts.filter((d) => d.isDrifting).length;
+    const learningCount = itemDrifts.filter((d) => d.trend === "learning").length;
 
     $("#stat-tracked").textContent = String(tracked.length);
     $("#stat-attention").textContent = String(attention);
     $("#stat-established").textContent = String(established);
     $("#stat-one-time").textContent = String(oneTime.length);
+
+    const rhythmHealthEl = $("#stat-rhythm-health");
+    const rhythmSubEl = $("#stat-rhythm-sub");
+    if (rhythmHealthEl) {
+      rhythmHealthEl.textContent = `${clockworkCount} clockwork`;
+    }
+    if (rhythmSubEl) {
+      rhythmSubEl.textContent = driftingCount > 0 ? `${driftingCount} drifting · Audit` : `${learningCount} learning · Audit`;
+    }
   }
 
   function horizonPositionFor(daysUntil, compact = false) {
@@ -2891,6 +2905,157 @@ import {
       .join("");
   }
 
+  function renderRhythmAuditContent() {
+    const summaryEl = $("#rhythm-audit-summary");
+    const groupsEl = $("#rhythm-audit-groups");
+    if (!summaryEl || !groupsEl) return;
+
+    const staples = state.items.filter((item) => !item.isOneTime);
+    const itemDrifts = staples
+      .map((item) => ({ item, drift: rhythmDriftFor(item) }))
+      .filter((entry) => Boolean(entry.drift));
+
+    const clockworkItems = itemDrifts.filter((entry) => entry.drift.trend === "clockwork");
+    const steadyItems = itemDrifts.filter((entry) => entry.drift.trend === "steady");
+    const driftingItems = itemDrifts.filter((entry) => entry.drift.isDrifting);
+    const learningItems = itemDrifts.filter((entry) => entry.drift.trend === "learning");
+
+    summaryEl.innerHTML = `
+      <span class="status-chip status-clockwork">${clockworkItems.length} Clockwork</span>
+      <span class="status-chip status-steady">${steadyItems.length} Steady</span>
+      ${driftingItems.length > 0 ? `<span class="status-chip status-stretching">${driftingItems.length} Drifting</span>` : ""}
+      <span class="status-chip status-learning">${learningItems.length} Learning</span>
+    `;
+
+    const renderRows = (entries, isDriftingGroup = false) =>
+      entries
+        .map(
+          ({ item, drift }) => `
+          <tr class="rhythm-audit-row" data-item-id="${escapeHtml(item.id)}">
+            <td class="rhythm-audit-cell rhythm-audit-cell-name">
+              <a href="#/item/${escapeHtml(item.id)}" class="rhythm-audit-link" data-close>${escapeHtml(item.name)}</a>
+            </td>
+            <td class="rhythm-audit-cell">
+              <span class="status-chip status-${drift.trend}">${escapeHtml(drift.label)}</span>
+            </td>
+            <td class="rhythm-audit-cell rhythm-audit-metrics">
+              ${
+                isDriftingGroup
+                  ? `${drift.baselineInterval}d → ${drift.recentInterval}d (diff: ${drift.diffDays > 0 ? `+${drift.diffDays}` : drift.diffDays}d)`
+                  : drift.trend === "learning"
+                    ? `${drift.cycleCount} of 3 purchases`
+                    : `${drift.baselineInterval}d cadence · MAD ±${drift.mad ?? 0}d`
+              }
+            </td>
+            <td class="rhythm-audit-cell rhythm-audit-action-cell">
+              ${
+                isDriftingGroup && (drift.trend === "stretching" || drift.trend === "accelerating")
+                  ? `<button
+                      type="button"
+                      class="btn btn-secondary btn-sm rhythm-recalibrate-btn"
+                      data-action="recalibrate-item-cadence"
+                      data-item-id="${escapeHtml(item.id)}"
+                      data-target-cadence="${drift.recentInterval}"
+                    >
+                      Recalibrate (${drift.recentInterval}d)
+                    </button>`
+                  : ""
+              }
+            </td>
+          </tr>
+        `,
+        )
+        .join("");
+
+    let groupsHtml = "";
+
+    if (driftingItems.length > 0) {
+      groupsHtml += `
+        <section class="rhythm-audit-section" aria-labelledby="rhythm-audit-drifting-title">
+          <h3 class="rhythm-audit-section-title" id="rhythm-audit-drifting-title">Cadence drift & shifted baselines (${driftingItems.length})</h3>
+          <table class="rhythm-audit-table">
+            <tbody>${renderRows(driftingItems, true)}</tbody>
+          </table>
+        </section>
+      `;
+    }
+
+    const stableItems = [...clockworkItems, ...steadyItems];
+    if (stableItems.length > 0) {
+      groupsHtml += `
+        <section class="rhythm-audit-section" aria-labelledby="rhythm-audit-stable-title">
+          <h3 class="rhythm-audit-section-title" id="rhythm-audit-stable-title">Stable rhythms (${stableItems.length})</h3>
+          <table class="rhythm-audit-table">
+            <tbody>${renderRows(stableItems, false)}</tbody>
+          </table>
+        </section>
+      `;
+    }
+
+    if (learningItems.length > 0) {
+      groupsHtml += `
+        <section class="rhythm-audit-section" aria-labelledby="rhythm-audit-learning-title">
+          <h3 class="rhythm-audit-section-title" id="rhythm-audit-learning-title">Learning rhythms (${learningItems.length})</h3>
+          <table class="rhythm-audit-table">
+            <tbody>${renderRows(learningItems, false)}</tbody>
+          </table>
+        </section>
+      `;
+    }
+
+    groupsEl.innerHTML = groupsHtml;
+  }
+
+  function openRhythmAuditDialog(trigger = null) {
+    renderRhythmAuditContent();
+    showDialog($("#rhythm-audit-dialog"), trigger);
+  }
+
+  function recalibrateItemCadence(button) {
+    const itemId = button.dataset.itemId;
+    const targetCadence = Number(button.dataset.targetCadence);
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || !Number.isFinite(targetCadence) || targetCadence <= 0) return;
+
+    const previousPivot = item.cadencePivotDate;
+    const previousCadence = item.reorderThresholdDays;
+
+    const sortedPurchases = [...item.purchases].sort(
+      (left, right) => parseDate(left.date) - parseDate(right.date),
+    );
+    const latestPurchase = sortedPurchases.length ? sortedPurchases[sortedPurchases.length - 1] : null;
+
+    item.cadencePivotDate = latestPurchase ? latestPurchase.date : toISODate(today);
+    item.reorderThresholdDays = Math.round(targetCadence);
+    saveState();
+    render();
+
+    if (currentView === "item" && currentItemId === item.id) {
+      renderItemPage(item);
+    }
+    const auditDialog = $("#rhythm-audit-dialog");
+    if (auditDialog && auditDialog.open) {
+      renderRhythmAuditContent();
+    }
+
+    toast(`Recalibrated ${item.name} baseline to ${item.reorderThresholdDays} days.`, "success", {
+      label: "Undo",
+      onAction: async () => {
+        item.cadencePivotDate = previousPivot;
+        item.reorderThresholdDays = previousCadence;
+        saveState();
+        render();
+        if (currentView === "item" && currentItemId === item.id) {
+          renderItemPage(item);
+        }
+        if (auditDialog && auditDialog.open) {
+          renderRhythmAuditContent();
+        }
+        toast(`${item.name} baseline restored.`);
+      },
+    });
+  }
+
   function openAisleOrderDialog(trigger) {
     renderAisleOrderList();
     showDialog($("#aisle-order-dialog"), trigger);
@@ -3450,6 +3615,7 @@ import {
             <div class="rhythm-head">
               <time class="rhythm-date" datetime="${escapeHtml(purchase.date)}">${formatFullDate(parseDate(purchase.date))}</time>
               ${purchase.earlyRestock && purchase.effectiveStartDate ? `<span class="status-chip status-buffer">Early buffer (${formatDate(parseDate(purchase.effectiveStartDate))})</span>` : ""}
+              ${item.cadencePivotDate && purchase.date >= item.cadencePivotDate ? `<span class="status-chip status-recalibrated">Recalibrated baseline</span>` : ""}
             </div>
             <p class="rhythm-purchase">${escapeHtml(formatQuantity(purchase.quantity, item.unit))} · ${formatPurchasePrice(purchase.price)}${escapeHtml(unitPrice)}</p>
             ${purchaseActionButtons(item, purchase)}
@@ -3725,6 +3891,72 @@ import {
     `;
   }
 
+  function rhythmDriftCard(item, prediction) {
+    const drift = rhythmDriftFor(item);
+    if (!drift) return "";
+
+    const trendLabels = {
+      clockwork: "Clockwork",
+      steady: "Steady",
+      stretching: "Stretching",
+      accelerating: "Accelerating",
+      erratic: "Erratic",
+      learning: "Learning",
+    };
+    const trendTitle = trendLabels[drift.trend] || "Steady";
+
+    const accuracyNote =
+      drift.mad !== null
+        ? `Accurate within ±${drift.mad} day${drift.mad === 1 ? "" : "s"} across ${drift.cycleCount} restock${drift.cycleCount === 1 ? "" : "s"}.`
+        : drift.cycleCount > 0
+          ? `Learning cadence across ${drift.cycleCount} restock${drift.cycleCount === 1 ? "" : "s"}.`
+          : "Not enough purchases yet to measure drift.";
+
+    const recalibrationCallout =
+      drift.isDrifting && (drift.trend === "stretching" || drift.trend === "accelerating")
+        ? `
+        <div class="drift-recalibration-callout" role="region" aria-label="Cadence recalibration callout">
+          <p class="drift-callout-copy">
+            Buying rhythm has shifted: recent restocks average ${drift.recentInterval} days (baseline was ${drift.baselineInterval} days).
+          </p>
+          <button
+            class="btn btn-secondary btn-sm"
+            type="button"
+            data-action="recalibrate-item-cadence"
+            data-item-id="${escapeHtml(item.id)}"
+            data-target-cadence="${drift.recentInterval}"
+          >
+            Recalibrate baseline to ${drift.recentInterval} days
+          </button>
+        </div>
+      `
+        : "";
+
+    const pivotNote = item.cadencePivotDate
+      ? `<p class="rail-note">Baseline recalibrated to ${item.reorderThresholdDays} days on ${formatDate(parseDate(item.cadencePivotDate))}.</p>`
+      : "";
+
+    return `
+      <article class="rail-card rhythm-drift-card" id="item-drift-card" aria-labelledby="rhythm-drift-title">
+        <div class="rail-card-header">
+          <h2 id="rhythm-drift-title">Rhythm health & drift</h2>
+          <span class="status-chip status-${drift.trend}">${trendTitle}</span>
+        </div>
+        <p class="rail-detail">${escapeHtml(accuracyNote)}</p>
+        <dl class="pattern-list">
+          <div><dt>Status</dt><dd>${escapeHtml(drift.label)}</dd></div>
+          <div><dt>Baseline cadence</dt><dd>${drift.baselineInterval} days</dd></div>
+          <div><dt>Recent cadence</dt><dd>${drift.recentInterval} days</dd></div>
+          <div><dt>Mean absolute drift</dt><dd>${drift.mad !== null ? `±${drift.mad}d` : "None"}</dd></div>
+          <div><dt>Net drift bias</dt><dd>${drift.netBias !== null ? `${drift.netBias > 0 ? `+${drift.netBias}` : drift.netBias}d` : "None"}</dd></div>
+        </dl>
+        ${recalibrationCallout}
+        ${pivotNote}
+        <p class="rail-note">Measures how closely purchases follow the expected cadence over time. Recalibrating updates future restock baselines while preserving complete purchase and buying rhythm history.</p>
+      </article>
+    `;
+  }
+
   function renderItemPage(item) {
     const content = $("#item-analysis-content");
     const prediction = predictionFor(item);
@@ -3774,6 +4006,7 @@ import {
           </div>
           <aside class="item-rail" aria-label="Pattern, confidence, and spending details">
             ${patternCard(item, prediction)}
+            ${rhythmDriftCard(item, prediction)}
             ${confidenceCard(item, prediction)}
             ${prediction.purchaseCount ? spendingCard(item) : ""}
             ${checksCard(item)}
@@ -4837,6 +5070,10 @@ import {
         saveTripAsPlan();
       } else if (action === "open-aisle-order") {
         openAisleOrderDialog(actionButton);
+      } else if (action === "open-rhythm-audit") {
+        openRhythmAuditDialog(actionButton);
+      } else if (action === "recalibrate-item-cadence") {
+        recalibrateItemCadence(actionButton);
       } else if (action === "move-aisle-up") {
         moveAisleCategory(actionButton.dataset.category, -1, actionButton);
       } else if (action === "move-aisle-down") {

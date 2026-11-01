@@ -215,7 +215,7 @@ A shopper wants to know when one item is needed again, see why Hoot thinks so, a
 1. Hoot writes `#/item/<id>` and opens the page at the top with focus on the item heading.
 2. Read the **Next restock** answer: date, due phrase, status, likely window when available, and one plain sentence explaining the estimate.
 3. Follow the **Buying rhythm** ledger: each purchase is a node with quantity, price, and unit price; the line between nodes carries the measured gap and, once learned, how it compares with the typical gap.
-4. Check **Pattern**, **Confidence**, **Spending**, and **Your checks** — including the compact unit-price history when two or more prices are known and the active Next up correction — or expand **How Hoot got this date** for the estimate’s basis.
+4. Check **Pattern**, **Confidence**, **Spending**, **Rhythm health & drift**, and **Your checks** — including historical prediction error (Mean Absolute Drift), cadence stability (steady, stretching, accelerating, or erratic), and the 1-tap **Recalibrate baseline** action when cadence shifts — including the compact unit-price history when two or more prices are known and the active Next up correction — or expand **How Hoot got this date** for the estimate’s basis.
 5. Edit or delete a purchase directly in its ledger node.
 6. **Log purchase** is the page’s single primary action; **Edit item** and **Delete** close the page.
 

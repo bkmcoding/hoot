@@ -7,6 +7,7 @@ import {
   addDays,
   likelyWindowFor,
   parseDate,
+  rhythmDriftFor,
   predictionFor,
   startOfDay,
   toISODate,
@@ -277,4 +278,109 @@ test("predictionFor respects effectiveStartDate on early restocks without interv
   // Interval between 10-15 and 10-22 is 7 days, so next predicted date is 10-29
   assert.equal(toISODate(prediction.date), "2026-10-29");
   assert.deepEqual(prediction.intervals, [7, 7, 7]);
+});
+
+test("rhythmDriftFor returns null for one-time items and learning for sparse history", () => {
+  const oneTime = { isOneTime: true, purchases: [] };
+  assert.equal(rhythmDriftFor(oneTime), null);
+
+  const sparse = {
+    isOneTime: false,
+    reorderThresholdDays: 7,
+    purchases: [{ date: "2026-10-01" }],
+  };
+  const drift = rhythmDriftFor(sparse);
+  assert.equal(drift.trend, "learning");
+  assert.equal(drift.isDrifting, false);
+});
+
+test("rhythmDriftFor classifies clockwork cadence with low drift", () => {
+  const item = {
+    isOneTime: false,
+    reorderThresholdDays: 7,
+    purchases: [
+      { date: "2026-09-01" },
+      { date: "2026-09-08" },
+      { date: "2026-09-15" },
+      { date: "2026-09-22" },
+      { date: "2026-09-29" },
+    ],
+  };
+
+  const drift = rhythmDriftFor(item);
+  assert.equal(drift.trend, "clockwork");
+  assert.equal(drift.mad, 0);
+  assert.equal(drift.diffDays, 0);
+  assert.equal(drift.isDrifting, false);
+});
+
+test("rhythmDriftFor detects stretching cadence when recent gaps lengthen", () => {
+  const item = {
+    isOneTime: false,
+    reorderThresholdDays: 7,
+    purchases: [
+      { date: "2026-08-01" },
+      { date: "2026-08-08" },
+      { date: "2026-08-15" },
+      // Gaps stretch to 12 days
+      { date: "2026-08-27" },
+      { date: "2026-09-08" },
+    ],
+  };
+
+  const drift = rhythmDriftFor(item);
+  assert.equal(drift.trend, "stretching");
+  assert.equal(drift.isDrifting, true);
+  assert.ok(drift.diffDays >= 3);
+  assert.equal(drift.recentInterval, 12);
+});
+
+test("rhythmDriftFor detects accelerating cadence when recent gaps contract", () => {
+  const item = {
+    isOneTime: false,
+    reorderThresholdDays: 14,
+    purchases: [
+      { date: "2026-08-01" },
+      { date: "2026-08-15" },
+      { date: "2026-08-29" },
+      // Gaps contract to 7 days
+      { date: "2026-09-05" },
+      { date: "2026-09-12" },
+    ],
+  };
+
+  const drift = rhythmDriftFor(item);
+  assert.equal(drift.trend, "accelerating");
+  assert.equal(drift.isDrifting, true);
+  assert.ok(drift.diffDays <= -3);
+  assert.equal(drift.recentInterval, 7);
+});
+
+test("predictionFor uses cadencePivotDate to recalibrate baseline and learn new rhythm", () => {
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-08-01",
+    // Recalibrated baseline on Oct 1 to 14 days
+    cadencePivotDate: "2026-10-01",
+    reorderThresholdDays: 14,
+    purchases: [
+      // Old 7-day cadence
+      { date: "2026-08-01" },
+      { date: "2026-08-08" },
+      { date: "2026-08-15" },
+      { date: "2026-08-22" },
+      // Post-pivot purchase
+      { date: "2026-10-01" },
+    ],
+  };
+
+  const today = parseDate("2026-10-05");
+  const prediction = predictionFor(item, today);
+
+  // Uses the recalibrated 14-day threshold instead of the old 7-day regression
+  assert.equal(toISODate(prediction.date), "2026-10-15");
+  assert.equal(prediction.maturity, "learning");
+  assert.equal(prediction.confidence, "Recalibrated · 1 of 3 purchases");
+  assert.ok(prediction.method.includes("Recalibrated baseline"));
+  assert.equal(prediction.cadencePivotDate, "2026-10-01");
 });
