@@ -2,6 +2,7 @@ import {
   DAY_MS,
   EARLY_RESTOCK_SHIFT_DAYS,
   addDays,
+  depletionFor,
   likelyWindowFor,
   parseDate,
   predictionFor,
@@ -779,7 +780,8 @@ import {
 
   function loadDashboardView() {
     try {
-      return window.localStorage.getItem(DASHBOARD_VIEW_KEY) === "calendar" ? "calendar" : "list";
+      const stored = window.localStorage.getItem(DASHBOARD_VIEW_KEY);
+      return stored === "calendar" || stored === "shelves" ? stored : "list";
     } catch {
       return "list";
     }
@@ -794,10 +796,18 @@ import {
     const dashboard = $("#view-dashboard");
     if (dashboard) dashboard.dataset.dashboardView = dashboardView;
     document.body.dataset.dashboardView = dashboardView;
+
+    const copy = $("#dashboard-copy");
+    if (copy) {
+      copy.textContent =
+        dashboardView === "shelves"
+          ? "Staples organized by household area."
+          : "The next item to decide, then the rest of your staples.";
+    }
   }
 
   function setDashboardView(value) {
-    const next = value === "calendar" ? "calendar" : "list";
+    const next = value === "calendar" || value === "shelves" ? value : "list";
     if (next === dashboardView) return;
     dashboardView = next;
     try {
@@ -806,7 +816,11 @@ import {
       // The in-memory preference still applies when storage is unavailable.
     }
     syncDashboardViewControls();
-    if (dashboardView === "calendar") renderRestockCalendar();
+    if (dashboardView === "calendar") {
+      renderRestockCalendar();
+    } else if (dashboardView === "shelves") {
+      renderShelves();
+    }
   }
 
   function setDensity(value) {
