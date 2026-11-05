@@ -5,6 +5,7 @@ import {
   DAY_MS,
   EARLY_RESTOCK_SHIFT_DAYS,
   addDays,
+  depletionFor,
   likelyWindowFor,
   parseDate,
   rhythmDriftFor,
@@ -383,4 +384,54 @@ test("predictionFor uses cadencePivotDate to recalibrate baseline and learn new 
   assert.equal(prediction.confidence, "Recalibrated · 1 of 3 purchases");
   assert.ok(prediction.method.includes("Recalibrated baseline"));
   assert.equal(prediction.cadencePivotDate, "2026-10-01");
+});
+
+test("depletionFor returns null for one-time items", () => {
+  const item = { isOneTime: true, purchases: [] };
+  assert.strictEqual(depletionFor(item), null);
+});
+
+test("depletionFor calculates 100% on the day of purchase", () => {
+  const ref = parseDate("2026-11-05");
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-10-01",
+    reorderThresholdDays: 10,
+    purchases: [{ date: "2026-11-05", quantity: 1, price: 5 }],
+  };
+  const result = depletionFor(item, ref);
+  assert.strictEqual(result.percentRemaining, 100);
+  assert.strictEqual(result.status, "steady");
+  assert.ok(result.phrase.includes("100%"));
+});
+
+test("depletionFor tracks mid-cycle depletion", () => {
+  const ref = parseDate("2026-11-05");
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-10-01",
+    reorderThresholdDays: 10,
+    purchases: [{ date: "2026-10-31", quantity: 1, price: 5 }],
+  };
+  // 5 days elapsed out of 10 days expected = 50%
+  const result = depletionFor(item, ref);
+  assert.strictEqual(result.percentRemaining, 50);
+  assert.strictEqual(result.status, "watch");
+  assert.ok(result.phrase.includes("50%"));
+});
+
+test("depletionFor clamps to 0% and counts overdue days when overdue", () => {
+  const ref = parseDate("2026-11-05");
+  const item = {
+    isOneTime: false,
+    createdAt: "2026-10-01",
+    reorderThresholdDays: 10,
+    purchases: [{ date: "2026-10-20", quantity: 1, price: 5 }],
+  };
+  // Due 2026-10-30 -> 6 days overdue on Nov 5
+  const result = depletionFor(item, ref);
+  assert.strictEqual(result.percentRemaining, 0);
+  assert.strictEqual(result.status, "overdue");
+  assert.strictEqual(result.overdueDays, 6);
+  assert.ok(result.phrase.includes("6d overdue"));
 });
