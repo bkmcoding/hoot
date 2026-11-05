@@ -959,6 +959,19 @@ import {
     `;
   }
 
+  function renderDepletionGaugeHtml(depletion, compact = false) {
+    if (!depletion) return "";
+    const fillWidth = depletion.status === "overdue" ? 100 : depletion.percentRemaining;
+    return `
+      <div class="depletion-gauge${compact ? " is-compact" : ""}" role="meter" aria-valuenow="${depletion.percentRemaining}" aria-valuemin="0" aria-valuemax="100" aria-label="${escapeHtml(depletion.phrase)}">
+        <div class="depletion-track">
+          <div class="depletion-fill is-${escapeHtml(depletion.status)}" style="width: ${fillWidth}%;"></div>
+        </div>
+        <span class="depletion-label">${escapeHtml(depletion.phrase)}</span>
+      </div>
+    `;
+  }
+
   function nextUpCard(item, prediction) {
     const unitText = item.unit ? ` · ${escapeHtml(item.unit)}` : "";
     const logLastButton = item.purchases.length
@@ -991,6 +1004,7 @@ import {
           </div>
         </div>
         ${restockHorizonLane(item, prediction)}
+        ${renderDepletionGaugeHtml(depletionFor(item))}
         <div class="item-card-footer">
           <div class="item-actions">
             <button class="btn btn-primary" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
@@ -1018,6 +1032,7 @@ import {
           </h3>
           <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
           ${isOutOfStockToday(item.id) ? '<span class="status-chip status-oos">Out of stock</span>' : ""}
+          ${renderDepletionGaugeHtml(depletionFor(item), true)}
         </div>
         <strong class="item-row-due">${formatFullDate(prediction.date)}</strong>
         <div class="item-row-actions">
@@ -3584,6 +3599,7 @@ import {
           </div>
           <p class="restock-answer-date">${formatFullDate(prediction.date)}</p>
           <p class="restock-answer-due">${escapeHtml(formatDue(prediction.daysUntil))}</p>
+          ${renderDepletionGaugeHtml(depletionFor(item))}
           <p class="restock-answer-why">${escapeHtml(rhythmSentence(item, prediction))}</p>
           ${answerWindowLine(prediction)}
         </div>
