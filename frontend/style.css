@@ -5453,6 +5453,10 @@ body.is-store-run .toast-region {
     padding-block: 14px;
   }
 
+  .item-card .depletion-gauge {
+    display: none;
+  }
+
   .item-card-header {
     gap: 6px;
   }
@@ -5517,11 +5521,11 @@ body.is-store-run .toast-region {
 
   #add-item-dialog .dialog-header,
   #add-item-dialog .item-type-choice {
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-2);
   }
 
   #add-item-dialog .field {
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-2);
   }
 
   #add-item-dialog .field-row .field-hint {

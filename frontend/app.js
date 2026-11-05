@@ -1118,6 +1118,7 @@ import {
 
     const [nextUp, ...remainingItems] = tracked;
     const focusedCard = nextUpCard(nextUp.item, nextUp.prediction);
+    renderShelves();
 
     if (!searchTerm) {
       const dense = density === "dense";
@@ -1184,7 +1185,6 @@ import {
       </section>
     `;
     syncNextUpDock();
-    renderShelves();
   }
 
   function renderShelves() {
