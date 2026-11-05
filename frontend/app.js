@@ -39,6 +39,13 @@ import {
   const escapeHtml = (value) =>
     String(value ?? "").replace(/[&<>"']/g, (character) => htmlEntities[character]);
 
+  const slugify = (value) =>
+    String(value ?? "")
+      .toLowerCase()
+      .replace(/&/g, "and")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
   const SAMPLE_IDS = new Set(DEMO_SAMPLES.map((sample) => sample.id));
   const normalizeSampleId = (value) => (SAMPLE_IDS.has(value) ? value : "starter");
   const sampleFor = (value) =>
@@ -1105,6 +1112,7 @@ import {
           </div>
         `;
       syncNextUpDock();
+      renderShelves();
       return;
     }
 
@@ -1176,6 +1184,135 @@ import {
       </section>
     `;
     syncNextUpDock();
+    renderShelves();
+  }
+
+  function renderShelves() {
+    const container = $("#dashboard-shelves");
+    if (!container) return;
+
+    const hasTrackedItems = state.items.some((item) => !item.isOneTime);
+    if (!hasTrackedItems) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <h2>No tracked items yet</h2>
+          <p>Add a household staple and Hoot will start organizing your pantry shelves.</p>
+          <button class="btn btn-primary" type="button" data-action="add-item">Add your first item</button>
+        </div>
+      `;
+      return;
+    }
+
+    const rawSearchTerm = queueSearch.trim();
+    const searchTerm = rawSearchTerm.toLowerCase();
+    const allTracked = rankedTrackedEntries();
+
+    const filtered = searchTerm
+      ? allTracked.filter(({ item }) => matchesQueueSearch(item, searchTerm))
+      : allTracked;
+
+    if (searchTerm && !filtered.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <h2>No matching staples</h2>
+          <p>No items matched \u201C${escapeHtml(rawSearchTerm)}\u201D.</p>
+          <button class="btn btn-secondary" type="button" data-action="clear-search">Clear search</button>
+        </div>
+      `;
+      return;
+    }
+
+    // Group items by category
+    const categoryMap = new Map();
+    for (const { item, prediction } of filtered) {
+      const cat = item.category || "Uncategorized";
+      if (!categoryMap.has(cat)) {
+        categoryMap.set(cat, []);
+      }
+      categoryMap.get(cat).push({ item, prediction });
+    }
+
+    const urgencyScore = (entries) => {
+      if (entries.some((e) => e.prediction.zone === "overdue")) return 0;
+      if (entries.some((e) => e.prediction.zone === "buy-now")) return 1;
+      if (entries.some((e) => e.prediction.zone === "watch")) return 2;
+      return 3;
+    };
+
+    const sortedCategories = [...categoryMap.entries()].sort(([catA, entriesA], [catB, entriesB]) => {
+      const scoreA = urgencyScore(entriesA);
+      const scoreB = urgencyScore(entriesB);
+      if (scoreA !== scoreB) return scoreA - scoreB;
+      return catA.localeCompare(catB);
+    });
+
+    const ledgersHtml = sortedCategories
+      .map(([category, entries]) => {
+        const count = entries.length;
+        const countWord = count === 1 ? "item" : "items";
+        const urgentCount = entries.filter(
+          (e) => e.prediction.zone === "overdue" || e.prediction.zone === "buy-now",
+        ).length;
+        const alertChip = urgentCount
+          ? `<span class="status-chip status-buy-now">${urgentCount} needs attention</span>`
+          : "";
+
+        const cardsHtml = entries
+          .map(({ item, prediction }) => {
+            const depletion = depletionFor(item);
+            const unitText = item.unit ? `<span class="shelf-card-unit">${escapeHtml(item.unit)}</span>` : "";
+            const isOos = isOutOfStockToday(item.id);
+            const oosChip = isOos ? `<span class="status-chip status-oos">Out of stock</span>` : "";
+
+            return `
+              <article class="shelf-card horizon-${escapeHtml(prediction.zone)}" data-item-id="${escapeHtml(item.id)}">
+                <div class="shelf-card-header">
+                  <div>
+                    <h3 class="shelf-card-title">
+                      <button
+                        class="item-title-button"
+                        type="button"
+                        data-action="detail"
+                        data-id="${escapeHtml(item.id)}"
+                      >${escapeHtml(item.name)}</button>
+                    </h3>
+                    ${unitText}
+                  </div>
+                  <div class="shelf-card-meta">
+                    <span class="status-chip status-${escapeHtml(prediction.zone)}">${escapeHtml(prediction.statusLabel)}</span>
+                    ${oosChip}
+                  </div>
+                </div>
+                <div class="shelf-card-due">${formatFullDate(prediction.date)} · ${escapeHtml(formatDue(prediction.daysUntil))}</div>
+                ${renderDepletionGaugeHtml(depletion)}
+                <div class="shelf-card-footer">
+                  <button class="btn btn-secondary btn-sm shelf-card-action" type="button" data-action="log" data-id="${escapeHtml(item.id)}">Log purchase</button>
+                  <button class="btn btn-ghost btn-sm" type="button" data-action="detail" data-id="${escapeHtml(item.id)}" aria-label="Details for ${escapeHtml(item.name)}">Details</button>
+                </div>
+              </article>
+            `;
+          })
+          .join("");
+
+        const catSlug = slugify(category);
+        return `
+          <section class="shelf-ledge" aria-labelledby="shelf-${escapeHtml(catSlug)}">
+            <header class="shelf-header">
+              <div class="shelf-title-group">
+                <h2 id="shelf-${escapeHtml(catSlug)}" class="shelf-title">${escapeHtml(category)}</h2>
+                <span class="shelf-count">${count} ${countWord}</span>
+              </div>
+              ${alertChip}
+            </header>
+            <div class="shelf-grid">
+              ${cardsHtml}
+            </div>
+          </section>
+        `;
+      })
+      .join("");
+
+    container.innerHTML = ledgersHtml;
   }
 
   function calendarItemButton(item, prediction) {
