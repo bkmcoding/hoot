@@ -18,6 +18,11 @@ app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
+// Minimal API endpoint for health checking
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }));
+
 app.MapControllers();
 
 app.Run();
+
+public partial class Program { }
