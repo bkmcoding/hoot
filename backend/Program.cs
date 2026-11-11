@@ -6,15 +6,24 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-// Register EF Core DbContext with PostgreSQL
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? "Host=localhost;Database=hoot;Username=postgres;Password=postgres";
-
+// Register EF Core DbContext with provider selection (PostgreSQL for live, InMemory for tests)
 builder.Services.AddDbContext<HootDbContext>(options =>
 {
-    options.UseNpgsql(connectionString);
+    var provider = builder.Configuration["DatabaseProvider"];
+    if (string.Equals(provider, "InMemory", StringComparison.OrdinalIgnoreCase))
+    {
+        var inMemoryDbName = builder.Configuration["InMemoryDbName"] ?? "HootInMemoryDb";
+        options.UseInMemoryDatabase(inMemoryDbName);
+    }
+    else
+    {
+        var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+            ?? "Host=localhost;Database=hoot;Username=postgres;Password=postgres";
+        options.UseNpgsql(connectionString);
+    }
 });
 
 var app = builder.Build();

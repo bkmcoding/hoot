@@ -1,3 +1,4 @@
+using HootApi.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace HootApi.Data;
@@ -12,8 +13,19 @@ public class HootDbContext : DbContext
     {
     }
 
+    public DbSet<Item> Items => Set<Item>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<Item>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
+            entity.Property(e => e.Unit).HasMaxLength(50);
+            entity.HasIndex(e => new { e.HouseholdId, e.Name });
+        });
     }
 }
