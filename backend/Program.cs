@@ -1,7 +1,8 @@
+using HootApi.Middleware;
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -18,8 +19,15 @@ app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
-// Minimal API endpoint for health checking
+// Enforce X-Household-Id header on all API endpoints
+app.UseMiddleware<HouseholdContextMiddleware>();
+
+// Minimal API endpoint for health checking (exempt from middleware)
 app.MapGet("/api/health", () => Results.Ok(new { status = "healthy" }));
+
+// Test endpoint to inspect current household context
+app.MapGet("/api/test-context", (HttpContext ctx) =>
+    Results.Ok(new { householdId = ctx.Items["HouseholdId"]?.ToString() }));
 
 app.MapControllers();
 
