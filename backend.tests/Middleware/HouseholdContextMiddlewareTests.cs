@@ -1,15 +1,15 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
+using HootApi.Tests.Helpers;
 using Xunit;
 
 namespace HootApi.Tests.Middleware;
 
-public class HouseholdContextMiddlewareTests : IClassFixture<WebApplicationFactory<Program>>
+public class HouseholdContextMiddlewareTests : IClassFixture<HootTestFactory>
 {
     private readonly HttpClient _client;
 
-    public HouseholdContextMiddlewareTests(WebApplicationFactory<Program> factory)
+    public HouseholdContextMiddlewareTests(HootTestFactory factory)
     {
         _client = factory.CreateClient();
     }
@@ -22,7 +22,7 @@ public class HouseholdContextMiddlewareTests : IClassFixture<WebApplicationFacto
 
         // Assert: Middleware should block this at the front door with HTTP 400
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        
+
         var message = await response.Content.ReadAsStringAsync();
         Assert.Contains("Missing or empty X-Household-Id", message);
     }
@@ -39,7 +39,7 @@ public class HouseholdContextMiddlewareTests : IClassFixture<WebApplicationFacto
 
         // Assert
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        
+
         var message = await response.Content.ReadAsStringAsync();
         Assert.Contains("Invalid X-Household-Id format", message);
     }
@@ -57,7 +57,7 @@ public class HouseholdContextMiddlewareTests : IClassFixture<WebApplicationFacto
 
         // Assert
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        
+
         var data = await response.Content.ReadFromJsonAsync<TestContextResponse>();
         Assert.NotNull(data);
         Assert.Equal(validId.ToString(), data.HouseholdId);

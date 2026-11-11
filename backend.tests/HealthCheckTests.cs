@@ -1,14 +1,14 @@
 using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
+using HootApi.Tests.Helpers;
 using Xunit;
 
 namespace HootApi.Tests;
 
-public class HealthCheckTests : IClassFixture<WebApplicationFactory<Program>>
+public class HealthCheckTests : IClassFixture<HootTestFactory>
 {
     private readonly HttpClient _client;
 
-    public HealthCheckTests(WebApplicationFactory<Program> factory)
+    public HealthCheckTests(HootTestFactory factory)
     {
         _client = factory.CreateClient();
     }
