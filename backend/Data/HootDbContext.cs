@@ -14,6 +14,7 @@ public class HootDbContext : DbContext
     }
 
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<Purchase> Purchases => Set<Purchase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -27,7 +28,25 @@ public class HootDbContext : DbContext
             entity.Property(e => e.Unit).HasMaxLength(50);
             entity.HasIndex(e => new { e.HouseholdId, e.Name });
 
-            // Global Query Filter: Exclude soft-deleted records from standard queries
+            // Global Query Filter: Exclude soft-deleted items across all queries
+            entity.HasQueryFilter(e => !e.IsDeleted);
+        });
+
+        modelBuilder.Entity<Purchase>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Quantity).HasPrecision(10, 2);
+            entity.Property(e => e.Price).HasPrecision(10, 2);
+            entity.Property(e => e.FeedbackVerdict).HasMaxLength(20);
+
+            entity.HasOne(e => e.Item)
+                  .WithMany(i => i.Purchases)
+                  .HasForeignKey(e => e.ItemId)
+                  .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => new { e.HouseholdId, e.ItemId, e.Date });
+
+            // Global Query Filter: Exclude soft-deleted purchases across all queries
             entity.HasQueryFilter(e => !e.IsDeleted);
         });
     }
