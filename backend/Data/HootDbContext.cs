@@ -26,6 +26,9 @@ public class HootDbContext : DbContext
             entity.Property(e => e.Category).IsRequired().HasMaxLength(50);
             entity.Property(e => e.Unit).HasMaxLength(50);
             entity.HasIndex(e => new { e.HouseholdId, e.Name });
+
+            // Global Query Filter: Exclude soft-deleted records from standard queries
+            entity.HasQueryFilter(e => !e.IsDeleted);
         });
     }
 }

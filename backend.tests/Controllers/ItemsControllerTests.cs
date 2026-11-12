@@ -125,4 +125,46 @@ public class ItemsControllerTests : IClassFixture<HootTestFactory>
         Assert.NotNull(itemsB);
         Assert.Empty(itemsB);
     }
+
+    [Fact]
+    public async Task DeleteItem_ExistingItem_ReturnsNoContent204_AndHidesFromQueries()
+    {
+        // Arrange: Create item to delete
+        var createPayload = new CreateItemRequest(null, "Unsalted Butter", "Dairy", "stick", 14);
+        using var createReq = CreateRequest(HttpMethod.Post, "/api/items", createPayload);
+        var createResponse = await _client.SendAsync(createReq);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var createdItem = await createResponse.Content.ReadFromJsonAsync<ItemResponse>();
+        Assert.NotNull(createdItem);
+
+        // Act: Delete the item
+        using var deleteReq = CreateRequest(HttpMethod.Delete, $"/api/items/{createdItem.Id}");
+        var deleteResponse = await _client.SendAsync(deleteReq);
+
+        // Assert: Returns 204 No Content
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        // Verify: Item is now excluded from GET /api/items via Global Query Filter
+        using var getListReq = CreateRequest(HttpMethod.Get, "/api/items");
+        var listResponse = await _client.SendAsync(getListReq);
+        var items = await listResponse.Content.ReadFromJsonAsync<List<ItemResponse>>();
+        Assert.NotNull(items);
+        Assert.DoesNotContain(items, i => i.Id == createdItem.Id);
+
+        // Verify: Direct GET /api/items/{id} returns 404 Not Found
+        using var getSingleReq = CreateRequest(HttpMethod.Get, $"/api/items/{createdItem.Id}");
+        var singleResponse = await _client.SendAsync(getSingleReq);
+        Assert.Equal(HttpStatusCode.NotFound, singleResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task DeleteItem_NonExistentItem_ReturnsNotFound404()
+    {
+        // Act
+        using var deleteReq = CreateRequest(HttpMethod.Delete, "/api/items/does-not-exist");
+        var response = await _client.SendAsync(deleteReq);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }

@@ -127,4 +127,23 @@ public class ItemsController : ControllerBase
 
         return CreatedAtAction(nameof(GetItemById), new { id = item.Id }, response);
     }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteItem(string id)
+    {
+        var householdId = GetHouseholdId();
+        var item = await _db.Items.FirstOrDefaultAsync(i => i.Id == id && i.HouseholdId == householdId);
+        if (item == null)
+        {
+            return NotFound();
+        }
+
+        // Soft delete: Mark deleted and update timestamp for sync tracking
+        item.IsDeleted = true;
+        item.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return NoContent();
+    }
 }
