@@ -137,4 +137,54 @@ public class PurchasesController : ControllerBase
 
         return CreatedAtAction(nameof(GetPurchaseById), new { itemId, purchaseId = purchase.Id }, response);
     }
+
+    [HttpPut("{purchaseId}")]
+    public async Task<ActionResult<PurchaseResponse>> UpdatePurchaseFeedback(
+        string itemId,
+        string purchaseId,
+        [FromBody] UpdatePurchaseFeedbackRequest request)
+    {
+        var householdId = GetHouseholdId();
+
+        var purchase = await _db.Purchases
+            .FirstOrDefaultAsync(p => p.Id == purchaseId && p.ItemId == itemId && p.HouseholdId == householdId);
+
+        if (purchase == null)
+        {
+            return NotFound();
+        }
+
+        // Apply feedback updates
+        purchase.EarlyRestock = request.EarlyRestock;
+        if (request.EffectiveStartDate.HasValue)
+        {
+            purchase.EffectiveStartDate = request.EffectiveStartDate.Value;
+        }
+        if (!string.IsNullOrWhiteSpace(request.FeedbackVerdict))
+        {
+            purchase.FeedbackVerdict = request.FeedbackVerdict;
+        }
+        if (request.FeedbackPredictedDate.HasValue)
+        {
+            purchase.FeedbackPredictedDate = request.FeedbackPredictedDate.Value;
+        }
+
+        purchase.UpdatedAt = DateTimeOffset.UtcNow;
+
+        await _db.SaveChangesAsync();
+
+        return Ok(new PurchaseResponse(
+            purchase.Id,
+            purchase.ItemId,
+            purchase.Date,
+            purchase.Quantity,
+            purchase.Price,
+            purchase.EarlyRestock,
+            purchase.EffectiveStartDate,
+            purchase.FeedbackVerdict,
+            purchase.FeedbackPredictedDate,
+            purchase.CreatedAt,
+            purchase.UpdatedAt
+        ));
+    }
 }

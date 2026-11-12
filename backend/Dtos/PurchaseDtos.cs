@@ -15,6 +15,16 @@ public record LogPurchaseRequest(
 );
 
 /// <summary>
+/// Incoming request payload for updating restock feedback on a purchase ("Was Hoot right?").
+/// </summary>
+public record UpdatePurchaseFeedbackRequest(
+    bool EarlyRestock,
+    DateOnly? EffectiveStartDate = null,
+    string? FeedbackVerdict = null,
+    DateOnly? FeedbackPredictedDate = null
+);
+
+/// <summary>
 /// Outgoing response payload representing a logged purchase.
 /// </summary>
 public record PurchaseResponse(

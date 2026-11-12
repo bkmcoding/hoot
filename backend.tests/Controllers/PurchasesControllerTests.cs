@@ -110,4 +110,55 @@ public class PurchasesControllerTests : IClassFixture<HootTestFactory>
         Assert.Equal(date1, list[0].Date);
         Assert.Equal(date2, list[1].Date);
     }
+
+    [Fact]
+    public async Task UpdateFeedback_ExistingPurchase_ReturnsOk_WithUpdatedValues()
+    {
+        // Arrange
+        var item = await CreateTestItemAsync("Greek Yogurt");
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var initialPayload = new LogPurchaseRequest(null, today, 2, 6.99m);
+        using var createReq = CreateRequest(HttpMethod.Post, $"/api/items/{item.Id}/purchases", initialPayload);
+        var createResponse = await _client.SendAsync(createReq);
+        Assert.Equal(HttpStatusCode.Created, createResponse.StatusCode);
+        var purchase = await createResponse.Content.ReadFromJsonAsync<PurchaseResponse>();
+        Assert.NotNull(purchase);
+
+        // Act: Update feedback ("Still had some" -> early restock)
+        var shiftedDate = today.AddDays(3);
+        var feedbackPayload = new UpdatePurchaseFeedbackRequest(
+            EarlyRestock: true,
+            EffectiveStartDate: shiftedDate,
+            FeedbackVerdict: "early",
+            FeedbackPredictedDate: today
+        );
+
+        using var updateReq = CreateRequest(HttpMethod.Put, $"/api/items/{item.Id}/purchases/{purchase.Id}", feedbackPayload);
+        var updateResponse = await _client.SendAsync(updateReq);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.OK, updateResponse.StatusCode);
+        var updated = await updateResponse.Content.ReadFromJsonAsync<PurchaseResponse>();
+        Assert.NotNull(updated);
+        Assert.Equal(purchase.Id, updated.Id);
+        Assert.True(updated.EarlyRestock);
+        Assert.Equal(shiftedDate, updated.EffectiveStartDate);
+        Assert.Equal("early", updated.FeedbackVerdict);
+        Assert.Equal(today, updated.FeedbackPredictedDate);
+    }
+
+    [Fact]
+    public async Task UpdateFeedback_NonExistentPurchase_ReturnsNotFound404()
+    {
+        // Arrange
+        var item = await CreateTestItemAsync("Almond Butter");
+        var feedbackPayload = new UpdatePurchaseFeedbackRequest(EarlyRestock: true);
+        using var updateReq = CreateRequest(HttpMethod.Put, $"/api/items/{item.Id}/purchases/non-existent-purchase", feedbackPayload);
+
+        // Act
+        var response = await _client.SendAsync(updateReq);
+
+        // Assert
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
 }
