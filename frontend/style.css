@@ -5177,6 +5177,21 @@ body.is-store-run .toast-region {
 
   .horizon-rail {
     margin-top: 24px;
+    /* Keep the overdue boundary at one third so the Today marker and pointer stay aligned. */
+    grid-template-columns: 7fr 4.25fr 3.75fr 6fr;
+  }
+
+  .horizon-labels {
+    grid-template-columns: 7fr 4.75fr 3.5fr 5.75fr;
+  }
+
+  .horizon-labels span {
+    font-size: 10.5px;
+    letter-spacing: -0.01em;
+  }
+
+  .horizon-pointer {
+    left: var(--zone-pointer-position-compact, var(--zone-pointer-position, 50%));
   }
 
   .item-row {
