@@ -581,12 +581,14 @@ body.is-one-time [data-dialog="log-purchase"] {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  max-width: 100%;
 }
 
 .sample-control select {
   appearance: none;
   min-height: 42px;
-  max-width: 260px;
+  max-width: min(260px, 100%);
+  min-width: 0;
   padding: 0 34px 0 12px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
@@ -4972,6 +4974,20 @@ body.is-store-run .toast-region {
     min-height: 44px;
   }
 
+  .footer-controls {
+    width: 100%;
+  }
+
+  .sample-control {
+    width: 100%;
+  }
+
+  .sample-control select {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
   .app-nav {
     justify-self: stretch;
     gap: var(--space-2);
@@ -5588,26 +5604,36 @@ body.is-store-run .toast-region {
     display: none;
   }
 
+  .app-frame {
+    padding-inline: 8px;
+  }
+
+  .store-run-group {
+    padding: 8px 6px;
+  }
+
   .store-run-row {
-    padding: 6px 0 6px 8px;
+    padding: 6px 0 6px 6px;
     gap: 6px;
   }
 
   .store-run-row-main strong {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .store-run-row .btn {
-    min-width: 52px;
-    padding-inline: 8px;
+    min-width: 48px;
+    padding-inline: 6px;
+    font-size: 13px;
   }
 
   .store-run-row .status-chip {
-    padding-inline: 6px;
+    padding-inline: 5px;
+    font-size: 11px;
   }
 
   .store-run-row-heading {
-    gap: 2px 6px;
+    gap: 2px 4px;
   }
 
   .store-run-row-main {
@@ -5615,11 +5641,12 @@ body.is-store-run .toast-region {
   }
 
   .store-run-row-meta {
-    gap: 2px 6px;
+    gap: 2px 4px;
+    font-size: 12px;
   }
 
   .store-run-row-skips {
-    gap: 6px;
+    gap: 4px;
   }
 
   .store-run-row .store-run-skip,
@@ -5627,7 +5654,7 @@ body.is-store-run .toast-region {
     min-width: 0;
     min-height: 44px;
     padding: 0 2px;
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 

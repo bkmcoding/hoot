@@ -1150,23 +1150,6 @@ test("keeps the mobile viewport within the horizontal bounds", async ({ page }) 
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/");
 
-  const debugInfo = await page.evaluate(() => {
-    const sw = document.documentElement.scrollWidth;
-    const cw = document.documentElement.clientWidth;
-    const iw = window.innerWidth;
-    const offenders = Array.from(document.querySelectorAll("*"))
-      .filter((el) => el.getBoundingClientRect().right > cw || el.scrollWidth > cw)
-      .map((el) => ({
-        tag: el.tagName,
-        id: el.id,
-        cls: el.className,
-        right: el.getBoundingClientRect().right,
-        scrollWidth: el.scrollWidth,
-      }));
-    return { sw, cw, iw, offenders: offenders.slice(0, 10) };
-  });
-  console.log("DEBUG VIEWPORT at 320:", JSON.stringify(debugInfo));
-
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });

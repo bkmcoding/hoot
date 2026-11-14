@@ -892,14 +892,6 @@ test("keeps phone Log actions compact and trailing", async ({ page }) => {
   const button = row.getByRole("button", { name: "Log Buy-now Eggs", exact: true });
   const rowBox = await row.boundingBox();
   const buttonBox = await button.boundingBox();
-  console.log("DEBUG STORE RUN ROW:", {
-    rowBox,
-    mainBox: await row.locator('.store-run-row-main').boundingBox(),
-    headingBox: await row.locator('.store-run-row-heading').boundingBox(),
-    metaBox: await row.locator('.store-run-row-meta').boundingBox(),
-    skipsBox: await row.locator('.store-run-row-skips').boundingBox(),
-    btnBox: buttonBox,
-  });
 
   expect(rowBox.height).toBeLessThan(110);
   expect(buttonBox.height).toBeGreaterThanOrEqual(44);
