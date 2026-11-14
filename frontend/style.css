@@ -4019,6 +4019,11 @@ body.is-store-run .toast-region {
   gap: var(--space-3);
   align-content: start;
   align-items: start;
+  min-width: 0;
+}
+
+.item-rail > * {
+  min-width: 0;
 }
 
 .item-evidence-line {
@@ -4265,6 +4270,8 @@ body.is-store-run .toast-region {
   margin: 8px 0 2px;
   cursor: pointer;
   touch-action: manipulation;
+  overflow: hidden;
+  border-radius: var(--radius-segment);
 }
 
 .price-spark-svg {
@@ -5514,12 +5521,17 @@ body.is-store-run .toast-region {
 
   .horizon-rail {
     margin-top: 20px;
-  }
-
-  .horizon-rail,
-  .horizon-labels {
     /* Keep the overdue boundary at one third so the Today marker and pointer stay aligned. */
     grid-template-columns: 7fr 4.25fr 3.75fr 6fr;
+  }
+
+  .horizon-labels {
+    grid-template-columns: 7fr 4.75fr 3.5fr 5.75fr;
+  }
+
+  .horizon-labels span {
+    font-size: 10px;
+    letter-spacing: -0.01em;
   }
 
   .horizon-pointer {
@@ -5823,16 +5835,38 @@ body.is-store-run .toast-region {
   }
 
   #view-dashboard:has(.current-trip) .stats-grid {
-    margin: 4px 0 8px;
+    margin: 2px 0 6px;
+  }
+
+  #view-dashboard:has(.current-trip) .current-trip {
+    padding: 3px 6px;
+  }
+
+  #view-dashboard:has(.current-trip) #current-trip-slot {
+    margin-bottom: 2px;
+  }
+
+  #view-dashboard:has(.current-trip) .app-main {
+    padding-top: 6px;
   }
 
   #view-dashboard:has(.current-trip) .item-card {
-    gap: 4px;
-    padding-block: 6px;
+    gap: 2px;
+    padding-block: 4px;
   }
 
   #view-dashboard:has(.current-trip) .item-card-footer {
-    padding-top: 4px;
+    padding-top: 2px;
+  }
+
+  .detail-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .drift-recalibration-callout .btn {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
   }
 }
 

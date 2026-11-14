@@ -123,14 +123,31 @@ test("rhythm audit and item drift cards fit viewports without overflow", async (
   }
 
   await auditDialog.getByRole("button", { name: "Done" }).click();
+  await expect(auditDialog).toBeHidden();
 
   // Test item page across viewports
   await page.goto("/#/item/item-paper-towels");
   for (const width of [1440, 980, 390, 320]) {
     await page.setViewportSize({ width, height: 800 });
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow, `item detail page overflow at ${width}px`).toBeLessThanOrEqual(0);
+    const overflowReport = await page.evaluate(() => {
+      const sw = document.documentElement.scrollWidth;
+      const cw = document.documentElement.clientWidth;
+      const diff = sw - cw;
+      if (diff <= 0) return { diff: 0, offenders: [] };
+      const offenders = [];
+      for (const el of document.querySelectorAll("*")) {
+        const r = el.getBoundingClientRect();
+        if (r.right > cw + 0.5) {
+          offenders.push({
+            tag: el.tagName,
+            id: el.id,
+            cls: el.className,
+            right: r.right,
+          });
+        }
+      }
+      return { diff, offenders };
+    });
+    expect(overflowReport.diff, `item detail page overflow at ${width}px: ${JSON.stringify(overflowReport.offenders)}`).toBeLessThanOrEqual(0);
   }
 });
