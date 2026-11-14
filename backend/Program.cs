@@ -1,5 +1,6 @@
 using HootApi.Data;
 using HootApi.Middleware;
+using HootApi.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
+
+// Register application services
+builder.Services.AddScoped<DemoSeedService>();
 
 // Register EF Core DbContext with provider selection (PostgreSQL for live, InMemory for tests)
 builder.Services.AddDbContext<HootDbContext>(options =>
