@@ -55,6 +55,10 @@ Dashboard density is a real layout mode: **Spacious** is the default; **Dense** 
 - Score all ten Nielsen heuristics only when the surface is an Operate surface; state any degraded sub-agent status honestly.
 - Persist the new snapshot under `.impeccable/critique/` and update this file only when the authoritative doc set changes.
 
+## Commit attribution
+
+Commits are authored by the repository owner only. Never add `Co-authored-by`, `Generated with`, or any other trailer, footer, or signature naming Codebuff, an AI agent, or a bot to a commit message. If a change would otherwise introduce one, omit it rather than asking.
+
 ## Change control
 
 1. `DESIGN.md` first for durable visual or component rules.

@@ -314,3 +314,51 @@ export function rhythmDriftFor(item) {
     stdDev,
   };
 }
+
+export function depletionFor(item, referenceDate = startOfDay()) {
+  if (!item || item.isOneTime) return null;
+
+  const today = startOfDay(referenceDate);
+  const prediction = predictionFor(item, today);
+  if (!prediction) return null;
+
+  const sortedPurchases = [...(item.purchases || [])].sort(
+    (left, right) => parseDate(left.date) - parseDate(right.date),
+  );
+  const latestPurchase = sortedPurchases[sortedPurchases.length - 1] ?? null;
+  const originDate = latestPurchase
+    ? parseDate(latestPurchase.effectiveStartDate ?? latestPurchase.date)
+    : parseDate(item.createdAt);
+
+  const predictedDate = prediction.date;
+  const cycleTotalDays = Math.max(1, Math.round((predictedDate - originDate) / DAY_MS));
+  const daysRemaining = prediction.daysUntil;
+
+  let percentRemaining;
+  let status;
+  let overdueDays = 0;
+  let phrase;
+
+  if (daysRemaining < 0) {
+    percentRemaining = 0;
+    status = "overdue";
+    overdueDays = Math.abs(daysRemaining);
+    phrase = `0% remaining · ${overdueDays}d overdue`;
+  } else {
+    const ratio = Math.min(1, Math.max(0, daysRemaining / cycleTotalDays));
+    percentRemaining = Math.round(ratio * 100);
+    status = prediction.zone;
+    const dueFragment = daysRemaining === 0 ? "due today" : `${daysRemaining}d left`;
+    phrase = `~${percentRemaining}% remaining · ${dueFragment}`;
+  }
+
+  return {
+    percentRemaining,
+    status,
+    overdueDays,
+    phrase,
+    cycleTotalDays,
+    daysRemaining,
+  };
+}
+

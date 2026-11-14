@@ -56,6 +56,8 @@
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue",
     Arial, sans-serif;
 
+  --radius-segment: 3px;
+  --radius-compact: 10px;
   --radius-control: 12px;
   --radius-inner: 14px;
   --radius-card: 18px;
@@ -448,11 +450,20 @@ body.is-one-time [data-dialog="log-purchase"] {
 }
 
 #view-dashboard[data-dashboard-view="list"] .calendar-panel,
-#view-dashboard[data-dashboard-view="list"] .dashboard-viewbar .calendar-controls {
+#view-dashboard[data-dashboard-view="list"] .dashboard-viewbar .calendar-controls,
+#view-dashboard[data-dashboard-view="list"] #dashboard-shelves {
+  display: none;
+}
+
+#view-dashboard[data-dashboard-view="shelves"] #dashboard-list,
+#view-dashboard[data-dashboard-view="shelves"] .calendar-panel,
+#view-dashboard[data-dashboard-view="shelves"] .dashboard-viewbar .calendar-controls,
+#view-dashboard[data-dashboard-view="shelves"] #calendar-caption {
   display: none;
 }
 
 #view-dashboard[data-dashboard-view="calendar"] #dashboard-list,
+#view-dashboard[data-dashboard-view="calendar"] #dashboard-shelves,
 #view-dashboard[data-dashboard-view="calendar"] .stats-grid,
 #view-dashboard[data-dashboard-view="calendar"] .queue-tools,
 #view-dashboard[data-dashboard-view="calendar"] #dashboard-copy {
@@ -5442,6 +5453,10 @@ body.is-store-run .toast-region {
     padding-block: 14px;
   }
 
+  .item-card .depletion-gauge {
+    display: none;
+  }
+
   .item-card-header {
     gap: 6px;
   }
@@ -5506,11 +5521,11 @@ body.is-store-run .toast-region {
 
   #add-item-dialog .dialog-header,
   #add-item-dialog .item-type-choice {
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-2);
   }
 
   #add-item-dialog .field {
-    margin-bottom: var(--space-3);
+    margin-bottom: var(--space-2);
   }
 
   #add-item-dialog .field-row .field-hint {
@@ -5756,6 +5771,260 @@ body.is-store-run .toast-region {
 
   .density-toggle {
     padding: 1px;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Tactile Depletion Gauge
+   -------------------------------------------------------------------------- */
+
+.depletion-gauge {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+}
+
+.depletion-track {
+  height: 5px;
+  background: var(--surface-quiet);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-segment);
+  overflow: hidden;
+  position: relative;
+}
+
+.depletion-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.2s ease-out;
+}
+
+.depletion-fill.is-steady {
+  background: var(--steady-rail);
+}
+
+.depletion-fill.is-watch {
+  background: var(--watch-rail);
+}
+
+.depletion-fill.is-buy-now {
+  background: var(--buy-now-rail);
+}
+
+.depletion-fill.is-overdue {
+  width: 100% !important;
+  background: repeating-linear-gradient(
+    45deg,
+    var(--overdue-rail),
+    var(--overdue-rail) 4px,
+    var(--overdue-border) 4px,
+    var(--overdue-border) 8px
+  );
+}
+
+.depletion-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* Compact Depletion for List Rows */
+.depletion-gauge.is-compact {
+  max-width: 110px;
+  gap: 2px;
+}
+
+.depletion-gauge.is-compact .depletion-track {
+  height: 4px;
+}
+
+.depletion-gauge.is-compact .depletion-label {
+  font-size: 10px;
+}
+
+.next-up-card .depletion-gauge {
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-1);
+}
+
+/* --------------------------------------------------------------------------
+   Shelves / Pantry Map View
+   -------------------------------------------------------------------------- */
+
+.shelves-container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.shelf-ledge {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-inner);
+  padding: var(--space-4);
+  box-shadow: 0 1px 2px var(--tone-header-shadow);
+}
+
+.shelf-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.shelf-title-group {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.shelf-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.shelf-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-faint);
+}
+
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: var(--space-3);
+}
+
+.shelf-card {
+  background: var(--surface-quiet);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-compact);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color var(--duration-fast) var(--ease-standard),
+    box-shadow var(--duration-fast) var(--ease-standard);
+  position: relative;
+  cursor: pointer;
+}
+
+.shelf-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: 0 2px 6px var(--tone-card-shadow);
+}
+
+.shelf-card:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.shelf-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.shelf-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.shelf-card-unit {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+
+.shelf-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: 2px;
+}
+
+.shelf-card-due {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+.shelf-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: auto;
+  padding-top: var(--space-1);
+}
+
+.shelf-card-action {
+  font-size: 12px;
+  padding: 4px 10px;
+  min-height: 32px;
+}
+
+/* Dense mode overrides for Shelves */
+[data-density="dense"] .shelf-grid {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+[data-density="dense"] .shelf-card {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  gap: var(--space-3);
+}
+
+[data-density="dense"] .shelf-card-header {
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+[data-density="dense"] .shelf-card-meta {
+  margin-top: 0;
+  gap: var(--space-2);
+}
+
+[data-density="dense"] .shelf-card .depletion-gauge {
+  max-width: 140px;
+  margin: 0;
+}
+
+[data-density="dense"] .shelf-card-footer {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+@media (max-width: 660px) {
+  .shelf-grid {
+    grid-template-columns: 1fr;
+  }
+
+  [data-density="dense"] .shelf-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  [data-density="dense"] .shelf-card .depletion-gauge {
+    max-width: none;
   }
 }
 

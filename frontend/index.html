@@ -97,6 +97,12 @@
               <button
                 class="density-button view-button"
                 type="button"
+                data-dashboard-view-option="shelves"
+                aria-pressed="false"
+              >Shelves</button>
+              <button
+                class="density-button view-button"
+                type="button"
                 data-dashboard-view-option="calendar"
                 aria-pressed="false"
               >Calendar</button>
@@ -126,6 +132,8 @@
           <div id="current-trip-slot"></div>
 
           <div id="dashboard-list" class="dashboard-stack"></div>
+
+          <div id="dashboard-shelves" class="shelves-container"></div>
 
           <div class="stats-grid" role="group" aria-label="Inventory summary">
             <article class="stat-card">
