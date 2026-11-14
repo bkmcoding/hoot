@@ -7,6 +7,9 @@ export default defineConfig({
   reporter: process.env.CI ? "github" : "list",
   use: {
     baseURL: "http://127.0.0.1:4173",
+    launchOptions: {
+      args: ["--hide-scrollbars"],
+    },
   },
   webServer: {
     command: "node tools/serve-frontend.mjs",

@@ -147,7 +147,7 @@ import {
   function priceSparkline(item, history) {
     const width = 240;
     const height = 44;
-    const padX = 4;
+    const padX = 14;
     const padY = 6;
     const prices = history.map((entry) => entry.unitPrice);
     const min = Math.min(...prices);

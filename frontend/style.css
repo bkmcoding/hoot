@@ -581,12 +581,14 @@ body.is-one-time [data-dialog="log-purchase"] {
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  max-width: 100%;
 }
 
 .sample-control select {
   appearance: none;
   min-height: 42px;
-  max-width: 260px;
+  max-width: min(260px, 100%);
+  min-width: 0;
   padding: 0 34px 0 12px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
@@ -4017,6 +4019,11 @@ body.is-store-run .toast-region {
   gap: var(--space-3);
   align-content: start;
   align-items: start;
+  min-width: 0;
+}
+
+.item-rail > * {
+  min-width: 0;
 }
 
 .item-evidence-line {
@@ -4263,6 +4270,8 @@ body.is-store-run .toast-region {
   margin: 8px 0 2px;
   cursor: pointer;
   touch-action: manipulation;
+  overflow: hidden;
+  border-radius: var(--radius-segment);
 }
 
 .price-spark-svg {
@@ -4972,6 +4981,20 @@ body.is-store-run .toast-region {
     min-height: 44px;
   }
 
+  .footer-controls {
+    width: 100%;
+  }
+
+  .sample-control {
+    width: 100%;
+  }
+
+  .sample-control select {
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+  }
+
   .app-nav {
     justify-self: stretch;
     gap: var(--space-2);
@@ -5154,6 +5177,21 @@ body.is-store-run .toast-region {
 
   .horizon-rail {
     margin-top: 24px;
+    /* Keep the overdue boundary at one third so the Today marker and pointer stay aligned. */
+    grid-template-columns: 7fr 4.25fr 3.75fr 6fr;
+  }
+
+  .horizon-labels {
+    grid-template-columns: 7fr 4.75fr 3.5fr 5.75fr;
+  }
+
+  .horizon-labels span {
+    font-size: 10.5px;
+    letter-spacing: -0.01em;
+  }
+
+  .horizon-pointer {
+    left: var(--zone-pointer-position-compact, var(--zone-pointer-position, 50%));
   }
 
   .item-row {
@@ -5498,12 +5536,17 @@ body.is-store-run .toast-region {
 
   .horizon-rail {
     margin-top: 20px;
-  }
-
-  .horizon-rail,
-  .horizon-labels {
     /* Keep the overdue boundary at one third so the Today marker and pointer stay aligned. */
     grid-template-columns: 7fr 4.25fr 3.75fr 6fr;
+  }
+
+  .horizon-labels {
+    grid-template-columns: 7fr 4.75fr 3.5fr 5.75fr;
+  }
+
+  .horizon-labels span {
+    font-size: 10px;
+    letter-spacing: -0.01em;
   }
 
   .horizon-pointer {
@@ -5588,36 +5631,57 @@ body.is-store-run .toast-region {
     display: none;
   }
 
-  .store-run-row-main strong {
-    font-size: 15px;
+  .app-frame {
+    padding-inline: 8px;
   }
 
-  .store-run-row .btn {
-    min-width: 56px;
-    padding-inline: 10px;
-  }
-
-  .store-run-row .status-chip {
-    padding-inline: 6px;
-  }
-
-  .store-run-row-heading {
-    gap: 2px 6px;
+  .store-run-group {
+    padding: 8px 6px;
   }
 
   .store-run-row {
-    padding-block: 6px;
+    padding: 6px 0 6px 6px;
+    gap: 6px;
+  }
+
+  .store-run-row-main strong {
+    font-size: 14px;
+  }
+
+  .store-run-row .btn {
+    min-width: 48px;
+    padding-inline: 6px;
+    font-size: 13px;
+  }
+
+  .store-run-row .status-chip {
+    padding-inline: 5px;
+    font-size: 11px;
+  }
+
+  .store-run-row-heading {
+    gap: 2px 4px;
   }
 
   .store-run-row-main {
     gap: 2px;
   }
 
-  .store-run-row .store-run-skip {
+  .store-run-row-meta {
+    gap: 2px 4px;
+    font-size: 12px;
+  }
+
+  .store-run-row-skips {
+    gap: 4px;
+  }
+
+  .store-run-row .store-run-skip,
+  .store-run-row .store-run-oos {
     min-width: 0;
     min-height: 44px;
     padding: 0 2px;
-    font-size: 12px;
+    font-size: 11px;
   }
 }
 
@@ -5771,6 +5835,53 @@ body.is-store-run .toast-region {
 
   .density-toggle {
     padding: 1px;
+  }
+
+  .app-main {
+    padding-top: var(--space-3);
+  }
+
+  .stats-grid {
+    margin: var(--space-3) 0;
+  }
+
+  .item-card {
+    padding-block: 10px;
+  }
+
+  #view-dashboard:has(.current-trip) .stats-grid {
+    margin: 2px 0 6px;
+  }
+
+  #view-dashboard:has(.current-trip) .current-trip {
+    padding: 3px 6px;
+  }
+
+  #view-dashboard:has(.current-trip) #current-trip-slot {
+    margin-bottom: 2px;
+  }
+
+  #view-dashboard:has(.current-trip) .app-main {
+    padding-top: 6px;
+  }
+
+  #view-dashboard:has(.current-trip) .item-card {
+    gap: 2px;
+    padding-block: 4px;
+  }
+
+  #view-dashboard:has(.current-trip) .item-card-footer {
+    padding-top: 2px;
+  }
+
+  .detail-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .drift-recalibration-callout .btn {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
   }
 }
 
