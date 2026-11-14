@@ -5588,13 +5588,18 @@ body.is-store-run .toast-region {
     display: none;
   }
 
+  .store-run-row {
+    padding: 6px 0 6px 8px;
+    gap: 6px;
+  }
+
   .store-run-row-main strong {
     font-size: 15px;
   }
 
   .store-run-row .btn {
-    min-width: 56px;
-    padding-inline: 10px;
+    min-width: 52px;
+    padding-inline: 8px;
   }
 
   .store-run-row .status-chip {
@@ -5605,15 +5610,20 @@ body.is-store-run .toast-region {
     gap: 2px 6px;
   }
 
-  .store-run-row {
-    padding-block: 6px;
-  }
-
   .store-run-row-main {
     gap: 2px;
   }
 
-  .store-run-row .store-run-skip {
+  .store-run-row-meta {
+    gap: 2px 6px;
+  }
+
+  .store-run-row-skips {
+    gap: 6px;
+  }
+
+  .store-run-row .store-run-skip,
+  .store-run-row .store-run-oos {
     min-width: 0;
     min-height: 44px;
     padding: 0 2px;
@@ -5771,6 +5781,31 @@ body.is-store-run .toast-region {
 
   .density-toggle {
     padding: 1px;
+  }
+
+  .app-main {
+    padding-top: var(--space-3);
+  }
+
+  .stats-grid {
+    margin: var(--space-3) 0;
+  }
+
+  .item-card {
+    padding-block: 10px;
+  }
+
+  #view-dashboard:has(.current-trip) .stats-grid {
+    margin: 4px 0 8px;
+  }
+
+  #view-dashboard:has(.current-trip) .item-card {
+    gap: 4px;
+    padding-block: 6px;
+  }
+
+  #view-dashboard:has(.current-trip) .item-card-footer {
+    padding-top: 4px;
   }
 }
 
