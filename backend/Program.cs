@@ -54,6 +54,16 @@ app.MapGet("/api/test-context", (HttpContext ctx) =>
 
 app.MapControllers();
 
+// Apply pending migrations automatically on startup when running against a relational database (PostgreSQL)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<HootDbContext>();
+    if (db.Database.IsRelational())
+    {
+        await db.Database.MigrateAsync();
+    }
+}
+
 app.Run();
 
 public partial class Program { }
