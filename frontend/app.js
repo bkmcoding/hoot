@@ -355,6 +355,7 @@ import {
     } catch {
       // Storage unavailable
     }
+    enqueuePreferenceMutation();
   }
 
   let aisleOrder = loadAisleOrder();
@@ -466,6 +467,17 @@ import {
     } catch {
       // Ignore storage failures; plans still work in memory.
     }
+    const now = new Date().toISOString();
+    for (const plan of plans) {
+      enqueuePlanMutation({
+        id: plan.id,
+        action: "upsert",
+        targetDate: plan.date,
+        selectedItemIds: Array.isArray(plan.itemIds) ? plan.itemIds : [],
+        completed: false,
+        updatedAt: now,
+      });
+    }
   }
 
   function clearPlans() {
@@ -498,6 +510,7 @@ import {
         window.localStorage.removeItem(OUT_OF_STOCK_TODAY_KEY);
       }
     } catch {}
+    enqueuePreferenceMutation();
   }
 
   let outOfStockTodayIds = loadOutOfStockToday();
@@ -559,8 +572,429 @@ import {
     return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   }
 
+  const HOOT_API_URL_KEY = "hoot-api-url-v1";
+  const HOOT_OFFLINE_QUEUE_KEY = "hoot-offline-queue-v1";
+  const HOOT_LAST_SYNC_KEY = "hoot-last-sync-v1";
+  const HOOT_HOUSEHOLD_ID_KEY = "hoot-household-id-v1";
+
+  const DEFAULT_API_BASE_URL = "http://localhost:5002";
+
+  const SAMPLE_HOUSEHOLD_IDS = {
+    starter: "11111111-1111-1111-1111-111111111111",
+    busy: "22222222-2222-2222-2222-222222222222",
+  };
+
+  function getApiBaseUrl() {
+    try {
+      if (typeof window !== "undefined" && window.HOOT_API_BASE) {
+        return window.HOOT_API_BASE;
+      }
+      const stored = window.localStorage?.getItem(HOOT_API_URL_KEY);
+      return stored || DEFAULT_API_BASE_URL;
+    } catch {
+      return DEFAULT_API_BASE_URL;
+    }
+  }
+
+  function getHouseholdId() {
+    try {
+      const stored = window.localStorage?.getItem(HOOT_HOUSEHOLD_ID_KEY);
+      if (stored) return stored;
+    } catch {}
+    const activeSample = normalizeSampleId(state?.sample);
+    return SAMPLE_HOUSEHOLD_IDS[activeSample] || SAMPLE_HOUSEHOLD_IDS.starter;
+  }
+
+  function getLastSyncTimestamp() {
+    try {
+      return window.localStorage?.getItem(HOOT_LAST_SYNC_KEY) || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function setLastSyncTimestamp(isoTimestamp) {
+    try {
+      if (isoTimestamp) {
+        window.localStorage?.setItem(HOOT_LAST_SYNC_KEY, isoTimestamp);
+      } else {
+        window.localStorage?.removeItem(HOOT_LAST_SYNC_KEY);
+      }
+    } catch {}
+  }
+
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 1000) {
+    const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller ? controller.signal : undefined,
+      });
+      return response;
+    } catch {
+      return null;
+    } finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
+  }
+
+  function createEmptyOfflineQueue() {
+    return {
+      items: {},
+      purchases: {},
+      plans: {},
+      preferences: null,
+    };
+  }
+
+  function loadOfflineQueue() {
+    try {
+      const raw = window.localStorage?.getItem(HOOT_OFFLINE_QUEUE_KEY);
+      if (!raw) return createEmptyOfflineQueue();
+      const parsed = JSON.parse(raw);
+      return {
+        items: parsed.items && typeof parsed.items === "object" ? parsed.items : {},
+        purchases: parsed.purchases && typeof parsed.purchases === "object" ? parsed.purchases : {},
+        plans: parsed.plans && typeof parsed.plans === "object" ? parsed.plans : {},
+        preferences: parsed.preferences && typeof parsed.preferences === "object" ? parsed.preferences : null,
+      };
+    } catch {
+      return createEmptyOfflineQueue();
+    }
+  }
+
+  let offlineQueue = loadOfflineQueue();
+
+  function saveOfflineQueue() {
+    try {
+      const hasItems = Object.keys(offlineQueue.items).length > 0;
+      const hasPurchases = Object.keys(offlineQueue.purchases).length > 0;
+      const hasPlans = Object.keys(offlineQueue.plans).length > 0;
+      const hasPrefs = offlineQueue.preferences !== null;
+
+      if (hasItems || hasPurchases || hasPlans || hasPrefs) {
+        window.localStorage?.setItem(HOOT_OFFLINE_QUEUE_KEY, JSON.stringify(offlineQueue));
+      } else {
+        window.localStorage?.removeItem(HOOT_OFFLINE_QUEUE_KEY);
+      }
+    } catch {}
+  }
+
+  function clearOfflineQueue() {
+    offlineQueue = createEmptyOfflineQueue();
+    try {
+      window.localStorage?.removeItem(HOOT_OFFLINE_QUEUE_KEY);
+    } catch {}
+  }
+
+  function enqueueItemMutation(mutation) {
+    offlineQueue.items[mutation.id] = mutation;
+    saveOfflineQueue();
+    scheduleSync();
+  }
+
+  function enqueuePurchaseMutation(mutation) {
+    offlineQueue.purchases[mutation.id] = mutation;
+    saveOfflineQueue();
+    scheduleSync();
+  }
+
+  function enqueuePlanMutation(mutation) {
+    offlineQueue.plans[mutation.id] = mutation;
+    saveOfflineQueue();
+    scheduleSync();
+  }
+
+  function enqueuePreferenceMutation() {
+    offlineQueue.preferences = {
+      density,
+      dashboardView,
+      aisleOrder: Array.isArray(aisleOrder) ? aisleOrder : [],
+      outOfStockItemIds: outOfStockTodayIds ? [...outOfStockTodayIds] : [],
+      updatedAt: new Date().toISOString(),
+    };
+    saveOfflineQueue();
+    scheduleSync();
+  }
+
+  let syncTimeout = null;
+  let isSyncInProgress = false;
+
+  function scheduleSync(delayMs = 250) {
+    if (typeof window === "undefined" || !window.fetch) return;
+    if (syncTimeout) clearTimeout(syncTimeout);
+    syncTimeout = setTimeout(() => {
+      syncWithBackend().catch(() => {});
+    }, delayMs);
+  }
+
+  async function notifyResetDemo(sampleId) {
+    try {
+      const normSample = normalizeSampleId(sampleId);
+      const householdId = SAMPLE_HOUSEHOLD_IDS[normSample] || getHouseholdId();
+      const res = await fetchWithTimeout(
+        `${getApiBaseUrl()}/api/households/reset-demo?sample=${encodeURIComponent(normSample)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Household-Id": householdId,
+          },
+        },
+        2000
+      );
+      if (res && res.ok) {
+        setLastSyncTimestamp(new Date().toISOString());
+      }
+    } catch {}
+  }
+
+  async function syncWithBackend() {
+    if (isSyncInProgress || typeof window === "undefined" || !window.fetch) return;
+    isSyncInProgress = true;
+    try {
+      const baseUrl = getApiBaseUrl();
+      const householdId = getHouseholdId();
+      const headers = {
+        "Content-Type": "application/json",
+        "X-Household-Id": householdId,
+      };
+
+      // 1. Flush offline queue if mutations exist
+      const itemsList = Object.values(offlineQueue.items);
+      const purchasesList = Object.values(offlineQueue.purchases);
+      const plansList = Object.values(offlineQueue.plans);
+      const prefs = offlineQueue.preferences;
+
+      if (itemsList.length || purchasesList.length || plansList.length || prefs) {
+        const batchPayload = {
+          items: itemsList.length ? itemsList : null,
+          purchases: purchasesList.length ? purchasesList : null,
+          plans: plansList.length ? plansList : null,
+          preferences: prefs || null,
+        };
+
+        const batchRes = await fetchWithTimeout(`${baseUrl}/api/sync/batch`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(batchPayload),
+        });
+
+        if (batchRes && batchRes.ok) {
+          for (const item of itemsList) {
+            if (offlineQueue.items[item.id] === item) delete offlineQueue.items[item.id];
+          }
+          for (const purch of purchasesList) {
+            if (offlineQueue.purchases[purch.id] === purch) delete offlineQueue.purchases[purch.id];
+          }
+          for (const plan of plansList) {
+            if (offlineQueue.plans[plan.id] === plan) delete offlineQueue.plans[plan.id];
+          }
+          if (offlineQueue.preferences === prefs) {
+            offlineQueue.preferences = null;
+          }
+          saveOfflineQueue();
+        }
+      }
+
+      // 2. Fetch delta sync
+      const lastSync = getLastSyncTimestamp();
+      const syncUrl = lastSync
+        ? `${baseUrl}/api/sync?since=${encodeURIComponent(lastSync)}`
+        : `${baseUrl}/api/sync`;
+
+      const deltaRes = await fetchWithTimeout(syncUrl, {
+        method: "GET",
+        headers,
+      });
+
+      if (deltaRes && deltaRes.ok) {
+        const delta = await deltaRes.json();
+        let stateChanged = false;
+
+        // Merge items
+        if (Array.isArray(delta.items) && delta.items.length > 0) {
+          for (const serverItem of delta.items) {
+            const localIndex = state.items.findIndex((item) => item.id === serverItem.id);
+            if (serverItem.isDeleted) {
+              if (localIndex !== -1) {
+                state.items.splice(localIndex, 1);
+                stateChanged = true;
+              }
+            } else {
+              if (localIndex !== -1) {
+                const local = state.items[localIndex];
+                const localUpdated = local.updatedAt ? new Date(local.updatedAt).getTime() : 0;
+                const serverUpdated = new Date(serverItem.updatedAt).getTime();
+                if (serverUpdated >= localUpdated) {
+                  local.name = serverItem.name;
+                  local.category = serverItem.category;
+                  local.unit = serverItem.unit || "";
+                  local.reorderThresholdDays = serverItem.reorderThresholdDays;
+                  local.isOneTime = serverItem.isOneTime;
+                  local.completed = serverItem.completed;
+                  local.updatedAt = serverItem.updatedAt;
+                  stateChanged = true;
+                }
+              } else {
+                state.items.push({
+                  id: serverItem.id,
+                  name: serverItem.name,
+                  category: serverItem.category,
+                  unit: serverItem.unit || "",
+                  reorderThresholdDays: serverItem.reorderThresholdDays,
+                  isOneTime: serverItem.isOneTime,
+                  completed: serverItem.completed,
+                  createdAt: serverItem.createdAt ? serverItem.createdAt.slice(0, 10) : toISODate(today),
+                  updatedAt: serverItem.updatedAt,
+                  purchases: [],
+                });
+                stateChanged = true;
+              }
+            }
+          }
+        }
+
+        // Merge purchases
+        if (Array.isArray(delta.purchases) && delta.purchases.length > 0) {
+          for (const serverPurch of delta.purchases) {
+            const item = state.items.find((entry) => entry.id === serverPurch.itemId);
+            if (!item) continue;
+            if (!Array.isArray(item.purchases)) item.purchases = [];
+
+            const purchIndex = item.purchases.findIndex((p) => p.id === serverPurch.id);
+            if (serverPurch.isDeleted) {
+              if (purchIndex !== -1) {
+                item.purchases.splice(purchIndex, 1);
+                stateChanged = true;
+              }
+            } else {
+              const dateStr = typeof serverPurch.date === "string" ? serverPurch.date.slice(0, 10) : String(serverPurch.date);
+              const purchObj = {
+                id: serverPurch.id,
+                date: dateStr,
+                quantity: Number(serverPurch.quantity),
+                price: Number(serverPurch.price),
+                ...(serverPurch.earlyRestock ? { earlyRestock: true } : {}),
+                ...(serverPurch.effectiveStartDate ? { effectiveStartDate: serverPurch.effectiveStartDate.slice(0, 10) } : {}),
+                updatedAt: serverPurch.updatedAt,
+              };
+              if (serverPurch.feedbackVerdict) {
+                purchObj.feedback = {
+                  verdict: serverPurch.feedbackVerdict,
+                  predictedDate: serverPurch.feedbackPredictedDate ? serverPurch.feedbackPredictedDate.slice(0, 10) : null,
+                  source: "receipt",
+                };
+              }
+
+              if (purchIndex !== -1) {
+                const localPurch = item.purchases[purchIndex];
+                const localUpdated = localPurch.updatedAt ? new Date(localPurch.updatedAt).getTime() : 0;
+                const serverUpdated = new Date(serverPurch.updatedAt).getTime();
+                if (serverUpdated >= localUpdated) {
+                  item.purchases[purchIndex] = { ...localPurch, ...purchObj };
+                  item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
+                  stateChanged = true;
+                }
+              } else {
+                item.purchases.push(purchObj);
+                item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
+                stateChanged = true;
+              }
+            }
+          }
+        }
+
+        // Merge plans
+        if (Array.isArray(delta.plans) && delta.plans.length > 0) {
+          let plansChanged = false;
+          for (const serverPlan of delta.plans) {
+            const planIndex = plans.findIndex((p) => p.id === serverPlan.id);
+            if (serverPlan.isDeleted) {
+              if (planIndex !== -1) {
+                plans.splice(planIndex, 1);
+                plansChanged = true;
+              }
+            } else {
+              const dateStr = typeof serverPlan.targetDate === "string" ? serverPlan.targetDate.slice(0, 10) : String(serverPlan.targetDate);
+              if (planIndex !== -1) {
+                const localPlan = plans[planIndex];
+                const localUpdated = localPlan.updatedAt ? new Date(localPlan.updatedAt).getTime() : 0;
+                const serverUpdated = new Date(serverPlan.updatedAt).getTime();
+                if (serverUpdated >= localUpdated) {
+                  localPlan.date = dateStr;
+                  localPlan.itemIds = Array.isArray(serverPlan.selectedItemIds) ? serverPlan.selectedItemIds : [];
+                  localPlan.updatedAt = serverPlan.updatedAt;
+                  plansChanged = true;
+                }
+              } else {
+                plans.push({
+                  id: serverPlan.id,
+                  date: dateStr,
+                  itemIds: Array.isArray(serverPlan.selectedItemIds) ? serverPlan.selectedItemIds : [],
+                  includeWatch: false,
+                  createdAt: serverPlan.createdAt ? serverPlan.createdAt.slice(0, 10) : dateStr,
+                  updatedAt: serverPlan.updatedAt,
+                  earlyRestocks: {},
+                });
+                plansChanged = true;
+              }
+            }
+          }
+          if (plansChanged) savePlans();
+        }
+
+        // Merge preferences
+        if (delta.preferences) {
+          const pref = delta.preferences;
+          if (pref.density && pref.density !== density) {
+            density = pref.density === "dense" ? "dense" : "spacious";
+            document.body.dataset.density = density;
+            try { window.localStorage?.setItem(DENSITY_KEY, density); } catch {}
+            syncDensityControls();
+            stateChanged = true;
+          }
+          if (pref.dashboardView && pref.dashboardView !== dashboardView) {
+            dashboardView = pref.dashboardView === "calendar" || pref.dashboardView === "shelves" ? pref.dashboardView : "list";
+            try { window.localStorage?.setItem(DASHBOARD_VIEW_KEY, dashboardView); } catch {}
+            syncDashboardViewControls();
+            stateChanged = true;
+          }
+          if (Array.isArray(pref.aisleOrder)) {
+            aisleOrder = pref.aisleOrder;
+            saveAisleOrder(aisleOrder);
+          }
+          if (Array.isArray(pref.outOfStockItemIds)) {
+            outOfStockTodayIds = new Set(pref.outOfStockItemIds);
+            saveOutOfStockToday();
+            stateChanged = true;
+          }
+        }
+
+        if (delta.serverTimestamp) {
+          setLastSyncTimestamp(delta.serverTimestamp);
+        }
+
+        if (stateChanged) {
+          saveState();
+          render();
+        }
+      }
+    } catch {
+      // Unreachable or offline: keep queued changes safely in storage
+    } finally {
+      isSyncInProgress = false;
+    }
+  }
+
+  if (typeof window !== "undefined") {
+    window.addEventListener("online", () => {
+      scheduleSync(100);
+    });
+  }
+
   const hootApi = {
-    // API-ready seam: replace these local implementations with REST calls when the backend exists.
     async getItems() {
       return clone(state.items);
     },
@@ -573,6 +1007,7 @@ import {
       const duplicate = findDuplicateItem(input.name);
       if (duplicate) throw createDuplicateItemError(duplicate);
 
+      const now = new Date().toISOString();
       const item = {
         id: makeId("item"),
         name: input.name,
@@ -582,44 +1017,116 @@ import {
         isOneTime: Boolean(input.isOneTime),
         completed: false,
         createdAt: toISODate(today),
+        updatedAt: now,
         purchases: [],
       };
       state.items.push(item);
       saveState();
+      enqueueItemMutation({
+        id: item.id,
+        action: "upsert",
+        name: item.name,
+        category: item.category,
+        unit: item.unit || "",
+        reorderThresholdDays: item.reorderThresholdDays,
+        isOneTime: item.isOneTime,
+        completed: item.completed,
+        updatedAt: now,
+      });
       return clone(item);
     },
     async updateItem(id, input) {
       const index = state.items.findIndex((item) => item.id === id);
       if (index === -1) throw new Error("Item not found");
-      state.items[index] = { ...state.items[index], ...input };
+      const now = new Date().toISOString();
+      state.items[index] = { ...state.items[index], ...input, updatedAt: now };
       saveState();
+      const updated = state.items[index];
+      enqueueItemMutation({
+        id: updated.id,
+        action: "upsert",
+        name: updated.name,
+        category: updated.category,
+        unit: updated.unit || "",
+        reorderThresholdDays: updated.reorderThresholdDays,
+        isOneTime: updated.isOneTime,
+        completed: updated.completed,
+        updatedAt: now,
+      });
       return clone(state.items[index]);
     },
     async deleteItem(id) {
       state.items = state.items.filter((item) => item.id !== id);
       saveState();
+      enqueueItemMutation({
+        id,
+        action: "delete",
+        updatedAt: new Date().toISOString(),
+      });
       return true;
     },
     async restoreItem(item, index) {
       const insertionIndex = clamp(index, 0, state.items.length);
-      state.items.splice(insertionIndex, 0, item);
+      const now = new Date().toISOString();
+      const restored = { ...item, updatedAt: now };
+      state.items.splice(insertionIndex, 0, restored);
       saveState();
+      enqueueItemMutation({
+        id: restored.id,
+        action: "upsert",
+        name: restored.name,
+        category: restored.category,
+        unit: restored.unit || "",
+        reorderThresholdDays: restored.reorderThresholdDays,
+        isOneTime: restored.isOneTime,
+        completed: restored.completed,
+        updatedAt: now,
+      });
+      if (Array.isArray(restored.purchases)) {
+        for (const purch of restored.purchases) {
+          enqueuePurchaseMutation({
+            id: purch.id,
+            itemId: restored.id,
+            action: "upsert",
+            date: purch.date,
+            quantity: Number(purch.quantity),
+            price: Number(purch.price || 0),
+            earlyRestock: Boolean(purch.earlyRestock),
+            effectiveStartDate: purch.effectiveStartDate || null,
+            updatedAt: now,
+          });
+        }
+      }
       return clone(state.items[insertionIndex]);
     },
     async logPurchase(id, purchase) {
       const item = state.items.find((entry) => entry.id === id);
       if (!item) throw new Error("Item not found");
-      item.purchases.push({
+      const now = new Date().toISOString();
+      const newPurchase = {
         id: makeId("purchase"),
         date: purchase.date,
         quantity: purchase.quantity,
         price: purchase.price,
         ...(purchase.earlyRestock ? { earlyRestock: true } : {}),
         ...(purchase.effectiveStartDate ? { effectiveStartDate: purchase.effectiveStartDate } : {}),
-      });
+        updatedAt: now,
+      };
+      item.purchases.push(newPurchase);
       item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
       clearOutOfStockToday(id);
       saveState();
+      enqueuePurchaseMutation({
+        id: newPurchase.id,
+        itemId: id,
+        action: "upsert",
+        date: newPurchase.date,
+        quantity: Number(newPurchase.quantity),
+        price: Number(newPurchase.price || 0),
+        earlyRestock: Boolean(newPurchase.earlyRestock),
+        effectiveStartDate: newPurchase.effectiveStartDate || null,
+        updatedAt: now,
+      });
       return clone(item);
     },
     async updatePurchase(itemId, purchaseId, input) {
@@ -627,13 +1134,28 @@ import {
       if (!item) throw new Error("Item not found");
       const purchase = item.purchases.find((entry) => entry.id === purchaseId);
       if (!purchase) throw new Error("Purchase not found");
+      const now = new Date().toISOString();
       purchase.date = input.date;
       purchase.quantity = input.quantity;
       purchase.price = input.price;
       if (input.earlyRestock !== undefined) purchase.earlyRestock = input.earlyRestock;
       if (input.effectiveStartDate !== undefined) purchase.effectiveStartDate = input.effectiveStartDate;
+      purchase.updatedAt = now;
       item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
       saveState();
+      enqueuePurchaseMutation({
+        id: purchase.id,
+        itemId,
+        action: "upsert",
+        date: purchase.date,
+        quantity: Number(purchase.quantity),
+        price: Number(purchase.price || 0),
+        earlyRestock: Boolean(purchase.earlyRestock),
+        effectiveStartDate: purchase.effectiveStartDate || null,
+        feedbackVerdict: purchase.feedback?.verdict || null,
+        feedbackPredictedDate: purchase.feedback?.predictedDate || null,
+        updatedAt: now,
+      });
       return clone(item);
     },
     async deletePurchase(itemId, purchaseId) {
@@ -643,33 +1165,80 @@ import {
       if (index === -1) throw new Error("Purchase not found");
       const [deletedPurchase] = item.purchases.splice(index, 1);
       saveState();
+      enqueuePurchaseMutation({
+        id: purchaseId,
+        itemId,
+        action: "delete",
+        updatedAt: new Date().toISOString(),
+      });
       return { item: clone(item), deletedPurchase: clone(deletedPurchase), index };
     },
     async restorePurchase(itemId, purchase, index) {
       const item = state.items.find((entry) => entry.id === itemId);
       if (!item) throw new Error("Item not found");
       const insertionIndex = clamp(index ?? item.purchases.length, 0, item.purchases.length);
-      item.purchases.splice(insertionIndex, 0, {
+      const now = new Date().toISOString();
+      const restoredPurch = {
         id: purchase.id || makeId("purchase"),
         date: purchase.date,
         quantity: purchase.quantity,
         price: purchase.price,
-      });
+        updatedAt: now,
+      };
+      if (purchase.feedback?.verdict) {
+        restoredPurch.feedback = clone(purchase.feedback);
+      }
+      item.purchases.splice(insertionIndex, 0, restoredPurch);
       item.purchases.sort((left, right) => parseDate(left.date) - parseDate(right.date));
       saveState();
+      enqueuePurchaseMutation({
+        id: restoredPurch.id,
+        itemId,
+        action: "upsert",
+        date: restoredPurch.date,
+        quantity: Number(restoredPurch.quantity),
+        price: Number(restoredPurch.price || 0),
+        earlyRestock: Boolean(restoredPurch.earlyRestock),
+        effectiveStartDate: restoredPurch.effectiveStartDate || null,
+        feedbackVerdict: restoredPurch.feedback?.verdict || null,
+        feedbackPredictedDate: restoredPurch.feedback?.predictedDate || null,
+        updatedAt: now,
+      });
       return clone(item);
     },
     async toggleOneTime(id, completed) {
       const item = state.items.find((entry) => entry.id === id);
       if (!item) throw new Error("Item not found");
+      const now = new Date().toISOString();
       item.completed = Boolean(completed);
+      item.updatedAt = now;
       if (completed) clearOutOfStockToday(id);
       saveState();
+      enqueueItemMutation({
+        id: item.id,
+        action: "upsert",
+        name: item.name,
+        category: item.category,
+        unit: item.unit || "",
+        reorderThresholdDays: item.reorderThresholdDays,
+        isOneTime: item.isOneTime,
+        completed: item.completed,
+        updatedAt: now,
+      });
       return clone(item);
     },
-    async resetDemo() {
-      state = createDemoState(normalizeSampleId(state.sample));
+    async resetDemo(sampleId = state.sample) {
+      const nextSampleId = normalizeSampleId(sampleId);
+      state = createDemoState(nextSampleId);
       saveState();
+      clearStoreRunSession();
+      clearOfflineQueue();
+      plans = [];
+      try { window.localStorage.removeItem(PLANS_KEY); } catch {}
+      outOfStockTodayIds.clear();
+      try { window.localStorage.removeItem(OUT_OF_STOCK_TODAY_KEY); } catch {}
+      setLastSyncTimestamp(null);
+      notifyResetDemo(nextSampleId).catch(() => {});
       return clone(state.items);
     },
   };
@@ -822,6 +1391,7 @@ import {
     } catch {
       // The in-memory preference still applies when storage is unavailable.
     }
+    enqueuePreferenceMutation();
     syncDashboardViewControls();
     if (dashboardView === "calendar") {
       renderRestockCalendar();
@@ -841,6 +1411,7 @@ import {
     } catch {
       // The in-memory preference still applies when storage is unavailable.
     }
+    enqueuePreferenceMutation();
     syncDensityControls();
     renderDashboard();
   }
@@ -2908,7 +3479,22 @@ import {
     } else {
       delete purchase.feedback;
     }
+    const now = new Date().toISOString();
+    purchase.updatedAt = now;
     saveState();
+    enqueuePurchaseMutation({
+      id: purchase.id,
+      itemId: item.id,
+      action: "upsert",
+      date: purchase.date,
+      quantity: Number(purchase.quantity),
+      price: Number(purchase.price || 0),
+      earlyRestock: Boolean(purchase.earlyRestock),
+      effectiveStartDate: purchase.effectiveStartDate || null,
+      feedbackVerdict: purchase.feedback?.verdict || null,
+      feedbackPredictedDate: purchase.feedback?.predictedDate || null,
+      updatedAt: now,
+    });
     return item;
   }
 
@@ -3499,6 +4085,11 @@ import {
   function deletePlan(planId) {
     plans = plans.filter((plan) => plan.id !== planId);
     savePlans();
+    enqueuePlanMutation({
+      id: planId,
+      action: "delete",
+      updatedAt: new Date().toISOString(),
+    });
     renderRestockCalendar();
     toast("Plan deleted.");
   }
@@ -3510,6 +4101,15 @@ import {
     lastDialogTrigger = null;
     closeDialog($("#finish-run-dialog"));
     if (completedRunDate && plans.some((plan) => plan.date === completedRunDate)) {
+      const removed = plans.filter((plan) => plan.date === completedRunDate);
+      const now = new Date().toISOString();
+      for (const p of removed) {
+        enqueuePlanMutation({
+          id: p.id,
+          action: "delete",
+          updatedAt: now,
+        });
+      }
       plans = plans.filter((plan) => plan.date !== completedRunDate);
       savePlans();
     }
@@ -3552,7 +4152,22 @@ import {
       recordedAt: toISODate(today),
       source: "receipt",
     };
+    const now = new Date().toISOString();
+    entry.purchase.updatedAt = now;
     saveState();
+    enqueuePurchaseMutation({
+      id: entry.purchase.id,
+      itemId: entry.item.id,
+      action: "upsert",
+      date: entry.purchase.date,
+      quantity: Number(entry.purchase.quantity),
+      price: Number(entry.purchase.price || 0),
+      earlyRestock: Boolean(entry.purchase.earlyRestock),
+      effectiveStartDate: entry.purchase.effectiveStartDate || null,
+      feedbackVerdict: verdict,
+      feedbackPredictedDate: entry.selection.predictedDate,
+      updatedAt: now,
+    });
 
     const next = predictionFor(entry.item, today);
     const check = trigger.closest(".prediction-check");
@@ -3604,7 +4219,22 @@ import {
       shiftDays,
       ...(previousFeedback ? { previousFeedback } : {}),
     };
+    const now = new Date().toISOString();
+    latestPurchase.updatedAt = now;
     saveState();
+    enqueuePurchaseMutation({
+      id: latestPurchase.id,
+      itemId: item.id,
+      action: "upsert",
+      date: latestPurchase.date,
+      quantity: Number(latestPurchase.quantity),
+      price: Number(latestPurchase.price || 0),
+      earlyRestock: Boolean(latestPurchase.earlyRestock),
+      effectiveStartDate: latestPurchase.effectiveStartDate || null,
+      feedbackVerdict: "early",
+      feedbackPredictedDate: toISODate(prediction.date),
+      updatedAt: now,
+    });
     render();
 
     const next = predictionFor(item);
@@ -4916,6 +5546,12 @@ import {
         state = createDemoState(nextSampleId);
         saveState();
         clearStoreRunSession();
+        clearOfflineQueue();
+        plans = [];
+        try { window.localStorage.removeItem(PLANS_KEY); } catch {}
+        outOfStockTodayIds.clear();
+        try { window.localStorage.removeItem(OUT_OF_STOCK_TODAY_KEY); } catch {}
+        setLastSyncTimestamp(null);
         currentItemId = null;
         itemReturnView = "dashboard";
         queueSearch = "";
@@ -4923,6 +5559,7 @@ import {
         render();
         setView("dashboard", { replace: true });
         toast(`${sample.label} loaded.`);
+        notifyResetDemo(nextSampleId).catch(() => {});
       },
       onDismiss: () => {
         if (select) select.value = normalizeSampleId(state.sample);
@@ -5412,6 +6049,20 @@ import {
       );
     }
     applyRoute();
+
+    scheduleSync(100);
+  }
+
+  if (typeof window !== "undefined") {
+    window.hootApi = hootApi;
+    window.hootSync = {
+      scheduleSync,
+      syncWithBackend,
+      getOfflineQueue: () => clone(offlineQueue),
+      clearOfflineQueue,
+      getApiBaseUrl,
+      getHouseholdId,
+    };
   }
 
   init();

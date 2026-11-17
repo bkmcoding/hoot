@@ -18,6 +18,13 @@ public class HouseholdContextMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
+        // Exempt OPTIONS requests for CORS preflight
+        if (HttpMethods.IsOptions(context.Request.Method))
+        {
+            await _next(context);
+            return;
+        }
+
         var path = context.Request.Path.Value ?? string.Empty;
 
         // Exempt system and documentation routes
