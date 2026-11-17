@@ -73,5 +73,16 @@ public class HouseholdContextMiddlewareTests : IClassFixture<HootTestFactory>
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
+    [Fact]
+    public async Task OptionsRequest_IsExempt_FromHouseholdHeaderRequirement()
+    {
+        // Act: OPTIONS preflight requests should not be blocked with 400
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/items");
+        var response = await _client.SendAsync(request);
+
+        // Assert
+        Assert.NotEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
     private record TestContextResponse(string? HouseholdId);
 }
