@@ -623,7 +623,7 @@ import {
     } catch {}
   }
 
-  async function fetchWithTimeout(url, options = {}, timeoutMs = 1500) {
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 1000) {
     const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
     const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
     try {
@@ -1231,12 +1231,14 @@ import {
       const nextSampleId = normalizeSampleId(sampleId);
       state = createDemoState(nextSampleId);
       saveState();
+      clearStoreRunSession();
       clearOfflineQueue();
-      clearPlans();
+      plans = [];
+      try { window.localStorage.removeItem(PLANS_KEY); } catch {}
       outOfStockTodayIds.clear();
-      saveOutOfStockToday();
+      try { window.localStorage.removeItem(OUT_OF_STOCK_TODAY_KEY); } catch {}
       setLastSyncTimestamp(null);
-      await notifyResetDemo(nextSampleId);
+      notifyResetDemo(nextSampleId).catch(() => {});
       return clone(state.items);
     },
   };
@@ -5543,12 +5545,13 @@ import {
       onConfirm: async () => {
         state = createDemoState(nextSampleId);
         saveState();
-        clearOfflineQueue();
-        clearPlans();
-        outOfStockTodayIds.clear();
-        saveOutOfStockToday();
-        setLastSyncTimestamp(null);
         clearStoreRunSession();
+        clearOfflineQueue();
+        plans = [];
+        try { window.localStorage.removeItem(PLANS_KEY); } catch {}
+        outOfStockTodayIds.clear();
+        try { window.localStorage.removeItem(OUT_OF_STOCK_TODAY_KEY); } catch {}
+        setLastSyncTimestamp(null);
         currentItemId = null;
         itemReturnView = "dashboard";
         queueSearch = "";
