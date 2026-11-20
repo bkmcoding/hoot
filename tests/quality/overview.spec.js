@@ -186,4 +186,20 @@ test.describe("Overview Command Center Scaffold", () => {
     const auditDialog = page.locator("#rhythm-audit-dialog");
     await expect(auditDialog).toBeVisible();
   });
+
+  test("transitions smoothly from Overview to Restocks and Shopping Run", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    // Click Restocks nav button
+    const restocksBtn = page.locator('.nav-button[data-view="dashboard"]');
+    await restocksBtn.click();
+
+    await expect(page.locator("#view-dashboard")).toBeVisible();
+    await expect(page.locator("#view-overview")).not.toHaveClass(/is-active/);
+
+    // Return to overview
+    const overviewBtn = page.locator('.nav-button[data-view="overview"]');
+    await overviewBtn.click();
+    await expect(page.locator("#view-overview")).toBeVisible();
+  });
 });

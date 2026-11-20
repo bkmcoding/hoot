@@ -4134,8 +4134,7 @@ import {
     setView("dashboard", { replace: true });
 
     if (openHistory && receipt?.historyItemId) {
-      openDetail(receipt.historyItemId);
-      $(".item-page .back-button")?.focus({ preventScroll: true });
+      openDetail(receipt.historyItemId, { focusBack: true });
       return;
     }
 
@@ -5258,55 +5257,83 @@ import {
     setView(route.view, { updateUrl: false });
   }
 
-  function setView(view, { replace = false, updateUrl = true } = {}) {
-    const previousView = currentView;
-    let nextView = view;
-    let activeItem = null;
-    if (nextView === "item") {
-      activeItem = state.items.find((entry) => entry.id === currentItemId) ?? null;
-      if (activeItem) renderItemPage(activeItem);
-      else nextView = itemReturnView || "dashboard";
+  function transitionToView(targetView, setupCallback) {
+    const isOverviewTransition = targetView === "overview" || currentView === "overview";
+    if (
+      !isOverviewTransition ||
+      !document.startViewTransition ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      setupCallback();
+      return;
     }
-    currentView = nextView;
-    document.body.classList.toggle("is-store-run", nextView === "store-run");
-    $$(".app-view").forEach((section) => {
-      section.classList.toggle("is-active", section.id === `view-${nextView}`);
+    document.startViewTransition(() => {
+      setupCallback();
     });
-    $$(".nav-button").forEach((button) => {
-      button.classList.toggle("is-active", button.dataset.view === nextView);
-      if (button.dataset.view === nextView) button.setAttribute("aria-current", "page");
-      else button.removeAttribute("aria-current");
-    });
-    const headerLog = document.querySelector('.header-actions [data-dialog="log-purchase"]');
-    if (headerLog) headerLog.hidden = nextView === "one-time";
-    if (nextView === "dashboard") {
-      renderCurrentTrip();
-      syncNextUpDock();
-    } else {
-      updateMobileDock();
-    }
-    if (nextView === "overview") {
-      renderOverview();
-    }
-    if (nextView === "store-run") {
-      if (!storeRun.selected.size) {
-        const [nextUp] = rankedTrackedEntries();
-        if (nextUp?.prediction.zone === "watch" && !storeRun.includeWatch) {
-          storeRun.includeWatch = true;
-          saveStoreRun();
+  }
+
+  function setView(view, { replace = false, updateUrl = true, focusBack = false } = {}) {
+    transitionToView(view, () => {
+      const previousView = currentView;
+      let nextView = view;
+      let activeItem = null;
+      if (nextView === "item") {
+        activeItem = state.items.find((entry) => entry.id === currentItemId) ?? null;
+        if (activeItem) {
+          renderItemPage(activeItem);
+        } else {
+          nextView = itemReturnView || "dashboard";
         }
       }
-      renderStoreRun();
-      if (previousView !== "store-run") {
-        window.scrollTo(0, 0);
-        syncRunHeaderState();
-        $("#store-run-title")?.focus({ preventScroll: true });
+      currentView = nextView;
+      document.body.classList.toggle("is-store-run", nextView === "store-run");
+      $$(".app-view").forEach((section) => {
+        section.classList.toggle("is-active", section.id === `view-${nextView}`);
+      });
+      $$(".nav-button").forEach((button) => {
+        button.classList.toggle("is-active", button.dataset.view === nextView);
+        if (button.dataset.view === nextView) button.setAttribute("aria-current", "page");
+        else button.removeAttribute("aria-current");
+      });
+      const headerLog = document.querySelector('.header-actions [data-dialog="log-purchase"]');
+      if (headerLog) headerLog.hidden = nextView === "one-time";
+      if (nextView === "dashboard") {
+        renderCurrentTrip();
+        syncNextUpDock();
+      } else {
+        updateMobileDock();
       }
-    } else if (previousView === "store-run" && nextView === "dashboard") {
-      $('.nav-button[data-view="dashboard"]')?.focus();
-    }
-    if (updateUrl) syncRoute(nextView, { replace });
-    document.title = activeItem ? `${activeItem.name} · Hoot` : DEFAULT_TITLE;
+      if (nextView === "overview") {
+        renderOverview();
+      }
+      if (nextView === "item" && activeItem) {
+        window.scrollTo(0, 0);
+        if (focusBack) {
+          $(".item-page .back-button")?.focus({ preventScroll: true });
+        } else {
+          $("#item-analysis-title")?.focus({ preventScroll: true });
+        }
+      }
+      if (nextView === "store-run") {
+        if (!storeRun.selected.size) {
+          const [nextUp] = rankedTrackedEntries();
+          if (nextUp?.prediction.zone === "watch" && !storeRun.includeWatch) {
+            storeRun.includeWatch = true;
+            saveStoreRun();
+          }
+        }
+        renderStoreRun();
+        if (previousView !== "store-run") {
+          window.scrollTo(0, 0);
+          syncRunHeaderState();
+          $("#store-run-title")?.focus({ preventScroll: true });
+        }
+      } else if (previousView === "store-run" && nextView === "dashboard") {
+        $('.nav-button[data-view="dashboard"]')?.focus();
+      }
+      if (updateUrl) syncRoute(nextView, { replace });
+      document.title = activeItem ? `${activeItem.name} · Hoot` : DEFAULT_TITLE;
+    });
   }
 
   function clearFieldErrors(form) {
@@ -5773,14 +5800,12 @@ import {
     if (dialog.open) dialog.close();
   }
 
-  function openDetail(itemId) {
+  function openDetail(itemId, { focusBack = false } = {}) {
     const item = state.items.find((entry) => entry.id === itemId);
     if (!item) return;
     itemReturnView = currentView === "item" ? itemReturnView : currentView || "dashboard";
     currentItemId = item.id;
-    setView("item");
-    window.scrollTo(0, 0);
-    $("#item-analysis-title")?.focus({ preventScroll: true });
+    setView("item", { focusBack });
   }
 
   function requestDelete(itemId, trigger) {
@@ -5991,13 +6016,11 @@ import {
           const item = state.items.find((e) => e.id === itemId);
           if (item) {
             logPurchaseFor(item);
-            renderOverview();
           }
         } else if (action === "still-have-some" && itemId) {
           const item = state.items.find((e) => e.id === itemId);
           if (item) {
             recordPredictionCheck(item.id, "still_have_some");
-            renderOverview();
           }
         } else if (action === "check-onetime" && itemId) {
           const item = (state.oneTimeItems || []).find((e) => e.id === itemId) || state.items.find((e) => e.id === itemId);

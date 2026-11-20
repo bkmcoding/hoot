@@ -6289,6 +6289,31 @@ body.is-store-run .toast-region {
   color: var(--watch);
 }
 
+/* CSS View Transitions */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 200ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .bento-card-spotlight {
+    view-transition-name: item-hero;
+  }
+  .bento-card-trip {
+    view-transition-name: shopping-run;
+  }
+  .bento-card-horizon {
+    view-transition-name: calendar-strip;
+  }
+  .bento-card-shelves {
+    view-transition-name: shelves-view;
+  }
+  .bento-card-onetime {
+    view-transition-name: one-time-view;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   :root,
   html,
