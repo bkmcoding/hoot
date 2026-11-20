@@ -52,6 +52,10 @@
   --learning: #5f5749;
   --learning-bg: #efe8da;
   --learning-border: #d6cbb6;
+  --overdue-background: #f8e6de;
+  --buy-now-background: #f8ead0;
+  --watch-background: #e6ecee;
+  --steady-background: #e7eedd;
 
   --font: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue",
     Arial, sans-serif;
@@ -59,6 +63,7 @@
   --radius-segment: 3px;
   --radius-compact: 10px;
   --radius-control: 12px;
+  --radius-bento: 12px;
   --radius-inner: 14px;
   --radius-card: 18px;
   --radius-dialog: 20px;
@@ -97,6 +102,9 @@
   --tone-toast-shadow: rgba(35, 28, 18, 0.16);
   --tone-toast-shadow-faint: rgba(35, 28, 18, 0.08);
   --tone-dock-shadow: rgba(35, 28, 18, 0.1);
+  --tone-bento-shadow-1: rgba(35, 32, 25, 0.04);
+  --tone-bento-shadow-2: rgba(35, 32, 25, 0.02);
+  --tone-bento-shadow-hover: rgba(35, 32, 25, 0.07);
 
   --highlight: inset 0 1px 0 var(--tone-edge-highlight);
   --shadow-card: var(--highlight), 0 1px 2px var(--tone-card-shadow), 0 4px 14px var(--tone-card-shadow-faint);
@@ -104,6 +112,8 @@
   --shadow-dialog: 0 24px 60px var(--tone-dialog-shadow), 0 4px 14px var(--tone-dialog-shadow-soft);
   --shadow-toast: 0 10px 28px var(--tone-toast-shadow), 0 2px 6px var(--tone-toast-shadow-faint);
   --shadow-dock: 0 -6px 24px var(--tone-dock-shadow);
+  --shadow-bento: 0 1px 3px var(--tone-bento-shadow-1), 0 1px 2px var(--tone-bento-shadow-2);
+  --shadow-bento-hover: 0 4px 14px var(--tone-bento-shadow-hover);
 
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
@@ -6137,6 +6147,146 @@ body.is-store-run .toast-region {
   [data-density="dense"] .shelf-card .depletion-gauge {
     max-width: none;
   }
+}
+
+/* Bento Grid Layout & Warm Ledger 2.0 Cards */
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 20px;
+  margin-top: 16px;
+  margin-bottom: 32px;
+}
+
+.bento-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 1px 3px var(--tone-bento-shadow-1), 0 1px 2px var(--tone-bento-shadow-2);
+  display: flex;
+  flex-direction: column;
+  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.bento-card:hover {
+  box-shadow: 0 4px 14px var(--tone-bento-shadow-hover);
+}
+
+.bento-card-spotlight {
+  grid-column: span 7;
+}
+
+.bento-card-trip {
+  grid-column: span 5;
+}
+
+.bento-card-horizon {
+  grid-column: span 8;
+}
+
+.bento-card-rhythm {
+  grid-column: span 4;
+}
+
+.bento-card-shelves {
+  grid-column: span 7;
+}
+
+.bento-card-onetime {
+  grid-column: span 5;
+}
+
+/* Tablet (640px - 979px) */
+@media (max-width: 979px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .bento-card-spotlight,
+  .bento-card-horizon {
+    grid-column: span 2;
+  }
+  .bento-card-trip,
+  .bento-card-rhythm,
+  .bento-card-shelves,
+  .bento-card-onetime {
+    grid-column: span 1;
+  }
+}
+
+/* Mobile (320px - 639px) */
+@media (max-width: 639px) {
+  .bento-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .bento-card {
+    grid-column: span 1 !important;
+    padding: 16px;
+  }
+}
+
+/* Card Internal Components */
+.bento-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.bento-card-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0;
+}
+
+.bento-card-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  line-height: 1.3;
+}
+
+.bento-pill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  background: var(--surface-quiet);
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.bento-pill-chip[data-zone="overdue"] {
+  background: var(--overdue-background);
+  border-color: var(--overdue-border);
+  color: var(--overdue);
+}
+
+.bento-pill-chip[data-zone="buy-now"] {
+  background: var(--buy-now-background);
+  border-color: var(--buy-now-border);
+  color: var(--buy-now);
+}
+
+.bento-pill-chip[data-zone="watch"] {
+  background: var(--watch-background);
+  border-color: var(--watch-border);
+  color: var(--watch);
 }
 
 @media (prefers-reduced-motion: reduce) {

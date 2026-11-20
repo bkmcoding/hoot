@@ -47,4 +47,23 @@ test.describe("Overview Command Center Scaffold", () => {
     await expect(page.locator("#bento-shelves")).toBeVisible();
     await expect(page.locator("#bento-onetime")).toBeVisible();
   });
+
+  test("maintains zero horizontal overflow at desktop, tablet, and mobile widths", async ({ page }) => {
+    for (const width of [1440, 980, 390, 320]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/#/overview");
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth
+      );
+      expect(overflow, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(0);
+    }
+  });
+
+  test("applies 12px border radius and paper card surface styling", async ({ page }) => {
+    await page.goto("/#/overview");
+    const spotlight = page.locator("#bento-spotlight");
+    await expect(spotlight).toHaveCSS("border-radius", "12px");
+    await expect(spotlight).toHaveCSS("background-color", "rgb(255, 250, 241)"); // #fffaf1
+  });
 });

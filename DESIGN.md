@@ -118,6 +118,7 @@ rounded:
   hairline: "4px"
   compact: "10px"
   control: "12px"
+  bento: "12px"
   inner: "14px"
   card: "18px"
   dialog: "20px"
@@ -180,6 +181,13 @@ components:
     textColor: "{colors.ink}"
     rounded: "{rounded.card}"
     padding: "20px 24px"
+  bento-card:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.bento}"
+    border: "1px solid {colors.border}"
+    padding: "20px"
+    shadow: "0 1px 3px rgba(35, 32, 25, 0.04), 0 1px 2px rgba(35, 32, 25, 0.02)"
   dialog:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -343,6 +351,7 @@ Cards rest on paper with a hairline border, a 1px inset highlight, and a soft of
 - Inner panels, calendar days, and toasts: 14px.
 - Cards and panels: 18px.
 - Dialogs: 20px.
+- Bento cards: 12px (Warm Ledger 2.0 bento grid cards).
 - Chips and lane ends are pill-shaped. Navigation is not: the tabs sit on the header's baseline with a 2px active rule and no container.
 
 ## Motion
@@ -356,6 +365,29 @@ Motion is calm and communicates state. Interface timing is 160–220ms.
 - `prefers-reduced-motion` removes transforms, pulses, and entrances.
 
 ## Components
+
+### Bento command center (Warm Ledger 2.0)
+
+The Overview command center (`#view-overview`) organizes household status into a 12-column responsive Bento grid (`.bento-grid`) with tactile Warm Ledger 2.0 cards (`.bento-card`):
+
+- **Grid columns & layout:**
+  - **Desktop (980px+):** 12-column CSS Grid with 20px gutters. Card spans:
+    - **Spotlight** (`.bento-card-spotlight`): span 7. Urgent decision focal point with prominent restock decision, quick action, and status badge.
+    - **Shopping trip readiness** (`.bento-card-trip`): span 5. Trip readiness metric, urgent counts, and immediate **Start shopping run** action.
+    - **Restock horizon lane** (`.bento-card-horizon`): span 8. Multi-item timeline overview showing upcoming restocks across the next 14 days.
+    - **Rhythm health** (`.bento-card-rhythm`): span 4. Cadence audit summary (Clockwork, Steady, Drifting, Learning) with recalibration shortcut.
+    - **Category shelves** (`.bento-card-shelves`): span 7. Depletion levels and quick inventory visualizer across pantry categories.
+    - **One-time checklist** (`.bento-card-onetime`): span 5. Active checklist preview with completion counters and direct navigation.
+  - **Tablet (640px–979px):** 2-column grid with 16px gutters. Spotlight and Horizon span 2 columns; Trip, Rhythm, Shelves, and One-Time span 1 column.
+  - **Mobile (320px–639px):** 1-column layout with 14px gutters, 16px card padding, and zero horizontal scroll down to 320px width.
+- **Card surface styling:**
+  - 12px border radius (`--radius-control` / Warm Ledger 2.0 bento token), paper background (`--surface`, `#fffaf1`), 1px warm hairline border (`--border`, `#e2d8c6`).
+  - Tactile layered ledger shadow (`0 1px 3px rgba(35, 32, 25, 0.04), 0 1px 2px rgba(35, 32, 25, 0.02)`) with a gentle 180ms hover lift (`0 4px 14px rgba(35, 32, 25, 0.07)`).
+- **Internal card components:**
+  - `.bento-card-header`: Flex row with space-between alignment and 12px bottom margin.
+  - `.bento-card-eyebrow`: 11px uppercase tracked label (`font-weight: 700`, `letter-spacing: 0.08em`, `color: var(--ink-soft)`).
+  - `.bento-card-title`: 18px heading (`font-weight: 700`, `line-height: 1.3`, `color: var(--ink)`).
+  - `.bento-pill-chip`: Pill badge (`border-radius: 9999px`, 12px bold, tabular numerals) with semantic zone colors for Overdue, Buy now, and Watch states.
 
 ### Dashboard hierarchy
 
