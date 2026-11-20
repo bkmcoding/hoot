@@ -456,8 +456,8 @@ test("fits all three navigation tabs at 320px without scrolling", async ({ page 
     const overflow = await nav.evaluate((element) => element.scrollWidth - element.clientWidth);
     expect(overflow, `navigation overflow at ${width}px`).toBeLessThanOrEqual(0);
 
-    for (const name of ["Dashboard", "One-time", "Shopping"]) {
-      const tab = page.getByRole("button", { name, exact: true });
+    for (const name of ["Restocks", "One-time", "Shopping"]) {
+      const tab = page.getByRole("button", { name: name === "Restocks" ? /^(Restocks|Dashboard)$/ : name, exact: true });
       await expect(tab).toBeVisible();
       const box = await tab.boundingBox();
       expect(box.x, `left clipping of ${name} at ${width}px`).toBeGreaterThanOrEqual(0);
@@ -713,7 +713,7 @@ test("focuses the checked item-type path when Add opens", async ({ page }) => {
   ).toBeFocused();
 
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+  await page.getByRole("button", { name: /^(Restocks|Dashboard)$/ }).click();
   await page.getByRole("button", { name: "Add item", exact: true }).click();
 
   const trackedPath = page.getByRole("radio", { name: /Tracked staple/ });
@@ -796,7 +796,7 @@ test("writes an item URL and keeps browser Back inside Hoot", async ({ page }) =
   await page.getByRole("button", { name: "Back to dashboard" }).click();
   await expect(page).toHaveURL(/#\/dashboard$/);
   await expect(
-    page.getByRole("button", { name: "Dashboard", exact: true })
+    page.getByRole("button", { name: /^(Restocks|Dashboard)$/ })
   ).toBeFocused();
 });
 

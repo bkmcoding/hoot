@@ -143,7 +143,7 @@ test("keeps one-time actions contextual", async ({ page }) => {
     page.locator('.header-actions [data-dialog="add-item"]'),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Dashboard", exact: true }).click();
+  await page.getByRole("button", { name: /^(Restocks|Dashboard)$/ }).click();
   await expect(logPurchase).toBeVisible();
 });
 

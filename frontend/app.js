@@ -4862,12 +4862,33 @@ import {
       const item = state.items.find((entry) => entry.id === currentItemId);
       if (item) renderItemPage(item);
     }
+    if (currentView === "overview") {
+      renderOverview();
+    }
+  }
+
+  function renderOverview() {
+    const slots = [
+      ["bento-spotlight", "bento-spotlight-title", "Spotlight"],
+      ["bento-trip", "bento-trip-title", "Shopping trip"],
+      ["bento-horizon", "bento-horizon-title", "7-day horizon"],
+      ["bento-rhythm", "bento-rhythm-title", "Pantry rhythm"],
+      ["bento-shelves", "bento-shelves-title", "Shelves"],
+      ["bento-onetime", "bento-onetime-title", "One-time items"],
+    ];
+    slots.forEach(([id, titleId, title]) => {
+      const el = document.getElementById(id);
+      if (el && !el.children.length) {
+        el.innerHTML = `<h2 id="${titleId}" class="bento-card-title">${title}</h2>`;
+      }
+    });
   }
 
   function viewRoute(view, itemId = currentItemId) {
     if (view === "item" && itemId) return `#/item/${encodeURIComponent(itemId)}`;
     if (view === "store-run") return "#/shopping";
     if (view === "one-time") return "#/one-time";
+    if (view === "overview") return "#/overview";
     return "#/dashboard";
   }
 
@@ -4879,9 +4900,10 @@ import {
     if (name === "item" && rest.length) {
       return { view: "item", itemId: decodeURIComponent(rest.join("/")), hasRoute: true };
     }
+    if (name === "overview") return { view: "overview", hasRoute: true };
     if (name === "shopping") return { view: "store-run", hasRoute: true };
     if (name === "one-time") return { view: "one-time", hasRoute: true };
-    if (name === "dashboard") return { view: "dashboard", hasRoute: true };
+    if (name === "dashboard" || name === "restocks") return { view: "dashboard", hasRoute: true };
     return { view: "dashboard", hasRoute: false };
   }
 
@@ -4942,6 +4964,9 @@ import {
       syncNextUpDock();
     } else {
       updateMobileDock();
+    }
+    if (nextView === "overview") {
+      renderOverview();
     }
     if (nextView === "store-run") {
       if (!storeRun.selected.size) {

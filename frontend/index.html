@@ -17,7 +17,7 @@
   <body class="hoot-shell">
     <header class="app-header">
       <div class="header-frame">
-        <a class="brand" href="#/dashboard" data-view="dashboard" aria-label="Hoot home">
+        <a class="brand" href="#/overview" data-view="overview" aria-label="Hoot home">
           <span class="brand-mark" aria-hidden="true">
             <svg viewBox="0 0 48 48" aria-hidden="true" focusable="false">
               <g transform="translate(24 24) scale(1.48) translate(-22.63 -23.15)">
@@ -32,7 +32,8 @@
         </a>
 
         <nav class="app-nav" aria-label="Primary">
-          <button class="nav-button is-active" type="button" data-view="dashboard">Dashboard</button>
+          <button class="nav-button" type="button" data-view="overview">Overview</button>
+          <button class="nav-button is-active" type="button" data-view="dashboard">Restocks</button>
           <button class="nav-button" type="button" data-view="store-run">Shopping</button>
           <button class="nav-button" type="button" data-view="one-time">One-time</button>
         </nav>
@@ -47,6 +48,28 @@
     <div class="app-frame">
 
       <main class="app-main">
+        <section
+          class="app-view"
+          id="view-overview"
+          aria-labelledby="overview-title"
+        >
+          <div class="section-heading">
+            <div>
+              <h1 id="overview-title" tabindex="-1">Household overview</h1>
+              <p class="section-copy" id="overview-copy">Pantry rhythm, upcoming restocks, and shopping trip readiness.</p>
+            </div>
+          </div>
+
+          <div class="bento-grid">
+            <article class="bento-card bento-card-spotlight" id="bento-spotlight" aria-labelledby="bento-spotlight-title"></article>
+            <article class="bento-card bento-card-trip" id="bento-trip" aria-labelledby="bento-trip-title"></article>
+            <article class="bento-card bento-card-horizon" id="bento-horizon" aria-labelledby="bento-horizon-title"></article>
+            <article class="bento-card bento-card-rhythm" id="bento-rhythm" aria-labelledby="bento-rhythm-title"></article>
+            <article class="bento-card bento-card-shelves" id="bento-shelves" aria-labelledby="bento-shelves-title"></article>
+            <article class="bento-card bento-card-onetime" id="bento-onetime" aria-labelledby="bento-onetime-title"></article>
+          </div>
+        </section>
+
         <section
           class="app-view is-active"
           id="view-dashboard"
