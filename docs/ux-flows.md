@@ -1,5 +1,94 @@
 # Hoot UX flow contracts
 
+## Overview Command Center (Warm Ledger 2.0)
+
+### Job
+
+A household shopper wants an at-a-glance high-level command center of household restock urgency, shopping trip readiness, multi-day restock flow, rhythm prediction health, pantry shelf inventory status, and irregular checklist needs without navigating across separate sub-pages or wading through long queue tables.
+
+### Entry points
+
+- Brand link / logo mark (`a.brand[href="#/overview"]`)
+- Primary navigation button: **Overview** (`.nav-button[data-view="overview"]`)
+- Direct hash URL: `#/overview`
+- Browser Back / Forward to `#/overview`
+
+### Sequence
+
+1. Arrive at `#/overview` and scan the 6-card Bento layout.
+2. Read the **Urgent Restock Spotlight**: note the highest-urgency item, its category, due date, status badge, and the semantic count strip (Overdue, Buy now, Watch).
+3. Take immediate action on Spotlight: tap **Log purchase** to record what was bought, **Still have some** to adjust a false overdue alarm, or select the item title to inspect its rhythm ledger.
+4. Check the **Shopping Run Launchpad**: review readiness counts and tap **Start shopping run** (or **Resume run** if a trip is active) to jump straight into the immersive aisle walk.
+5. Scan the **7-Day Horizon Glance**: observe the multi-day restock timeline across today and the next 6 days with day-by-day restock dots and counts; tap any day cell or **Open calendar** to navigate into the Restocks Calendar.
+6. Check **Rhythm Health Audit**: review the proportion of staples in Clockwork, Variable, and Learning cadences; tap the audit action button to open the **Rhythm health & cadence audit** dialog for 1-tap baseline recalibration.
+7. Inspect **Pantry Shelves Health**: view depletion progress bars across top pantry categories (e.g. Produce, Dairy & refrigerated, Pantry, Household & cleaning) to see which areas need attention, or tap **View shelves** to open the full shelves ledger.
+8. Review the **One-Time Scratchpad**: check off irregular needs in place, or type an item into the inline quick-add form and submit without opening a dialog.
+
+### Bento layout contract
+
+The overview organizes status into a 12-column responsive Bento grid (`.bento-grid`) with tactile Warm Ledger 2.0 cards (`.bento-card`):
+
+- **Urgent Restock Spotlight (`#bento-spotlight`):**
+  - Desktop span 7 / Tablet span 2 / Mobile span 1.
+  - Highlights the single highest-urgency tracked staple with a semantic 4px zone rail (overdue red, buy-now amber, watch sage, steady calm).
+  - Displays item name, category, due date phrase, and prediction confidence explanation.
+  - Primary in-place actions: **Log purchase** (opens Log Purchase dialog prefilled for this item), **Still have some** (records a prediction correction, shifts estimate 3 days out, announces toast with Undo), and **Item detail** (navigates to `#/item/<id>`).
+  - Labeled pill strip links directly to `#/dashboard` with Overdue, Buy now, and Watch counts.
+  - Empty state when no items are tracked or all items are steady: displays "Everything is in steady shape · All stocked" reassurance.
+- **Shopping Run Launchpad (`#bento-trip`):**
+  - Desktop span 5 / Tablet span 1 / Mobile span 1.
+  - If a trip is in progress: displays "Trip in progress" badge, counts logged vs total items, and provides a direct **Resume run** action linking to `#/shopping`.
+  - If no trip is active: displays "Ready" badge, count of items due next in Overdue or Buy now, and a primary **Start shopping run** action linking to `#/shopping`.
+- **7-Day Horizon Glance (`#bento-horizon`):**
+  - Desktop span 8 / Tablet span 2 / Mobile span 1.
+  - Displays a 7-day horizontal timeline covering today and the next 6 days.
+  - Each day cell highlights the weekday, day of the month, active today tint (`--surface-tint`), and restock status dots color-coded by top urgency zone.
+  - Clicking any date cell navigates directly to `#/dashboard` focused on that date; header pill links to **Open calendar**.
+- **Rhythm Health Audit (`#bento-rhythm`):**
+  - Desktop span 4 / Tablet span 1 / Mobile span 1.
+  - Aggregates cadence and historical drift across all tracked staples into Clockwork, Variable, and Learning segments.
+  - Multi-segmented distribution meter (`.rhythm-meter-bar`) shows relative percentages in steady, buy-now, and border-control tones.
+  - Labeled footer reports counts for each cadence group.
+  - Header shortcut button opens the full **Rhythm health & cadence audit** dialog (`#rhythm-audit-dialog`) to inspect drift metrics and trigger 1-tap baseline recalibrations.
+- **Pantry Shelves Health (`#bento-shelves`):**
+  - Desktop span 7 / Tablet span 1 / Mobile span 1.
+  - Surfaces depletion levels across the household's top 4 inventory categories.
+  - Each category row presents category name, a horizontal visual fill gauge indicating steady vs low stock, and a count of items low or "All good".
+  - Header pill chip **View shelves** links to `#/dashboard` with shelves view active (`data-goto-shelves="true"`).
+- **One-Time Scratchpad (`#bento-onetime`):**
+  - Desktop span 5 / Tablet span 1 / Mobile span 1.
+  - Displays up to 3 pending irregular checklist items excluded from prediction.
+  - Each row provides an accessible native checkbox (`data-bento-action="check-onetime"`); checking marks the item completed immediately without reload, moves it to the completed ledger, and provides an Undo toast.
+  - Bottom inline quick-add form (`data-bento-action="quick-add-onetime"`) allows typing a name and tapping **Add** to create a one-time need instantly in place.
+  - Header pill chip **Full ledger** links to `#/one-time`.
+
+### In-place quick actions
+
+- **Log purchase directly from Spotlight:** triggers the prefilled purchase logger for the spotlight item without leaving the overview.
+- **Still have some directly from Spotlight:** records a prediction check immediately, moving the estimate 3 days later, updating the card's zone chip and counts in place, and providing an Undo toast.
+- **Instant one-time check-off:** completing a pending irregular item in the scratchpad updates the inventory in memory and syncs to persistence without page transitions or layout shifts.
+- **Inline one-time quick-add:** typing into the scratchpad input and submitting creates the item, updates the list immediately, and clears the input with focus retained.
+- **Rhythm audit modal:** tapping the audit button on the rhythm card launches `#rhythm-audit-dialog` with drift and cadence details, and allows 1-tap recalibration with Undo.
+
+### Responsive layout & visual rules
+
+- **Desktop (980px and wider):** 12-column grid, 20px gutters. Bento card layout: Spotlight (span 7) + Trip (span 5); Horizon (span 8) + Rhythm (span 4); Shelves (span 7) + One-Time (span 5).
+- **Tablet (640px to 979px):** 2-column grid, 16px gutters. Spotlight and Horizon span both columns (span 2); Trip, Rhythm, Shelves, and One-Time span 1 column each.
+- **Mobile (320px to 639px):** 1-column layout, 14px gutters, 16px card padding. Zero page-level horizontal overflow at 390px and 320px.
+- **Warm Ledger 2.0 aesthetics:** 12px rounded corners (`--radius-bento`), paper surface (`--surface`, `#fffaf1`), 1px warm hairline border (`--border`, `#e2d8c6`), layered tactile shadows (`0 1px 3px rgba(35, 32, 25, 0.04), 0 1px 2px rgba(35, 32, 25, 0.02)`), and gentle 180ms hover lift (`0 4px 14px rgba(35, 32, 25, 0.07)`).
+
+### View transitions
+
+- Screen transitions between Overview and other surfaces (Restocks, Shopping Run, Calendar, Shelves, and Item Detail) use the browser-native CSS View Transitions API (`document.startViewTransition`).
+- Shared-element morphing:
+  - Urgent Restock Spotlight card morphs smoothly with Item Hero (`item-hero`).
+  - Shopping Run Launchpad morphs with the Shopping Run aisle walk (`shopping-run`).
+  - 7-Day Horizon Glance morphs with the Restocks Calendar strip (`calendar-strip`).
+  - Pantry Shelves Health morphs with the Shelves inventory view (`shelves-view`).
+  - One-Time Scratchpad morphs with the One-Time ledger (`one-time-view`).
+- Smooth 200ms cross-fades and geometry interpolations using `cubic-bezier(0.16, 1, 0.3, 1)`.
+- When the user prefers reduced motion (`prefers-reduced-motion: reduce`), view transitions are completely bypassed and views update instantaneously without animation.
+
 ## Dashboard
 
 ### Job
@@ -8,13 +97,13 @@ A shopper wants to know which household staples need attention now and which one
 
 ### Entry points
 
-- Brand link
-- Primary navigation
-- Returning to the app
+- Primary navigation: **Restocks**
+- Overview Command Center (Spotlight, Horizon glance, Shelves link, or status pills)
+- Returning to the app or direct URL `#/dashboard`
 
 ### Sequence
 
-1. Choose **List** or **Calendar** in the view switcher directly under the heading.
+1. Choose **List**, **Shelves**, or **Calendar** in the view switcher directly under the heading.
 2. Read the focused **Next up** decision.
 3. Choose **Spacious** or **Dense** in the heading control when the queue needs more air or more rows per screen.
 4. Search the queue by name, category, or unit when looking for a specific staple.
@@ -396,6 +485,9 @@ A user wants a safe way to restore sample data or remove an item.
 - Reset demo is visible in the footer, restores the active sample, and remains at least 44px tall on phones.
 - The **Sample** select names both built-in samples with their item counts; switching asks for confirmation, cancel leaves the active sample untouched, and reset restores that same sample.
 - The busy household renders 38 tracked queue rows and 6 one-time rows without horizontal overflow at 1440, 980, 390, and 320px.
-- All three navigation tabs render in full at 320px without a scroll container or a clipped label, and the brand link's hit area matches the lockup rather than the header row.
+- All navigation tabs (Overview, Restocks, Shopping, One-time) render in full at 320px without a scroll container or a clipped label, and the brand link's hit area matches the lockup rather than the header row.
+- The Overview Command Center renders all six bento cards (Spotlight, Shopping Run Launchpad, 7-Day Horizon Glance, Rhythm Health Audit, Pantry Shelves Health, One-Time Scratchpad) and operates in-place quick actions (Log purchase, Still have some, one-time instant checkbox toggle, inline quick-add, and rhythm audit launch) with keyboard and pointer.
+- Transitions between Overview and other surfaces use the CSS View Transitions API when supported and gracefully degrade under prefers-reduced-motion: reduce.
+- The Overview Command Center renders without horizontal overflow at 1440, 980, 390, and 320px across both starter and busy households.
 - The interface remains usable at 1440, 980, 390, and 320px.
 - No page-level horizontal overflow occurs, and the schedule never scrolls horizontally.
