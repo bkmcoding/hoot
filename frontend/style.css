@@ -6161,7 +6161,7 @@ body.is-store-run .toast-region {
 .bento-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-bento);
   padding: 20px;
   box-shadow: 0 1px 3px var(--tone-bento-shadow-1), 0 1px 2px var(--tone-bento-shadow-2);
   display: flex;
@@ -6311,6 +6311,22 @@ body.is-store-run .toast-region {
   }
   .bento-card-onetime {
     view-transition-name: one-time-view;
+  }
+
+  #view-store-run {
+    view-transition-name: shopping-run;
+  }
+  #dashboard-shelves {
+    view-transition-name: shelves-view;
+  }
+  #one-time-list {
+    view-transition-name: one-time-view;
+  }
+  #restock-calendar {
+    view-transition-name: calendar-strip;
+  }
+  #item-analysis-content {
+    view-transition-name: item-hero;
   }
 }
 

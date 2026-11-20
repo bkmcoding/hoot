@@ -4890,7 +4890,7 @@ import {
       else if (entry.prediction.zone === "watch") watchCount++;
     }
 
-    if (!nextUp) {
+    if (!nextUp || nextUp.prediction.zone === "steady") {
       container.innerHTML = `
         <div class="bento-card-header">
           <span class="bento-card-eyebrow">Spotlight</span>
@@ -4913,6 +4913,11 @@ import {
             ? "var(--steady-rail)"
             : "var(--watch-rail)";
 
+    const canDefer = pred.zone === "overdue" && Boolean(latestPurchaseFor(item));
+    const deferButtonHtml = canDefer
+      ? `<button class="btn btn-secondary btn-sm" type="button" data-bento-action="still-have-some" data-item-id="${escapeHtml(item.id)}">Still have some</button>`
+      : "";
+
     container.innerHTML = `
       <div class="bento-card-header">
         <span class="bento-card-eyebrow">Spotlight · Next decision</span>
@@ -4928,7 +4933,7 @@ import {
       </div>
       <div class="bento-spotlight-actions" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
         <button class="btn btn-primary btn-sm" type="button" data-bento-action="log-purchase" data-item-id="${escapeHtml(item.id)}">Log purchase</button>
-        <button class="btn btn-secondary btn-sm" type="button" data-bento-action="still-have-some" data-item-id="${escapeHtml(item.id)}">Still have some</button>
+        ${deferButtonHtml}
         <a href="#/item/${encodeURIComponent(item.id)}" class="btn btn-secondary btn-sm">Item detail</a>
       </div>
       <div class="bento-pill-strip" style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px;">
@@ -5084,7 +5089,7 @@ import {
       const steadyCount = data.total - data.urgent;
       const steadyPct = Math.round((steadyCount / data.total) * 100);
       rowsHtml += `
-        <div class="shelf-health-row" data-bento-action="filter-shelf" data-category="${escapeHtml(cat)}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); cursor: pointer;">
+        <button type="button" class="shelf-health-row" data-bento-action="filter-shelf" data-category="${escapeHtml(cat)}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 0; border: none; border-bottom: 1px solid var(--border); background: transparent; cursor: pointer; text-align: left; font-family: inherit;">
           <span style="font-size: 14px; font-weight: 600; color: var(--ink); flex: 1;">${escapeHtml(cat)}</span>
           <div style="width: 100px; height: 6px; border-radius: 9999px; background: var(--surface-quiet); overflow: hidden;">
             <div style="width: ${steadyPct}%; height: 100%; background: ${data.urgent > 0 ? "var(--buy-now-rail)" : "var(--steady-rail)"};"></div>
@@ -5092,7 +5097,7 @@ import {
           <span style="font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 60px; text-align: right;">
             ${data.urgent > 0 ? `${data.urgent} low` : "All good"}
           </span>
-        </div>
+        </button>
       `;
     }
 
@@ -5305,6 +5310,7 @@ import {
       }
       if (nextView === "overview") {
         renderOverview();
+        $("#overview-title")?.focus({ preventScroll: true });
       }
       if (nextView === "item" && activeItem) {
         window.scrollTo(0, 0);
@@ -6022,17 +6028,10 @@ import {
           if (item) {
             recordPredictionCheck(item.id, "still_have_some");
           }
-        } else if (action === "check-onetime" && itemId) {
-          const item = (state.oneTimeItems || []).find((e) => e.id === itemId) || state.items.find((e) => e.id === itemId);
-          if (item) {
-            item.purchasedAt = new Date().toISOString();
-            item.completed = true;
-            saveState();
-            renderOverview();
-          }
         } else if (action === "open-rhythm-audit") {
           openRhythmAuditDialog(bentoAction);
         } else if (action === "view-shelves" || action === "filter-shelf") {
+          setDashboardView("shelves");
           const cat = bentoAction.dataset.category;
           if (cat) {
             queueSearch = cat;

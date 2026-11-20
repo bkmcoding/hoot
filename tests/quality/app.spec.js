@@ -447,7 +447,7 @@ test("keeps the Next up primary above the phone fold with an active trip", async
   }
 });
 
-test("fits all three navigation tabs at 320px without scrolling", async ({ page }) => {
+test("fits all four navigation tabs at 320px without scrolling", async ({ page }) => {
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 700 });
     await page.goto("/");
@@ -456,7 +456,7 @@ test("fits all three navigation tabs at 320px without scrolling", async ({ page 
     const overflow = await nav.evaluate((element) => element.scrollWidth - element.clientWidth);
     expect(overflow, `navigation overflow at ${width}px`).toBeLessThanOrEqual(0);
 
-    for (const name of ["Restocks", "One-time", "Shopping"]) {
+    for (const name of ["Overview", "Restocks", "One-time", "Shopping"]) {
       const tab = page.getByRole("button", { name: name === "Restocks" ? /^(Restocks|Dashboard)$/ : name, exact: true });
       await expect(tab).toBeVisible();
       const box = await tab.boundingBox();

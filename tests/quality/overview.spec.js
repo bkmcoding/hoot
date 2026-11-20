@@ -95,9 +95,23 @@ test.describe("Overview Command Center Scaffold", () => {
 
     const shelves = page.locator("#bento-shelves .shelf-health-row");
     await expect(shelves.first()).toBeVisible();
+    await expect(shelves.first()).toHaveAttribute("type", "button");
 
     const oneTimeItems = page.locator("#bento-onetime .bento-onetime-item");
     await expect(oneTimeItems.first()).toBeVisible();
+  });
+
+  test("navigates to shelves dashboard when clicking a shelf health category", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const firstShelf = page.locator("#bento-shelves .shelf-health-row").first();
+    const catName = await firstShelf.locator("span").first().innerText();
+    await firstShelf.click();
+
+    await expect(page.locator("#view-dashboard")).toBeVisible();
+    await expect(page.locator("#dashboard-shelves")).toBeVisible();
+    const searchInput = page.locator("#queue-search");
+    await expect(searchInput).toHaveValue(catName.trim());
   });
 
   test("renders spotlight and bento cards on busy household", async ({ page }) => {
@@ -174,6 +188,8 @@ test.describe("Overview Command Center Scaffold", () => {
 
     // After marking still have some, item moves from overdue to buy-now
     await expect(chip).toHaveAttribute("data-zone", "buy-now");
+    // Still have some button only renders for overdue items
+    await expect(spotlight.locator('button[data-bento-action="still-have-some"]')).toHaveCount(0);
   });
 
   test("opens rhythm audit dialog via audit button on rhythm health card", async ({ page }) => {
@@ -201,5 +217,21 @@ test.describe("Overview Command Center Scaffold", () => {
     const overviewBtn = page.locator('.nav-button[data-view="overview"]');
     await overviewBtn.click();
     await expect(page.locator("#view-overview")).toBeVisible();
+    await expect(page.locator("#overview-title")).toBeFocused();
+
+    // Navigate to Shopping Run and return to Overview
+    const startRunBtn = page.locator('#bento-trip a[href="#/shopping"]');
+    await startRunBtn.click();
+
+    await expect(page.locator("#view-store-run")).toBeVisible();
+    await expect(page.locator("#view-overview")).not.toHaveClass(/is-active/);
+
+    const exitRunBtn = page.getByRole("button", { name: "Exit run", exact: true });
+    await exitRunBtn.click();
+    await expect(page.locator("#view-dashboard")).toBeVisible();
+
+    await overviewBtn.click();
+    await expect(page.locator("#view-overview")).toBeVisible();
+    await expect(page.locator("#overview-title")).toBeFocused();
   });
 });
