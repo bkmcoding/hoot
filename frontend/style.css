@@ -6163,16 +6163,20 @@ body.is-store-run .toast-region {
   border: 1px solid var(--border);
   border-radius: var(--radius-bento);
   padding: 20px;
-  box-shadow: 0 1px 3px var(--tone-bento-shadow-1), 0 1px 2px var(--tone-bento-shadow-2);
+  box-shadow: 0 1px 3px var(--tone-bento-shadow-1), 0 1px 2px var(--tone-bento-shadow-2), inset 0 1px 0 var(--tone-card-highlight);
   display: flex;
   flex-direction: column;
-  transition: transform 180ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform var(--duration-base) var(--ease),
+              box-shadow var(--duration-base) var(--ease),
+              border-color var(--duration-fast) var(--ease-standard);
   position: relative;
   overflow: hidden;
 }
 
 .bento-card:hover {
-  box-shadow: 0 4px 14px var(--tone-bento-shadow-hover);
+  transform: translateY(-2px);
+  border-color: var(--border-strong);
+  box-shadow: 0 4px 14px var(--tone-bento-shadow-hover), 0 2px 4px var(--tone-bento-shadow-1), inset 0 1px 0 var(--tone-edge-highlight);
 }
 
 .bento-card-spotlight {
@@ -6269,6 +6273,30 @@ body.is-store-run .toast-region {
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
   text-decoration: none;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.bento-pill-chip:hover {
+  background: var(--surface-tint);
+  border-color: var(--border-strong);
+  color: var(--ink);
+  transform: translateY(-1px);
+}
+
+.bento-pill-chip:active {
+  background: var(--selection);
+  transform: translateY(0);
+}
+
+.bento-pill-chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
 }
 
 .bento-pill-chip[data-zone="overdue"] {
@@ -6277,16 +6305,272 @@ body.is-store-run .toast-region {
   color: var(--overdue);
 }
 
+.bento-pill-chip[data-zone="overdue"]:hover {
+  border-color: var(--overdue-rail);
+}
+
 .bento-pill-chip[data-zone="buy-now"] {
   background: var(--buy-now-background);
   border-color: var(--buy-now-border);
   color: var(--buy-now);
 }
 
+.bento-pill-chip[data-zone="buy-now"]:hover {
+  border-color: var(--buy-now-rail);
+}
+
 .bento-pill-chip[data-zone="watch"] {
   background: var(--watch-background);
   border-color: var(--watch-border);
   color: var(--watch);
+}
+
+.bento-pill-chip[data-zone="watch"]:hover {
+  border-color: var(--watch-rail);
+}
+
+/* Shelf Health Row */
+.shelf-health-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) var(--ease-standard);
+}
+
+.shelf-health-row:hover {
+  background: var(--surface-quiet);
+}
+
+.shelf-health-row:active {
+  background: var(--surface-tint);
+  transform: translateY(0);
+}
+
+.shelf-health-row:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+}
+
+.shelf-health-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1;
+}
+
+.shelf-health-track {
+  width: 100px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-quiet);
+  overflow: hidden;
+}
+
+.shelf-health-status {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  min-width: 60px;
+  text-align: right;
+}
+
+/* 7-Day Horizon Strip */
+.horizon-cells-strip {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.horizon-cell {
+  flex: 1;
+  text-align: center;
+  padding: 10px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-quiet);
+  text-decoration: none;
+  color: inherit;
+  transition: background var(--duration-fast) var(--ease-standard),
+              border-color var(--duration-fast) var(--ease-standard),
+              transform var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.horizon-cell.is-today {
+  background: var(--surface-tint);
+  border-color: var(--border-strong);
+}
+
+.horizon-cell:hover {
+  background: var(--surface-tint);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px var(--tone-bento-shadow-1);
+}
+
+.horizon-cell:active {
+  transform: translateY(0);
+  background: var(--selection);
+}
+
+.horizon-cell:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+}
+
+.horizon-cell-day {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  display: block;
+}
+
+.horizon-cell-date {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  display: block;
+  margin: 4px 0;
+}
+
+.horizon-cell-indicator {
+  font-size: 11px;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 14px;
+}
+
+/* Spotlight Card Elements */
+.spotlight-item-link {
+  color: var(--ink);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+
+.spotlight-item-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.spotlight-item-link:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+  border-radius: 2px;
+}
+
+.bento-spotlight-body {
+  border-left: 4px solid var(--border);
+  padding-left: 12px;
+  margin-bottom: 16px;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.bento-spotlight-status {
+  margin: 4px 0;
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+
+.bento-spotlight-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.bento-pill-strip {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+/* Rhythm Card Elements */
+.rhythm-meter-bar {
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-quiet);
+  display: flex;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.rhythm-legend-strip {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* One-Time Scratchpad Elements */
+.bento-onetime-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.bento-onetime-item:hover {
+  background: var(--surface-quiet);
+}
+
+.bento-onetime-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--ink);
+  flex: 1;
+  cursor: pointer;
+}
+
+.bento-onetime-label input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
+}
+
+.bento-onetime-quickform {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+
+.bento-onetime-quickform input[type="text"] {
+  flex: 1;
+  font-size: 13px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: 6px;
+  background: var(--surface-quiet);
+  color: var(--ink);
+  transition: border-color var(--duration-fast) var(--ease-standard),
+              box-shadow var(--duration-fast) var(--ease-standard);
+}
+
+.bento-onetime-quickform input[type="text"]:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--focus);
 }
 
 /* CSS View Transitions */
@@ -6351,7 +6635,13 @@ body.is-store-run .toast-region {
   .item-card:hover,
   .calendar-item:hover,
   .btn:active:not(:disabled):not([aria-disabled="true"]),
-  .one-time-check:active {
+  .one-time-check:active,
+  .bento-card:hover,
+  .bento-pill-chip:hover,
+  .shelf-health-row:hover,
+  .shelf-health-row:active,
+  .horizon-cell:hover,
+  .horizon-cell:active {
     transform: none;
   }
 }

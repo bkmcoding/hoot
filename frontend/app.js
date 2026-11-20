@@ -4923,20 +4923,20 @@ import {
         <span class="bento-card-eyebrow">Spotlight · Next decision</span>
         <span class="bento-pill-chip" data-zone="${escapeHtml(pred.zone)}">${escapeHtml(pred.zoneLabel || pred.statusLabel || pred.zone)}</span>
       </div>
-      <div class="bento-spotlight-body" style="border-left: 4px solid ${railColor}; padding-left: 12px; margin-bottom: 16px;">
+      <div class="bento-spotlight-body" style="border-left-color: ${railColor};">
         <h2 id="bento-spotlight-title" class="bento-card-title">
           <a href="#/item/${encodeURIComponent(item.id)}" class="spotlight-item-link">${escapeHtml(item.name)}</a>
         </h2>
-        <p class="bento-spotlight-status" style="margin: 4px 0; font-size: 14px; color: var(--ink-soft);">
+        <p class="bento-spotlight-status">
           ${escapeHtml(item.category)} · Due ${formatDate(pred.predictedDate || pred.date)} · ${escapeHtml(pred.detail || pred.explanation || pred.confidence || "")}
         </p>
       </div>
-      <div class="bento-spotlight-actions" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+      <div class="bento-spotlight-actions">
         <button class="btn btn-primary btn-sm" type="button" data-bento-action="log-purchase" data-item-id="${escapeHtml(item.id)}">Log purchase</button>
         ${deferButtonHtml}
         <a href="#/item/${encodeURIComponent(item.id)}" class="btn btn-secondary btn-sm">Item detail</a>
       </div>
-      <div class="bento-pill-strip" style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px;">
+      <div class="bento-pill-strip">
         <a href="#/dashboard" class="bento-pill-chip" data-zone="overdue">${overdueCount} Overdue</a>
         <a href="#/dashboard" class="bento-pill-chip" data-zone="buy-now">${buyNowCount} Buy now</a>
         <a href="#/dashboard" class="bento-pill-chip" data-zone="watch">${watchCount} Watch</a>
@@ -5001,10 +5001,10 @@ import {
       }
 
       cellsHtml += `
-        <a href="#/dashboard" data-horizon-date="${iso}" class="horizon-cell" style="flex: 1; text-align: center; padding: 10px 4px; border: 1px solid var(--border); border-radius: 8px; background: ${isToday ? "var(--surface-tint)" : "var(--surface-quiet)"}; text-decoration: none; color: inherit;">
-          <span style="font-size: 11px; text-transform: uppercase; color: var(--ink-soft); display: block;">${isToday ? "Today" : formatWeekday(date)}</span>
-          <strong style="font-size: 16px; font-variant-numeric: tabular-nums; display: block; margin: 4px 0;">${date.getDate()}</strong>
-          <span style="font-size: 11px; color: var(--ink-faint); display: flex; align-items: center; justify-content: center; gap: 4px; height: 14px;">
+        <a href="#/dashboard" data-horizon-date="${iso}" class="horizon-cell ${isToday ? "is-today" : ""}">
+          <span class="horizon-cell-day">${isToday ? "Today" : formatWeekday(date)}</span>
+          <strong class="horizon-cell-date">${date.getDate()}</strong>
+          <span class="horizon-cell-indicator">
             ${dotHtml} ${dueOnDate.length > 0 ? dueOnDate.length : ""}
           </span>
         </a>
@@ -5017,7 +5017,7 @@ import {
         <a href="#/dashboard" class="bento-pill-chip">Open calendar</a>
       </div>
       <h2 id="bento-horizon-title" class="bento-card-title" style="margin-bottom: 12px;">Weekly restock flow</h2>
-      <div class="horizon-cells-strip" style="display: flex; gap: 6px; overflow-x: auto;">
+      <div class="horizon-cells-strip">
         ${cellsHtml}
       </div>
     `;
@@ -5057,12 +5057,12 @@ import {
       </div>
       <h2 id="bento-rhythm-title" class="bento-card-title">${clockwork} clockwork</h2>
       <p style="margin: 4px 0 12px; font-size: 13px; color: var(--ink-soft);">${clockworkPct}% learned purchase rhythms</p>
-      <div class="rhythm-meter-bar" style="height: 10px; border-radius: 9999px; background: var(--surface-quiet); display: flex; overflow: hidden; margin-bottom: 12px;">
+      <div class="rhythm-meter-bar">
         <span style="width: ${clockworkPct}%; background: var(--steady-rail);" title="Clockwork: ${clockwork}"></span>
         <span style="width: ${variablePct}%; background: var(--buy-now-rail);" title="Variable: ${variable}"></span>
         <span style="width: ${learningPct}%; background: var(--border-control);" title="Learning: ${learning}"></span>
       </div>
-      <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums;">
+      <div class="rhythm-legend-strip">
         <span>${clockwork} Clockwork</span>
         <span>${variable} Variable</span>
         <span>${learning} Learning</span>
@@ -5089,12 +5089,12 @@ import {
       const steadyCount = data.total - data.urgent;
       const steadyPct = Math.round((steadyCount / data.total) * 100);
       rowsHtml += `
-        <button type="button" class="shelf-health-row" data-bento-action="filter-shelf" data-category="${escapeHtml(cat)}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 6px 0; border: none; border-bottom: 1px solid var(--border); background: transparent; cursor: pointer; text-align: left; font-family: inherit;">
-          <span style="font-size: 14px; font-weight: 600; color: var(--ink); flex: 1;">${escapeHtml(cat)}</span>
-          <div style="width: 100px; height: 6px; border-radius: 9999px; background: var(--surface-quiet); overflow: hidden;">
+        <button type="button" class="shelf-health-row" data-bento-action="filter-shelf" data-category="${escapeHtml(cat)}">
+          <span class="shelf-health-name">${escapeHtml(cat)}</span>
+          <div class="shelf-health-track">
             <div style="width: ${steadyPct}%; height: 100%; background: ${data.urgent > 0 ? "var(--buy-now-rail)" : "var(--steady-rail)"};"></div>
           </div>
-          <span style="font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 60px; text-align: right;">
+          <span class="shelf-health-status">
             ${data.urgent > 0 ? `${data.urgent} low` : "All good"}
           </span>
         </button>
@@ -5125,8 +5125,8 @@ import {
     } else {
       for (const item of pending) {
         itemsHtml += `
-          <div class="bento-onetime-item" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0;">
-            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); flex: 1; cursor: pointer;">
+          <div class="bento-onetime-item">
+            <label class="bento-onetime-label">
               <input type="checkbox" data-bento-action="check-onetime" data-item-id="${escapeHtml(item.id)}" />
               <span>${escapeHtml(item.name)}</span>
             </label>
@@ -5144,8 +5144,8 @@ import {
       <div class="bento-onetime-list" style="margin-bottom: 12px;">
         ${itemsHtml}
       </div>
-      <form class="bento-onetime-quickform" data-bento-action="quick-add-onetime" style="display: flex; gap: 6px; margin-top: auto;">
-        <input type="text" name="name" aria-label="Add one-time item" placeholder="Add one-time item..." style="flex: 1; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border-control); border-radius: 6px; background: var(--surface-quiet);" required />
+      <form class="bento-onetime-quickform" data-bento-action="quick-add-onetime">
+        <input type="text" name="name" aria-label="Add one-time item" placeholder="Add one-time item..." required />
         <button class="btn btn-secondary btn-sm" type="submit">Add</button>
       </form>
     `;
@@ -6031,13 +6031,14 @@ import {
         } else if (action === "open-rhythm-audit") {
           openRhythmAuditDialog(bentoAction);
         } else if (action === "view-shelves" || action === "filter-shelf") {
-          setDashboardView("shelves");
           const cat = bentoAction.dataset.category;
           if (cat) {
             queueSearch = cat;
             const searchInput = $("#queue-search");
             if (searchInput) searchInput.value = queueSearch;
           }
+          setDashboardView("shelves");
+          renderDashboard();
           setView("dashboard");
         }
         return;

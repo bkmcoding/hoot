@@ -234,4 +234,28 @@ test.describe("Overview Command Center Scaffold", () => {
     await expect(page.locator("#view-overview")).toBeVisible();
     await expect(page.locator("#overview-title")).toBeFocused();
   });
+
+  test("filters dashboard shelves view when clicking a pantry shelf health row", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const shelfRow = page.locator("#bento-shelves .shelf-health-row").first();
+    await expect(shelfRow).toBeVisible();
+    const category = await shelfRow.getAttribute("data-category");
+    expect(category).toBeTruthy();
+
+    await shelfRow.click();
+    await expect(page.locator("#view-dashboard")).toBeVisible();
+    await expect(page.locator("#dashboard-shelves")).toBeVisible();
+    await expect(page.locator("#queue-search")).toHaveValue(category);
+  });
+
+  test("navigates to dashboard calendar when clicking a 7-day horizon cell", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const horizonCell = page.locator("#bento-horizon .horizon-cell").first();
+    await expect(horizonCell).toBeVisible();
+
+    await horizonCell.click();
+    await expect(page.locator("#view-dashboard")).toBeVisible();
+  });
 });
