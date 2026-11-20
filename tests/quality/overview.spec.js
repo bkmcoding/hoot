@@ -118,4 +118,72 @@ test.describe("Overview Command Center Scaffold", () => {
     const shelves = page.locator("#bento-shelves .shelf-health-row");
     await expect(shelves).toHaveCount(4);
   });
+
+  test("executes Log purchase directly from the spotlight card", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const spotlight = page.locator("#bento-spotlight");
+    const logBtn = spotlight.locator('button[data-bento-action="log-purchase"]');
+    await expect(logBtn).toBeVisible();
+
+    const titleBefore = await spotlight.locator("#bento-spotlight-title").innerText();
+
+    // Click Log purchase
+    await logBtn.click();
+
+    // Verify confirmation and overview updates
+    await expect(spotlight.locator("#bento-spotlight-title")).not.toHaveText(titleBefore);
+  });
+
+  test("adds a new one-time item via the quick-add scratchpad", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const form = page.locator('form[data-bento-action="quick-add-onetime"]');
+    await form.locator('input[name="name"]').fill("Light bulbs");
+    await form.locator('button[type="submit"]').click();
+
+    await expect(page.locator("#bento-onetime")).toContainText("Light bulbs");
+  });
+
+  test("checks off a one-time item via the bento scratchpad checkbox", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const onetimeSection = page.locator("#bento-onetime");
+    const firstCheckbox = onetimeSection.locator('input[type="checkbox"][data-bento-action="check-onetime"]').first();
+    await expect(firstCheckbox).toBeVisible();
+
+    const label = firstCheckbox.locator("..");
+    const itemName = await label.innerText();
+    await firstCheckbox.click();
+
+    // The checked item should no longer appear in the pending list
+    await expect(onetimeSection).not.toContainText(itemName.trim());
+  });
+
+  test("executes Still have some prediction check directly from spotlight card", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const spotlight = page.locator("#bento-spotlight");
+    const stillHaveSomeBtn = spotlight.locator('button[data-bento-action="still-have-some"]');
+    await expect(stillHaveSomeBtn).toBeVisible();
+
+    const chip = spotlight.locator(".bento-card-header .bento-pill-chip");
+    await expect(chip).toHaveAttribute("data-zone", "overdue");
+
+    await stillHaveSomeBtn.click();
+
+    // After marking still have some, item moves from overdue to buy-now
+    await expect(chip).toHaveAttribute("data-zone", "buy-now");
+  });
+
+  test("opens rhythm audit dialog via audit button on rhythm health card", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const auditBtn = page.locator('#bento-rhythm button[data-bento-action="open-rhythm-audit"]');
+    await expect(auditBtn).toBeVisible();
+
+    await auditBtn.click();
+    const auditDialog = page.locator("#rhythm-audit-dialog");
+    await expect(auditDialog).toBeVisible();
+  });
 });

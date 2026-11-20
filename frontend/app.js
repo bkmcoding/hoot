@@ -4905,7 +4905,14 @@ import {
 
     const item = nextUp.item;
     const pred = nextUp.prediction;
-    const railColor = pred.zone === "overdue" ? "var(--overdue-rail)" : pred.zone === "buy-now" ? "var(--buy-now-rail)" : "var(--watch-rail)";
+    const railColor =
+      pred.zone === "overdue"
+        ? "var(--overdue-rail)"
+        : pred.zone === "buy-now"
+          ? "var(--buy-now-rail)"
+          : pred.zone === "steady"
+            ? "var(--steady-rail)"
+            : "var(--watch-rail)";
 
     container.innerHTML = `
       <div class="bento-card-header">
@@ -5078,7 +5085,7 @@ import {
       const steadyCount = data.total - data.urgent;
       const steadyPct = Math.round((steadyCount / data.total) * 100);
       rowsHtml += `
-        <div class="shelf-health-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border);">
+        <div class="shelf-health-row" data-bento-action="filter-shelf" data-category="${escapeHtml(cat)}" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); cursor: pointer;">
           <span style="font-size: 14px; font-weight: 600; color: var(--ink); flex: 1;">${escapeHtml(cat)}</span>
           <div style="width: 100px; height: 6px; border-radius: 9999px; background: var(--surface-quiet); overflow: hidden;">
             <div style="width: ${steadyPct}%; height: 100%; background: ${data.urgent > 0 ? "var(--buy-now-rail)" : "var(--steady-rail)"};"></div>
@@ -5093,7 +5100,7 @@ import {
     container.innerHTML = `
       <div class="bento-card-header">
         <span class="bento-card-eyebrow">Pantry shelves</span>
-        <a href="#/dashboard" class="bento-pill-chip" data-goto-shelves="true">View shelves</a>
+        <a href="#/dashboard" class="bento-pill-chip" data-bento-action="view-shelves" data-goto-shelves="true">View shelves</a>
       </div>
       <h2 id="bento-shelves-title" class="bento-card-title" style="margin-bottom: 8px;">Inventory health</h2>
       <div class="shelves-list">
@@ -5134,10 +5141,67 @@ import {
         ${itemsHtml}
       </div>
       <form class="bento-onetime-quickform" data-bento-action="quick-add-onetime" style="display: flex; gap: 6px; margin-top: auto;">
-        <input type="text" name="name" placeholder="Add one-time item..." style="flex: 1; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border-control); border-radius: 6px; background: var(--surface-quiet);" required />
+        <input type="text" name="name" aria-label="Add one-time item" placeholder="Add one-time item..." style="flex: 1; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border-control); border-radius: 6px; background: var(--surface-quiet);" required />
         <button class="btn btn-secondary btn-sm" type="submit">Add</button>
       </form>
     `;
+  }
+
+  function logPurchaseFor(item) {
+    const latest = latestPurchaseFor(item);
+    hootApi.logPurchase(item.id, {
+      date: toISODate(today),
+      quantity: latest?.quantity ?? 1,
+      price: latest?.price ?? null,
+    });
+    renderOverview();
+    toast(`${item.name} purchase logged.`);
+  }
+
+  function recordPredictionCheck(itemId, verdict = "still_have_some") {
+    const item = state.items.find((entry) => entry.id === itemId);
+    if (!item || item.isOneTime) return;
+
+    const latestPurchase = latestPurchaseFor(item);
+    if (!latestPurchase) return;
+
+    const prediction = predictionFor(item, today);
+    const previousFeedback = latestPurchase.feedback
+      ? clone(latestPurchase.feedback)
+      : null;
+    const shiftDays = EARLY_RESTOCK_SHIFT_DAYS - (prediction.daysUntil ?? 0);
+
+    latestPurchase.feedback = {
+      verdict: "early",
+      predictedDate: toISODate(prediction.date),
+      recordedAt: toISODate(today),
+      source: "spotlight",
+      shiftDays,
+      ...(previousFeedback ? { previousFeedback } : {}),
+    };
+    const now = new Date().toISOString();
+    latestPurchase.updatedAt = now;
+    saveState();
+    enqueuePurchaseMutation({
+      id: latestPurchase.id,
+      itemId: item.id,
+      action: "upsert",
+      date: latestPurchase.date,
+      quantity: Number(latestPurchase.quantity),
+      price: Number(latestPurchase.price || 0),
+      earlyRestock: Boolean(latestPurchase.earlyRestock),
+      effectiveStartDate: latestPurchase.effectiveStartDate || null,
+      feedbackVerdict: "early",
+      feedbackPredictedDate: toISODate(prediction.date),
+      updatedAt: now,
+    });
+    renderOverview();
+
+    const next = predictionFor(item);
+    toast(
+      `${item.name} marked still have some. Next estimate moved to ${formatFullDate(next.date)}.`,
+      "success"
+    );
   }
 
   function viewRoute(view, itemId = currentItemId) {
@@ -5918,6 +5982,45 @@ import {
 
     document.addEventListener("click", (event) => {
       const target = event.target;
+      const bentoAction = target.closest("[data-bento-action]");
+      if (bentoAction) {
+        const action = bentoAction.dataset.bentoAction;
+        const itemId = bentoAction.dataset.itemId;
+
+        if (action === "log-purchase" && itemId) {
+          const item = state.items.find((e) => e.id === itemId);
+          if (item) {
+            logPurchaseFor(item);
+            renderOverview();
+          }
+        } else if (action === "still-have-some" && itemId) {
+          const item = state.items.find((e) => e.id === itemId);
+          if (item) {
+            recordPredictionCheck(item.id, "still_have_some");
+            renderOverview();
+          }
+        } else if (action === "check-onetime" && itemId) {
+          const item = (state.oneTimeItems || []).find((e) => e.id === itemId) || state.items.find((e) => e.id === itemId);
+          if (item) {
+            item.purchasedAt = new Date().toISOString();
+            item.completed = true;
+            saveState();
+            renderOverview();
+          }
+        } else if (action === "open-rhythm-audit") {
+          openRhythmAuditDialog(bentoAction);
+        } else if (action === "view-shelves" || action === "filter-shelf") {
+          const cat = bentoAction.dataset.category;
+          if (cat) {
+            queueSearch = cat;
+            const searchInput = $("#queue-search");
+            if (searchInput) searchInput.value = queueSearch;
+          }
+          setView("dashboard");
+        }
+        return;
+      }
+
       const pricePoint = target.closest("[data-price-spark-point]");
       if (pricePoint) {
         selectPricePoint(pricePoint);
@@ -6189,6 +6292,19 @@ import {
     });
 
     document.addEventListener("change", async (event) => {
+      const bentoCheck = event.target.closest('input[data-bento-action="check-onetime"]');
+      if (bentoCheck && bentoCheck.checked) {
+        const itemId = bentoCheck.dataset.itemId;
+        const item = (state.oneTimeItems || []).find((e) => e.id === itemId) || state.items.find((e) => e.id === itemId);
+        if (item) {
+          item.purchasedAt = new Date().toISOString();
+          item.completed = true;
+          saveState();
+          renderOverview();
+        }
+        return;
+      }
+
       const feedback = event.target.closest('[data-action="run-feedback"]');
       if (feedback) {
         recordRunPredictionFeedback(feedback.dataset.id, feedback.value, feedback);
@@ -6200,6 +6316,35 @@ import {
       const item = await hootApi.toggleOneTime(input.dataset.id, input.checked);
       render();
       toast(item.completed ? `${item.name} checked off.` : `${item.name} restored.`);
+    });
+
+    document.addEventListener("submit", (event) => {
+      const form = event.target.closest('form[data-bento-action="quick-add-onetime"]');
+      if (!form) return;
+      event.preventDefault();
+      const input = form.querySelector('input[name="name"]');
+      const name = input?.value?.trim();
+      if (!name) return;
+
+      const newItem = {
+        id: `onetime-${Date.now()}`,
+        name,
+        category: "Pantry",
+        unit: "item",
+        createdAt: new Date().toISOString(),
+        purchasedAt: null,
+        completed: false,
+        isOneTime: true,
+        purchases: [],
+      };
+      if (Array.isArray(state.oneTimeItems)) {
+        state.oneTimeItems.unshift(newItem);
+      } else {
+        state.items.unshift(newItem);
+      }
+      saveState();
+      input.value = "";
+      renderBentoOneTime();
     });
 
     $$('input[name="itemType"]').forEach((input) => {
