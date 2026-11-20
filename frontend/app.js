@@ -4868,20 +4868,276 @@ import {
   }
 
   function renderOverview() {
-    const slots = [
-      ["bento-spotlight", "bento-spotlight-title", "Spotlight"],
-      ["bento-trip", "bento-trip-title", "Shopping trip"],
-      ["bento-horizon", "bento-horizon-title", "7-day horizon"],
-      ["bento-rhythm", "bento-rhythm-title", "Pantry rhythm"],
-      ["bento-shelves", "bento-shelves-title", "Shelves"],
-      ["bento-onetime", "bento-onetime-title", "One-time items"],
-    ];
-    slots.forEach(([id, titleId, title]) => {
-      const el = document.getElementById(id);
-      if (el && !el.children.length) {
-        el.innerHTML = `<h2 id="${titleId}" class="bento-card-title">${title}</h2>`;
+    const tracked = rankedTrackedEntries();
+    renderBentoSpotlight(tracked);
+    renderBentoTrip();
+    renderBentoHorizon(tracked);
+    renderBentoRhythm(tracked);
+    renderBentoShelves(tracked);
+    renderBentoOneTime();
+  }
+
+  function renderBentoSpotlight(tracked) {
+    const container = $("#bento-spotlight");
+    if (!container) return;
+    const [nextUp] = tracked;
+
+    let overdueCount = 0;
+    let buyNowCount = 0;
+    let watchCount = 0;
+    for (const entry of tracked) {
+      if (entry.prediction.zone === "overdue") overdueCount++;
+      else if (entry.prediction.zone === "buy-now") buyNowCount++;
+      else if (entry.prediction.zone === "watch") watchCount++;
+    }
+
+    if (!nextUp) {
+      container.innerHTML = `
+        <div class="bento-card-header">
+          <span class="bento-card-eyebrow">Spotlight</span>
+          <span class="bento-pill-chip">All stocked</span>
+        </div>
+        <h2 id="bento-spotlight-title" class="bento-card-title">Everything is in steady shape</h2>
+        <p class="section-copy">No staples due for restock right now.</p>
+      `;
+      return;
+    }
+
+    const item = nextUp.item;
+    const pred = nextUp.prediction;
+    const railColor = pred.zone === "overdue" ? "var(--overdue-rail)" : pred.zone === "buy-now" ? "var(--buy-now-rail)" : "var(--watch-rail)";
+
+    container.innerHTML = `
+      <div class="bento-card-header">
+        <span class="bento-card-eyebrow">Spotlight · Next decision</span>
+        <span class="bento-pill-chip" data-zone="${escapeHtml(pred.zone)}">${escapeHtml(pred.zoneLabel || pred.statusLabel || pred.zone)}</span>
+      </div>
+      <div class="bento-spotlight-body" style="border-left: 4px solid ${railColor}; padding-left: 12px; margin-bottom: 16px;">
+        <h2 id="bento-spotlight-title" class="bento-card-title">
+          <a href="#/item/${encodeURIComponent(item.id)}" class="spotlight-item-link">${escapeHtml(item.name)}</a>
+        </h2>
+        <p class="bento-spotlight-status" style="margin: 4px 0; font-size: 14px; color: var(--ink-soft);">
+          ${escapeHtml(item.category)} · Due ${formatDate(pred.predictedDate || pred.date)} · ${escapeHtml(pred.detail || pred.explanation || pred.confidence || "")}
+        </p>
+      </div>
+      <div class="bento-spotlight-actions" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;">
+        <button class="btn btn-primary btn-sm" type="button" data-bento-action="log-purchase" data-item-id="${escapeHtml(item.id)}">Log purchase</button>
+        <button class="btn btn-secondary btn-sm" type="button" data-bento-action="still-have-some" data-item-id="${escapeHtml(item.id)}">Still have some</button>
+        <a href="#/item/${encodeURIComponent(item.id)}" class="btn btn-secondary btn-sm">Item detail</a>
+      </div>
+      <div class="bento-pill-strip" style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 12px;">
+        <a href="#/dashboard" class="bento-pill-chip" data-zone="overdue">${overdueCount} Overdue</a>
+        <a href="#/dashboard" class="bento-pill-chip" data-zone="buy-now">${buyNowCount} Buy now</a>
+        <a href="#/dashboard" class="bento-pill-chip" data-zone="watch">${watchCount} Watch</a>
+      </div>
+    `;
+  }
+
+  function renderBentoTrip() {
+    const container = $("#bento-trip");
+    if (!container) return;
+    const hasActiveTrip = Boolean(storeRun.planDate || storeRun.runDate || storeRun.selected?.size);
+
+    if (hasActiveTrip) {
+      const loggedCount = storeRun.purchases?.length || 0;
+      const totalCount = (storeRun.selected?.size || 0) + (storeRun.oneTimeSelected?.size || 0);
+      container.innerHTML = `
+        <div class="bento-card-header">
+          <span class="bento-card-eyebrow">Shopping run</span>
+          <span class="bento-pill-chip" data-zone="buy-now">Trip in progress</span>
+        </div>
+        <h2 id="bento-trip-title" class="bento-card-title">Active store run</h2>
+        <p style="margin: 8px 0; font-size: 14px; color: var(--ink-soft);">${loggedCount} of ${totalCount} items logged</p>
+        <div style="margin-top: auto; display: flex; gap: 8px;">
+          <a href="#/shopping" class="btn btn-primary btn-sm" style="flex: 1; text-align: center;">Resume run</a>
+        </div>
+      `;
+    } else {
+      const needsCount = rankedTrackedEntries().filter((e) => e.prediction.zone === "overdue" || e.prediction.zone === "buy-now").length;
+      container.innerHTML = `
+        <div class="bento-card-header">
+          <span class="bento-card-eyebrow">Shopping run</span>
+          <span class="bento-pill-chip">Ready</span>
+        </div>
+        <h2 id="bento-trip-title" class="bento-card-title">${needsCount} items due next</h2>
+        <p style="margin: 8px 0; font-size: 14px; color: var(--ink-soft);">Sorted by aisle and urgency for store aisles.</p>
+        <div style="margin-top: auto;">
+          <a href="#/shopping" class="btn btn-primary btn-sm" style="display: block; text-align: center;">Start shopping run</a>
+        </div>
+      `;
+    }
+  }
+
+  function renderBentoHorizon(tracked) {
+    const container = $("#bento-horizon");
+    if (!container) return;
+
+    let cellsHtml = "";
+    for (let i = 0; i < 7; i++) {
+      const date = addDays(today, i);
+      const iso = toISODate(date);
+      const dueOnDate = tracked.filter((e) => {
+        const pDate = e.prediction.predictedDate || e.prediction.date;
+        return pDate ? toISODate(pDate) === iso : false;
+      });
+      const isToday = i === 0;
+
+      let dotHtml = "";
+      if (dueOnDate.length > 0) {
+        const topZone = dueOnDate[0].prediction.zone;
+        const dotColor = topZone === "overdue" ? "var(--overdue-rail)" : topZone === "buy-now" ? "var(--buy-now-rail)" : "var(--watch-rail)";
+        dotHtml = `<span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: ${dotColor};"></span>`;
       }
-    });
+
+      cellsHtml += `
+        <a href="#/dashboard" data-horizon-date="${iso}" class="horizon-cell" style="flex: 1; text-align: center; padding: 10px 4px; border: 1px solid var(--border); border-radius: 8px; background: ${isToday ? "var(--surface-tint)" : "var(--surface-quiet)"}; text-decoration: none; color: inherit;">
+          <span style="font-size: 11px; text-transform: uppercase; color: var(--ink-soft); display: block;">${isToday ? "Today" : formatWeekday(date)}</span>
+          <strong style="font-size: 16px; font-variant-numeric: tabular-nums; display: block; margin: 4px 0;">${date.getDate()}</strong>
+          <span style="font-size: 11px; color: var(--ink-faint); display: flex; align-items: center; justify-content: center; gap: 4px; height: 14px;">
+            ${dotHtml} ${dueOnDate.length > 0 ? dueOnDate.length : ""}
+          </span>
+        </a>
+      `;
+    }
+
+    container.innerHTML = `
+      <div class="bento-card-header">
+        <span class="bento-card-eyebrow">Horizon glance · Next 7 days</span>
+        <a href="#/dashboard" class="bento-pill-chip">Open calendar</a>
+      </div>
+      <h2 id="bento-horizon-title" class="bento-card-title" style="margin-bottom: 12px;">Weekly restock flow</h2>
+      <div class="horizon-cells-strip" style="display: flex; gap: 6px; overflow-x: auto;">
+        ${cellsHtml}
+      </div>
+    `;
+  }
+
+  function renderBentoRhythm(tracked) {
+    const container = $("#bento-rhythm");
+    if (!container) return;
+
+    let clockwork = 0;
+    let variable = 0;
+    let learning = 0;
+    for (const entry of tracked) {
+      const drift = rhythmDriftFor(entry.item);
+      const rhythm =
+        entry.prediction.rhythm ||
+        (drift
+          ? drift.trend === "clockwork"
+            ? "clockwork"
+            : drift.trend === "learning"
+              ? "learning"
+              : "variable"
+          : "learning");
+      if (rhythm === "clockwork") clockwork++;
+      else if (rhythm === "variable") variable++;
+      else learning++;
+    }
+    const total = tracked.length || 1;
+    const clockworkPct = Math.round((clockwork / total) * 100);
+    const variablePct = Math.round((variable / total) * 100);
+    const learningPct = 100 - clockworkPct - variablePct;
+
+    container.innerHTML = `
+      <div class="bento-card-header">
+        <span class="bento-card-eyebrow">Rhythm health</span>
+        <button class="bento-pill-chip" type="button" data-bento-action="open-rhythm-audit">Audit</button>
+      </div>
+      <h2 id="bento-rhythm-title" class="bento-card-title">${clockwork} clockwork</h2>
+      <p style="margin: 4px 0 12px; font-size: 13px; color: var(--ink-soft);">${clockworkPct}% learned purchase rhythms</p>
+      <div class="rhythm-meter-bar" style="height: 10px; border-radius: 9999px; background: var(--surface-quiet); display: flex; overflow: hidden; margin-bottom: 12px;">
+        <span style="width: ${clockworkPct}%; background: var(--steady-rail);" title="Clockwork: ${clockwork}"></span>
+        <span style="width: ${variablePct}%; background: var(--buy-now-rail);" title="Variable: ${variable}"></span>
+        <span style="width: ${learningPct}%; background: var(--border-control);" title="Learning: ${learning}"></span>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums;">
+        <span>${clockwork} Clockwork</span>
+        <span>${variable} Variable</span>
+        <span>${learning} Learning</span>
+      </div>
+    `;
+  }
+
+  function renderBentoShelves(tracked) {
+    const container = $("#bento-shelves");
+    if (!container) return;
+
+    const categoriesMap = new Map();
+    for (const entry of tracked) {
+      const cat = entry.item.category || "Pantry";
+      if (!categoriesMap.has(cat)) categoriesMap.set(cat, { total: 0, urgent: 0 });
+      const record = categoriesMap.get(cat);
+      record.total++;
+      if (entry.prediction.zone === "overdue" || entry.prediction.zone === "buy-now") record.urgent++;
+    }
+
+    const topCategories = Array.from(categoriesMap.entries()).slice(0, 4);
+    let rowsHtml = "";
+    for (const [cat, data] of topCategories) {
+      const steadyCount = data.total - data.urgent;
+      const steadyPct = Math.round((steadyCount / data.total) * 100);
+      rowsHtml += `
+        <div class="shelf-health-row" style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--border);">
+          <span style="font-size: 14px; font-weight: 600; color: var(--ink); flex: 1;">${escapeHtml(cat)}</span>
+          <div style="width: 100px; height: 6px; border-radius: 9999px; background: var(--surface-quiet); overflow: hidden;">
+            <div style="width: ${steadyPct}%; height: 100%; background: ${data.urgent > 0 ? "var(--buy-now-rail)" : "var(--steady-rail)"};"></div>
+          </div>
+          <span style="font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 60px; text-align: right;">
+            ${data.urgent > 0 ? `${data.urgent} low` : "All good"}
+          </span>
+        </div>
+      `;
+    }
+
+    container.innerHTML = `
+      <div class="bento-card-header">
+        <span class="bento-card-eyebrow">Pantry shelves</span>
+        <a href="#/dashboard" class="bento-pill-chip" data-goto-shelves="true">View shelves</a>
+      </div>
+      <h2 id="bento-shelves-title" class="bento-card-title" style="margin-bottom: 8px;">Inventory health</h2>
+      <div class="shelves-list">
+        ${rowsHtml}
+      </div>
+    `;
+  }
+
+  function renderBentoOneTime() {
+    const container = $("#bento-onetime");
+    if (!container) return;
+
+    const oneTimeItems = state.oneTimeItems || (state.items ? state.items.filter((item) => item.isOneTime) : []);
+    const pending = oneTimeItems.filter((item) => !item.purchasedAt && !item.completed).slice(0, 3);
+    let itemsHtml = "";
+    if (pending.length === 0) {
+      itemsHtml = `<p style="font-size: 13px; color: var(--ink-soft); margin: 8px 0;">No pending one-time items.</p>`;
+    } else {
+      for (const item of pending) {
+        itemsHtml += `
+          <div class="bento-onetime-item" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0;">
+            <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); flex: 1; cursor: pointer;">
+              <input type="checkbox" data-bento-action="check-onetime" data-item-id="${escapeHtml(item.id)}" />
+              <span>${escapeHtml(item.name)}</span>
+            </label>
+          </div>
+        `;
+      }
+    }
+
+    container.innerHTML = `
+      <div class="bento-card-header">
+        <span class="bento-card-eyebrow">One-time scratchpad</span>
+        <a href="#/one-time" class="bento-pill-chip">Full ledger</a>
+      </div>
+      <h2 id="bento-onetime-title" class="bento-card-title" style="margin-bottom: 8px;">Irregular needs</h2>
+      <div class="bento-onetime-list" style="margin-bottom: 12px;">
+        ${itemsHtml}
+      </div>
+      <form class="bento-onetime-quickform" data-bento-action="quick-add-onetime" style="display: flex; gap: 6px; margin-top: auto;">
+        <input type="text" name="name" placeholder="Add one-time item..." style="flex: 1; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border-control); border-radius: 6px; background: var(--surface-quiet);" required />
+        <button class="btn btn-secondary btn-sm" type="submit">Add</button>
+      </form>
+    `;
   }
 
   function viewRoute(view, itemId = currentItemId) {

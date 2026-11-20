@@ -66,4 +66,56 @@ test.describe("Overview Command Center Scaffold", () => {
     await expect(spotlight).toHaveCSS("border-radius", "12px");
     await expect(spotlight).toHaveCSS("background-color", "rgb(255, 250, 241)"); // #fffaf1
   });
+
+  test("renders spotlight hero with urgent item details and counts on starter household", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const spotlight = page.locator("#bento-spotlight");
+    await expect(spotlight.locator(".bento-card-title")).toBeVisible();
+    await expect(spotlight.locator(".bento-spotlight-status")).toBeVisible();
+    await expect(spotlight.locator(".bento-pill-strip")).toBeVisible();
+  });
+
+  test("renders 7-day horizon with daily calendar cells and restock indicators", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const horizonCells = page.locator("#bento-horizon .horizon-cell");
+    await expect(horizonCells).toHaveCount(7);
+  });
+
+  test("renders rhythm health breakdown bars", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const rhythmBar = page.locator("#bento-rhythm .rhythm-meter-bar");
+    await expect(rhythmBar).toBeVisible();
+  });
+
+  test("renders shelf health categories and pending one-time items", async ({ page }) => {
+    await page.goto("/#/overview");
+
+    const shelves = page.locator("#bento-shelves .shelf-health-row");
+    await expect(shelves.first()).toBeVisible();
+
+    const oneTimeItems = page.locator("#bento-onetime .bento-onetime-item");
+    await expect(oneTimeItems.first()).toBeVisible();
+  });
+
+  test("renders spotlight and bento cards on busy household", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#sample-select").selectOption("busy");
+    await page
+      .locator("#confirm-dialog")
+      .getByRole("button", { name: "Switch sample" })
+      .click();
+    await expect(page.locator("body")).toHaveAttribute("data-sample", "busy");
+
+    await page.goto("/#/overview");
+
+    const spotlight = page.locator("#bento-spotlight");
+    await expect(spotlight.locator(".bento-card-title")).toBeVisible();
+    await expect(spotlight.locator(".bento-spotlight-status")).toBeVisible();
+
+    const shelves = page.locator("#bento-shelves .shelf-health-row");
+    await expect(shelves).toHaveCount(4);
+  });
 });
